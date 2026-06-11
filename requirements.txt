@@ -1,0 +1,5 @@
+Django==4.2.9
+mysqlclient==2.2.0
+redis==5.0.1
+celery==5.3.4
+python-dotenv==1.0.0
