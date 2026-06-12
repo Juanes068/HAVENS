@@ -96,8 +96,8 @@ Havens is an application where members of trusted communities can join a tailore
 
 #### High-Level Architecture Diagrams
 
-> ![DiagramHigh-Level Architecture Diagramsa](Readimages\mermaid-diagram-1780611765405.png)
-> ![High-Level Architecture Diagrams](Readimages\mermaid-diagram-1780611732535.png)
+> ![DiagramHigh-Level Architecture Diagramsa](Readimages/mermaid-diagram-1780611765405.png)
+> ![High-Level Architecture Diagrams](Readimages/mermaid-diagram-1780611732535.png)
 
 #### User and Administrator Flows
 
@@ -134,7 +134,7 @@ Havens is an application where members of trusted communities can join a tailore
 
 - **Entity-Relationship Diagram (ERD):**
 
-> ![High-Level Architecture Diagrams](Readimages\Untitled.png)
+> ![High-Level Architecture Diagrams](Readimages/Untitled.png)
 
 ---
 
