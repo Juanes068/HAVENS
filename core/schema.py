@@ -1,5 +1,16 @@
 import graphene
+from .types import UserType 
+from .models import User 
 
 class Query(graphene.ObjectType):
-    # creamos una consulta de prueba llamada 'hello'
     hello = graphene.String(default_value="TEST DB HAVENS")
+    
+    
+    myProfile = graphene.Field(UserType)
+
+    
+    def resolve_myProfile(self, info):
+        
+        return User.objects.first() 
+
+schema = graphene.Schema(query=Query)
