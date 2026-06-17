@@ -1,8 +1,8 @@
 import graphene
 from graphene_django import DjangoObjectType
-from django.contrib.auth.models import User 
+from django.contrib.auth.models import User
 
 class UserType(DjangoObjectType):
     class Meta:
         model = User
-        fields = ("id", "username", "email") 
+        fields = ("id", "username", "email")

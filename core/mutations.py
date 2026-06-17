@@ -2,13 +2,6 @@ import graphene
 from django.contrib.auth.models import User
 from .types import UserType
 
-class Query(graphene.ObjectType):
-    hello = graphene.String(default_value="TEST DB HAVENS")
-    myProfile = graphene.Field(UserType)
-
-    def resolve_myProfile(self, info):
-        return User.objects.first()
-
 class CreateUser(graphene.Mutation):
     class Arguments:
         username = graphene.String(required=True)
@@ -19,11 +12,7 @@ class CreateUser(graphene.Mutation):
 
     @classmethod
     def mutate(cls, root, info, username, email, password):
-        user = User.objects.create_user(
-            username=username,
-            email=email,
-            password=password
-        )
+        user = User.objects.create_user(username=username, email=email, password=password)
         return CreateUser(user=user)
 
 class Mutation(graphene.ObjectType):
