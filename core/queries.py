@@ -1,10 +1,13 @@
 import graphene
-from .types import UserType
-from django.contrib.auth.models import User
+from .types import CommunityType, EventType
+from .models import Community, Event
 
 class Query(graphene.ObjectType):
-    hello = graphene.String(default_value="TEST DB HAVENS")
-    myProfile = graphene.Field(UserType)
+    all_communities = graphene.List(CommunityType)
+    all_events = graphene.List(EventType)
 
-    def resolve_myProfile(self, info):
-        return User.objects.first()
+    def resolve_all_communities(self, info):
+        return Community.objects.all()
+
+    def resolve_all_events(self, info):
+        return Event.objects.all()
