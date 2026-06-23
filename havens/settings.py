@@ -5,9 +5,8 @@ Django 4.2 — see https://docs.djangoproject.com/en/4.2/
 """
 
 from pathlib import Path
-
-
 import os
+from datetime import timedelta
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -128,7 +127,10 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
 GRAPHENE = {
-    'SCHEMA': 'havens.schema.schema'
+    'SCHEMA': 'havens.schema.schema',
+    'MIDDLEWARE': [
+        'graphql_jwt.middleware.JSONWebTokenMiddleware',
+    ],
 }
 
 
@@ -139,3 +141,13 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
+
+
+# GraphQL JWT Authentication Settings
+# https://github.com/flavors/django-graphql-jwt
+GRAPHQL_JWT = {
+    'JWT_VERIFY_EXPIRATION': True,
+    'JWT_EXPIRATION_DELTA': timedelta(minutes=60),
+    'JWT_REFRESH_EXPIRATION_DELTA': timedelta(days=7),
+    'JWT_ALLOW_ARGUMENT': True,
+}

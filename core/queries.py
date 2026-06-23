@@ -39,10 +39,11 @@ class Query(graphene.ObjectType):
     participations_by_user = graphene.List(ParticipationType, user_id=graphene.Int(required=True))
 
     def resolve_my_profile(self, info):
+        """Returns the authenticated user via JWT; None if not authenticated."""
         user = info.context.user
         if user and user.is_authenticated:
             return user
-        return User.objects.first()
+        return None
 
     def resolve_all_users(self, info):
         return User.objects.all()

@@ -1,4 +1,5 @@
 import graphene
+import graphql_jwt
 from django.contrib.auth.models import User
 from django.db import transaction
 from django.utils import timezone
@@ -149,3 +150,8 @@ class Mutation(graphene.ObjectType):
     create_community = CreateCommunity.Field()
     create_event = CreateEvent.Field()
     confirm_attendance = ConfirmAttendance.Field()
+
+    # JWT Authentication mutations
+    token_auth = graphql_jwt.ObtainJSONWebToken.Field()
+    verify_token = graphql_jwt.Verify.Field()
+    refresh_token = graphql_jwt.Refresh.Field()
