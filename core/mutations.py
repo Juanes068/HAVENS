@@ -5,6 +5,7 @@ from django.db import transaction
 from django.utils import timezone
 from .types import UserType, CommunityType, EventType, TicketType, ParticipationType
 from .models import Community, Event, Ticket, Participation, UserProfile
+from .decorators import login_required
 
 
 class CreateUser(graphene.Mutation):
@@ -58,36 +59,33 @@ class CreateEvent(graphene.Mutation):
         description = graphene.String(required=True)
         latitude = graphene.Float(required=True)
         longitude = graphene.Float(required=True)
-        community_id = graphene.Int()
-        creator_id = graphene.Int()
-        points_reward = graphene.Int(default_value=10)
-        scheduled_date = graphene.DateTime()
+        communityId = graphene.Int()
+        pointsReward = graphene.Int(default_value=10)
 
     event = graphene.Field(EventType)
     success = graphene.Boolean()
     message = graphene.String()
 
     @classmethod
+    @login_required
     def mutate(cls, root, info, title, description, latitude, longitude,
-               community_id=None, creator_id=None, points_reward=10, scheduled_date=None):
+               communityId=None, pointsReward=10):
         try:
-            community = Community.objects.get(id=community_id) if community_id else None
-            creator = User.objects.get(id=creator_id) if creator_id else None
+            user = info.context.user
+            community = Community.objects.get(id=communityId) if communityId else None
             event = Event.objects.create(
                 title=title,
                 description=description,
                 latitude=latitude,
                 longitude=longitude,
                 community=community,
-                creator=creator,
-                points_reward=points_reward,
-                scheduled_date=scheduled_date or timezone.now(),
+                creator=user,
+                points_reward=pointsReward,
+                scheduled_date=timezone.now(),
             )
             return cls(event=event, success=True, message="Event created successfully")
         except Community.DoesNotExist:
             return cls(event=None, success=False, message="Community not found")
-        except User.DoesNotExist:
-            return cls(event=None, success=False, message="Creator not found")
         except Exception as e:
             return cls(event=None, success=False, message=str(e))
 

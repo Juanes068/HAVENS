@@ -5,15 +5,18 @@ from .models import Community, Event, Ticket, Participation, UserProfile
 
 
 class UserType(DjangoObjectType):
-    total_points = graphene.Int()
+    totalPoints = graphene.Int()
 
     class Meta:
         model = User
         fields = ("id", "username", "email")
 
-    def resolve_total_points(self, info):
-        profile = getattr(self, 'profile', None)
-        return profile.total_points if profile else 0
+    def resolve_totalPoints(self, info):
+        try:
+            profile = UserProfile.objects.get(user=self)
+            return profile.total_points
+        except UserProfile.DoesNotExist:
+            return 0
 
 
 class CommunityType(DjangoObjectType):
