@@ -20,9 +20,14 @@ class UserType(DjangoObjectType):
 
 
 class CommunityType(DjangoObjectType):
+    events = graphene.List(lambda: EventType)
+
     class Meta:
         model = Community
         fields = ("id", "name", "subdomain", "created_at")
+
+    def resolve_events(self, info):
+        return self.events.all()
 
 
 class EventType(DjangoObjectType):
