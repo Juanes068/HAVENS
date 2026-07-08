@@ -8,7 +8,7 @@ from .models import (
 )
 
 
-# Feature 7: Ampliación del Perfil
+# Feature 7: Extended User Profile
 class UserProfileType(DjangoObjectType):
     class Meta:
         model = UserProfile

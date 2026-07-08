@@ -17,7 +17,7 @@ from .decorators import login_required
 
 
 # ───────────────────────────────────────────────
-# Feature 7 + 1: Create User (requiere invitation code)
+# Feature 7 + 1: Create User (requires invitation code)
 # ───────────────────────────────────────────────
 class CreateUser(graphene.Mutation):
     class Arguments:

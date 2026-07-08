@@ -13,7 +13,7 @@ class Community(models.Model):
         return self.name
 
 
-# Feature 7: Ampliación del Perfil de Usuario
+# Feature 7: Extended User Profile
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     total_points = models.IntegerField(default=0)
@@ -25,7 +25,7 @@ class UserProfile(models.Model):
         return f"{self.user.username} ({self.total_points} pts)"
 
 
-# Feature 2: Conexión Usuario - Comunidad
+# Feature 2: User - Community Connection
 class CommunityMembership(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='community_memberships')
     community = models.ForeignKey(Community, on_delete=models.CASCADE, related_name='memberships')
@@ -38,7 +38,7 @@ class CommunityMembership(models.Model):
         return f"{self.user.username} in {self.community.name}"
 
 
-# Feature 1: Sistema de Invitación Exclusiva
+# Feature 1: Exclusive Invitation System
 class InvitationCode(models.Model):
     code = models.CharField(max_length=32, unique=True, default=uuid.uuid4, editable=False)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='invites_created')
@@ -75,7 +75,7 @@ class Event(models.Model):
         return self.title
 
 
-# Feature 4: "Tinder de Eventos" — EventRSVP
+# Feature 4: "Event Tinder" — EventRSVP
 class EventRSVP(models.Model):
     RESPONSE_CHOICES = [
         ('going', 'Going'),
@@ -122,7 +122,7 @@ class Participation(models.Model):
         return f"{self.user.username} @ {self.event.title} (+{self.points_awarded})"
 
 
-# Feature 3: La Red de Confianza (Friend Requests)
+# Feature 3: Trust Network (Friend Requests)
 class Friendship(models.Model):
     STATUS_CHOICES = [
         ('pending', 'Pending'),
@@ -143,7 +143,7 @@ class Friendship(models.Model):
         return f"{self.from_user.username} → {self.to_user.username} ({self.status})"
 
 
-# Feature 5: Matches y Chat (Mensajería)
+# Feature 5: Matches & Chat (Messaging)
 class Match(models.Model):
     user1 = models.ForeignKey(User, on_delete=models.CASCADE, related_name='matches_as_user1')
     user2 = models.ForeignKey(User, on_delete=models.CASCADE, related_name='matches_as_user2')
