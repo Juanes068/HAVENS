@@ -3,6 +3,7 @@ import graphql_jwt
 from django.contrib.auth.models import User
 from django.db import transaction
 from django.utils import timezone
+from graphql import GraphQLError
 from .types import (
     UserType, CommunityType, EventType, TicketType, ParticipationType,
     InvitationCodeType, CommunityMembershipType, EventRSVPType,
@@ -275,17 +276,18 @@ class SendMessage(graphene.Mutation):
     @classmethod
     @login_required
     def mutate(cls, root, info, match_id, content):
+        sender = info.context.user
         try:
-            sender = info.context.user
             match = Match.objects.get(id=match_id)
-
-            if sender != match.user1 and sender != match.user2:
-                return cls(message=None, success=False, message_field="You are not part of this match")
-
-            msg = Message.objects.create(match=match, sender=sender, content=content)
-            return cls(message=msg, success=True, message_field="Message sent")
         except Match.DoesNotExist:
             return cls(message=None, success=False, message_field="Match not found")
+
+        if sender != match.user1 and sender != match.user2:
+            raise GraphQLError("You are not part of this match")
+
+        try:
+            msg = Message.objects.create(match=match, sender=sender, content=content)
+            return cls(message=msg, success=True, message_field="Message sent")
         except Exception as e:
             return cls(message=None, success=False, message_field=str(e))
 
@@ -476,8 +478,12 @@ class ConfirmAttendance(graphene.Mutation):
     message = graphene.String()
 
     @classmethod
+    @login_required
     @transaction.atomic
     def mutate(cls, root, info, user_id, event_id):
+        if info.context.user.id != user_id:
+            raise GraphQLError("You cannot confirm attendance for another user.")
+
         try:
             user = User.objects.get(id=user_id)
             event = Event.objects.get(id=event_id)
@@ -515,6 +521,63 @@ class ConfirmAttendance(graphene.Mutation):
                        success=False, message=str(e))
 
 
+# ───────────────────────────────────────────────
+# Feature 6: Cloudinary Upload Signature (React Native)
+# ───────────────────────────────────────────────
+class GenerateCloudinarySignature(graphene.Mutation):
+    """
+    Generates a secure upload signature for Cloudinary.
+    The frontend (React Native) sends the parameters to sign (e.g., folder, public_id),
+    and this mutation returns the signature, timestamp, and API Key required to upload
+    directly to Cloudinary from the mobile app.
+    """
+    class Arguments:
+        params_to_sign = graphene.JSONString(required=True)
+
+    signature = graphene.String()
+    timestamp = graphene.Int()
+    api_key = graphene.String()
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @classmethod
+    @login_required
+    def mutate(cls, root, info, params_to_sign):
+        import os
+        import time
+        import cloudinary.utils
+
+        try:
+            api_secret = os.getenv('CLOUDINARY_API_SECRET')
+            api_key = os.getenv('CLOUDINARY_API_KEY')
+
+            if not api_secret or not api_key:
+                return cls(
+                    signature=None, timestamp=None, api_key=None,
+                    success=False, message="Cloudinary credentials not configured in environment"
+                )
+
+            # Convert to dictionary and populate timestamp if not present
+            params = dict(params_to_sign) if params_to_sign else {}
+            if 'timestamp' not in params:
+                params['timestamp'] = int(time.time())
+
+            signature = cloudinary.utils.api_sign_request(params, api_secret)
+
+            return cls(
+                signature=signature,
+                timestamp=int(params['timestamp']),
+                api_key=api_key,
+                success=True,
+                message="Signature generated successfully"
+            )
+        except Exception as e:
+            return cls(
+                signature=None, timestamp=None, api_key=None,
+                success=False, message=str(e)
+            )
+
+
 class Mutation(graphene.ObjectType):
     # Auth
     create_user = CreateUser.Field()
@@ -545,3 +608,4 @@ class Mutation(graphene.ObjectType):
 
     # Images (Feature 6)
     presigned_url = PresignedURL.Field()
+    generate_cloudinary_signature = GenerateCloudinarySignature.Field()

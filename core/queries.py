@@ -1,6 +1,8 @@
 import graphene
 from django.contrib.auth.models import User
 from django.db import models as django_models
+from django.db.models import F, Value
+from django.db.models.functions import ACos, Cos, Sin, Radians
 from .types import (
     UserType, UserProfileType, CommunityType, CommunityMembershipType,
     EventType, TicketType, ParticipationType, InvitationCodeType,
@@ -108,7 +110,12 @@ class Query(graphene.ObjectType):
     def resolve_all_events(self, info, latitude=None, longitude=None, radius_km=10.0):
         queryset = Event.objects.select_related('community', 'creator').all()
         if latitude is not None and longitude is not None:
-            return filter_events_by_radius(queryset, latitude, longitude, radius_km)
+            distance_expr = 6371 * ACos(
+                Cos(Radians(Value(latitude))) * Cos(Radians(F('latitude'))) *
+                Cos(Radians(F('longitude')) - Radians(Value(longitude))) +
+                Sin(Radians(Value(latitude))) * Sin(Radians(F('latitude')))
+            )
+            return queryset.annotate(distance=distance_expr).filter(distance__lte=radius_km)
         return queryset
 
     def resolve_event_by_id(self, info, id):
