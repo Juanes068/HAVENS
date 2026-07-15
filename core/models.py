@@ -40,7 +40,7 @@ class CommunityMembership(models.Model):
 
 # Feature 1: Exclusive Invitation System
 class InvitationCode(models.Model):
-    code = models.CharField(max_length=32, unique=True, default=uuid.uuid4, editable=False)
+    code = models.CharField(max_length=36, unique=True, default=uuid.uuid4, editable=False)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='invites_created')
     used_by = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='invited_with')
     is_used = models.BooleanField(default=False)
