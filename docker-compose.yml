@@ -52,3 +52,14 @@ services:
       - DB_PASSWORD=Juanes068
       - DB_HOST=db
       - DB_PORT=3306
+
+  frontend:
+    build: ./havens-web
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./havens-web:/app
+      - /app/node_modules
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true

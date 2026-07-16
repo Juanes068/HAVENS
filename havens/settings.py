@@ -37,9 +37,11 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'core', 
     'graphene_django',
+    'corsheaders',
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -152,3 +154,7 @@ JWT_EXPIRATION_DELTA = timedelta(minutes=60)
 JWT_REFRESH_EXPIRATION_DELTA = timedelta(days=7)
 JWT_ALLOW_REFRESH = True
 JWT_VERIFY_EXPIRATION = True
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+]
