@@ -1,98 +1,49 @@
 import React, { useState } from 'react'
+import { useQuery } from '@apollo/client'
 import { SectionHeading } from '../components/SectionHeading'
 import { EventCard, DiscoverPlan } from '../components/EventCard'
-
-const DISCOVER_PLANS: DiscoverPlan[] = [
-  {
-    id: 1,
-    title: 'Sunrise hike & coffee',
-    host: 'Maya R.',
-    date: 'Sat Jul 18',
-    time: '6:30 AM',
-    location: 'Runyon Canyon',
-    category: 'Outdoors',
-    going: 12,
-    mutualsFriends: 3,
-    img: 'https://images.unsplash.com/photo-1454496522488-7a8e488e8606?w=600&h=400&fit=crop&auto=format',
-    tags: ['hiking', 'morning'],
-  },
-  {
-    id: 2,
-    title: 'Natural wine tasting',
-    host: 'The Porch',
-    date: 'Fri Jul 17',
-    time: '7:00 PM',
-    location: 'Los Feliz',
-    category: 'Food & Drink',
-    going: 24,
-    mutualsFriends: 5,
-    img: 'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?w=600&h=400&fit=crop&auto=format',
-    tags: ['wine', 'social'],
-  },
-  {
-    id: 3,
-    title: 'Beach bonfire night',
-    host: 'Jordan L.',
-    date: 'Sat Jul 19',
-    time: '8:00 PM',
-    location: 'Zuma Beach',
-    category: 'Social',
-    going: 31,
-    mutualsFriends: 7,
-    img: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&h=400&fit=crop&auto=format',
-    tags: ['bonfire', 'beach'],
-  },
-  {
-    id: 4,
-    title: 'Sunday farmers market',
-    host: 'Priya K.',
-    date: 'Sun Jul 20',
-    time: '9:00 AM',
-    location: 'Silver Lake',
-    category: 'Food & Drink',
-    going: 8,
-    mutualsFriends: 2,
-    img: 'https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=600&h=400&fit=crop&auto=format',
-    tags: ['market', 'morning'],
-  },
-  {
-    id: 5,
-    title: 'Outdoor film screening',
-    host: 'Cinespia',
-    date: 'Sat Jul 25',
-    time: '8:30 PM',
-    location: 'Hollywood Forever',
-    category: 'Arts',
-    going: 180,
-    mutualsFriends: 9,
-    img: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&h=400&fit=crop&auto=format',
-    tags: ['film', 'night'],
-  },
-  {
-    id: 6,
-    title: 'Ceramics open studio',
-    host: 'Clay LA',
-    date: 'Thu Jul 24',
-    time: '6:00 PM',
-    location: 'Echo Park',
-    category: 'Arts',
-    going: 14,
-    mutualsFriends: 4,
-    img: 'https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?w=600&h=400&fit=crop&auto=format',
-    tags: ['craft', 'creative'],
-  },
-]
+import { GET_ALL_EVENTS } from '../graphql/operations'
 
 const CATEGORIES = ['All', 'Outdoors', 'Food & Drink', 'Arts', 'Social', 'Wellness']
 
+const DEFAULT_IMAGES = [
+  'https://images.unsplash.com/photo-1454496522488-7a8e488e8606?w=600&h=400&fit=crop&auto=format',
+  'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?w=600&h=400&fit=crop&auto=format',
+  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&h=400&fit=crop&auto=format',
+  'https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=600&h=400&fit=crop&auto=format',
+  'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&h=400&fit=crop&auto=format',
+]
+
 export const DiscoverView: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState('All')
-  const [savedIds, setSavedIds] = useState<number[]>([1])
+  const [savedIds, setSavedIds] = useState<number[]>([])
+
+  // Fetch events dynamically from the Django GraphQL backend
+  const { data, loading, error, refetch } = useQuery(GET_ALL_EVENTS, {
+    fetchPolicy: 'cache-and-network',
+  })
+
+  const rawEvents = data?.allEvents || []
+
+  // Adapt GraphQL backend event data into DiscoverPlan shape for UI cards
+  const plans: DiscoverPlan[] = rawEvents.map((evt: any, idx: number) => ({
+    id: parseInt(evt.id, 10) || idx + 1,
+    title: evt.title || 'Untitled Community Event',
+    host: evt.creator?.username ? `@${evt.creator.username}` : 'havens member',
+    date: 'Upcoming',
+    time: 'Flexible',
+    location: evt.latitude && evt.longitude ? `${evt.latitude.toFixed(2)}, ${evt.longitude.toFixed(2)}` : 'Vancouver, BC',
+    category: evt.visibility === 'public' ? 'Social' : 'Outdoors',
+    going: (evt.trustScore || 1) * 3 + 2,
+    mutualsFriends: 2,
+    img: DEFAULT_IMAGES[idx % DEFAULT_IMAGES.length],
+    tags: [evt.visibility || 'public'],
+  }))
 
   const filtered =
     activeCategory === 'All'
-      ? DISCOVER_PLANS
-      : DISCOVER_PLANS.filter((p) => p.category === activeCategory)
+      ? plans
+      : plans.filter((p) => p.category === activeCategory)
 
   const toggleSave = (id: number) =>
     setSavedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
@@ -103,7 +54,7 @@ export const DiscoverView: React.FC = () => {
       <div className="flex items-end justify-between mb-8">
         <div>
           <SectionHeading>Discover plans</SectionHeading>
-          <p className="text-sm text-muted mt-1">What your city is getting up to this week</p>
+          <p className="text-sm text-muted mt-1">What your trusted circle is getting up to</p>
         </div>
         <div className="flex items-center gap-2 bg-sand rounded-xl p-1">
           <button className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white text-charcoal shadow-sm">
@@ -112,8 +63,11 @@ export const DiscoverView: React.FC = () => {
           <button className="px-3 py-1.5 rounded-lg text-xs font-medium text-muted hover:text-charcoal">
             This month
           </button>
-          <button className="px-3 py-1.5 rounded-lg text-xs font-medium text-muted hover:text-charcoal">
-            Near me
+          <button
+            onClick={() => refetch()}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium text-forest hover:underline"
+          >
+            Refresh
           </button>
         </div>
       </div>
@@ -135,8 +89,25 @@ export const DiscoverView: React.FC = () => {
         ))}
       </div>
 
+      {/* Loading State */}
+      {loading && (
+        <div className="text-center py-20 text-muted font-normal animate-pulse text-sm">
+          Fetching live events from havens backend...
+        </div>
+      )}
+
+      {/* Error State */}
+      {error && !loading && (
+        <div className="p-4 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-sm mb-6 flex justify-between items-center">
+          <span>Failed to load events: {error.message}</span>
+          <button onClick={() => refetch()} className="text-xs font-semibold underline">
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Featured Card + Grid */}
-      {filtered.length > 0 && (
+      {!loading && filtered.length > 0 && (
         <>
           {/* Featured Card */}
           <div className="mb-6 rounded-2xl overflow-hidden border border-border bg-white flex h-64 group cursor-pointer">
@@ -154,11 +125,7 @@ export const DiscoverView: React.FC = () => {
                   <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-[#eaf3ed] text-forest">
                     {filtered[0].category}
                   </span>
-                  {filtered[0].mutualsFriends > 0 && (
-                    <span className="text-xs text-muted">
-                      {filtered[0].mutualsFriends} friends going
-                    </span>
-                  )}
+                  <span className="text-xs text-muted">Host: {filtered[0].host}</span>
                 </div>
                 <h2 className="text-2xl text-charcoal mb-2 font-serif font-semibold">
                   {filtered[0].title}
@@ -173,13 +140,6 @@ export const DiscoverView: React.FC = () => {
                   </span>
                   <span className="flex items-center gap-1.5">
                     <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none">
-                      <circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.3" />
-                      <path d="M8 5v3.5l2 1.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-                    </svg>
-                    {filtered[0].time}
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none">
                       <path d="M8 1.5C5.79 1.5 4 3.29 4 5.5c0 3 4 9 4 9s4-6 4-9c0-2.21-1.79-4-4-4z" stroke="currentColor" strokeWidth="1.3" />
                       <circle cx="8" cy="5.5" r="1.5" stroke="currentColor" strokeWidth="1.3" />
                     </svg>
@@ -189,16 +149,7 @@ export const DiscoverView: React.FC = () => {
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="flex -space-x-1">
-                    {['#2D5A3D', '#7aaa8a', '#C47B5A'].map((c, i) => (
-                      <div
-                        key={i}
-                        className="w-7 h-7 rounded-full border-2 border-white"
-                        style={{ backgroundColor: c }}
-                      />
-                    ))}
-                  </div>
-                  <span className="text-sm text-muted">{filtered[0].going} going</span>
+                  <span className="text-sm text-muted">{filtered[0].going} confirmed</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -230,7 +181,7 @@ export const DiscoverView: React.FC = () => {
             </div>
           </div>
 
-          {/* Rest of plans grid */}
+          {/* Grid */}
           <div className="grid grid-cols-3 gap-4">
             {filtered.slice(1).map((plan) => (
               <EventCard
@@ -244,10 +195,10 @@ export const DiscoverView: React.FC = () => {
         </>
       )}
 
-      {filtered.length === 0 && (
+      {!loading && filtered.length === 0 && (
         <div className="text-center py-20 text-muted">
-          <p className="text-lg mb-1 font-serif">Nothing here yet</p>
-          <p className="text-sm">Try a different category or check back soon.</p>
+          <p className="text-lg mb-1 font-serif">No events found in backend</p>
+          <p className="text-sm">Post a plan to create the first community event!</p>
         </div>
       )}
     </div>

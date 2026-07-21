@@ -1,57 +1,69 @@
 import React from 'react'
+import { NavLink, useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 
-export type NavPage = 'Discover' | 'My Plans' | 'Calendar' | 'Saved' | 'Post a Plan'
-
-const NAV_LINKS: NavPage[] = ['Discover', 'My Plans', 'Calendar', 'Saved', 'Post a Plan']
-
-interface NavigationProps {
-  activePage: NavPage
-  onNavigate: (page: NavPage) => void
+interface NavItem {
+  label: string
+  path: string
 }
 
-export const Navigation: React.FC<NavigationProps> = ({ activePage, onNavigate }) => {
+const NAV_ITEMS: NavItem[] = [
+  { label: 'Discover', path: '/discover' },
+  { label: 'My Plans', path: '/my-plans' },
+  { label: 'Calendar', path: '/calendar' },
+  { label: 'Saved', path: '/saved' },
+  { label: 'Post a Plan', path: '/post-a-plan' },
+]
+
+export const Navigation: React.FC = () => {
+  const navigate = useNavigate()
+  const { user, logout } = useAuth()
+
+  const handleLogout = () => {
+    logout()
+    navigate('/auth')
+  }
+
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-[#F4EEE2]/90 backdrop-blur-sm">
       <div className="max-w-[1400px] mx-auto px-6 h-16 flex items-center gap-8">
         <span
-          className="text-xl text-forest mr-4 shrink-0 cursor-pointer font-serif font-semibold tracking-tight lowercase"
-          onClick={() => onNavigate('Discover')}
+          className="text-xl text-[#2D5A3D] mr-4 shrink-0 cursor-pointer font-serif font-semibold tracking-tight lowercase"
+          onClick={() => navigate('/discover')}
         >
           havens
         </span>
         <nav className="flex items-center gap-1 flex-1">
-          {NAV_LINKS.map((link) => (
-            <button
-              key={link}
-              onClick={() => onNavigate(link)}
-              className={`px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
-                activePage === link
-                  ? 'bg-forest text-white'
-                  : 'text-[#5a5450] hover:text-charcoal hover:bg-sand'
-              }`}
+          {NAV_ITEMS.map((item) => (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              className={({ isActive }) =>
+                `px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
+                  isActive
+                    ? 'bg-[#2D5A3D] text-white'
+                    : 'text-[#5a5450] hover:text-charcoal hover:bg-sand'
+                }`
+              }
             >
-              {link}
-            </button>
+              {item.label}
+            </NavLink>
           ))}
         </nav>
-        <button className="shrink-0 flex items-center gap-2 px-4 py-2 rounded-lg bg-forest text-white text-sm font-medium hover:bg-forest-light transition-colors duration-150">
-          <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none">
-            <path
-              d="M13.5 8A5.5 5.5 0 1 1 8 2.5"
-              stroke="currentColor"
-              strokeWidth="1.4"
-              strokeLinecap="round"
-            />
-            <path
-              d="M8 1l2.5 2-2.5 2"
-              stroke="currentColor"
-              strokeWidth="1.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          Sync Calendar
-        </button>
+
+        <div className="flex items-center gap-3">
+          {user && (
+            <span className="text-xs font-medium text-[#2D5A3D] bg-[#eaf3ed] px-2.5 py-1 rounded-full">
+              @{user.username}
+            </span>
+          )}
+          <button
+            onClick={handleLogout}
+            className="px-3 py-1.5 rounded-lg border border-border text-xs font-medium text-muted hover:text-rose-700 hover:border-rose-200 transition-colors"
+          >
+            Sign out
+          </button>
+        </div>
       </div>
     </header>
   )
