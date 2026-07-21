@@ -41,113 +41,120 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-4">
-      <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl">
-        {/* Header */}
-        <div className="text-center mb-6">
-          <h1 className="text-4xl font-extrabold bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
-            Havens Web
+    <div className="min-h-screen bg-havens-cream text-havens-charcoal flex flex-col items-center justify-center p-6 antialiased">
+      <div className="max-w-md w-full bg-havens-sand/50 border border-havens-sand rounded-3xl p-8 shadow-sm text-slate-800">
+        
+        {/* Brand Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-semibold tracking-tight text-havens-forest lowercase">
+            havens
           </h1>
-          <p className="text-xs font-semibold tracking-widest text-slate-500 uppercase mt-1">
-            Authentication & Apollo Client Infrastructure
+          <p className="text-sm text-havens-muted font-normal mt-1">
+            warm, grounded community spaces
           </p>
         </div>
 
         {/* Loading State */}
         {isLoading ? (
-          <div className="text-center py-8 text-slate-400 animate-pulse">
-            Loading session status...
+          <div className="text-center py-10 text-havens-muted font-normal animate-pulse text-sm">
+            gathering your space...
           </div>
         ) : user ? (
-          /* Logged In State */
+          /* Authenticated State */
           <div className="space-y-6">
-            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
-              <div className="flex items-center space-x-3 mb-3">
-                <div className="h-10 w-10 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-lg">
-                  {user.username ? user.username[0].toUpperCase() : 'U'}
+            <div className="bg-havens-cream p-5 rounded-2xl border border-havens-sand shadow-xs">
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="h-11 w-11 rounded-full bg-havens-forest text-havens-cream flex items-center justify-center font-medium text-lg">
+                  {user.username ? user.username[0].toLowerCase() : 'u'}
                 </div>
                 <div>
-                  <h3 className="font-bold text-white text-base">{user.username}</h3>
-                  <p className="text-xs text-slate-400">{user.email}</p>
+                  <h3 className="font-semibold text-havens-charcoal text-base">
+                    {user.username}
+                  </h3>
+                  <p className="text-xs text-havens-muted">{user.email}</p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 text-xs border-t border-slate-900 pt-3">
+              <div className="grid grid-cols-2 gap-3 text-xs border-t border-havens-sand/80 pt-4 mt-2">
                 <div>
-                  <span className="text-slate-500 block">Total Points:</span>
-                  <span className="font-semibold text-emerald-400">{user.totalPoints ?? 0} pts</span>
+                  <span className="text-havens-muted block mb-0.5">Trust Points</span>
+                  <span className="font-semibold text-havens-forest">{user.totalPoints ?? 0} pts</span>
                 </div>
                 <div>
-                  <span className="text-slate-500 block">Neighbourhood:</span>
-                  <span className="font-semibold text-slate-300">{user.neighbourhood || 'N/A'}</span>
+                  <span className="text-havens-muted block mb-0.5">Neighbourhood</span>
+                  <span className="font-semibold text-havens-charcoal">{user.neighbourhood || 'Not set'}</span>
                 </div>
               </div>
 
               {user.bio && (
-                <div className="mt-3 text-xs text-slate-400 italic">
+                <div className="mt-3 text-xs text-havens-muted bg-havens-sand/40 p-3 rounded-xl border border-havens-sand/60 italic">
                   "{user.bio}"
                 </div>
               )}
             </div>
 
-            <div className="bg-slate-950 p-3 rounded-lg border border-slate-900 text-xs">
-              <span className="text-slate-500 font-mono block mb-1">JWT Header Status:</span>
-              <span className="text-emerald-400 font-mono break-all line-clamp-2">
+            <div className="bg-havens-cream p-3 rounded-xl border border-havens-sand text-xs space-y-1">
+              <span className="text-havens-muted font-medium block">Header Authorization:</span>
+              <span className="text-havens-clay font-mono text-[11px] break-all block">
                 Authorization: JWT {token}
               </span>
             </div>
 
             <button
               onClick={logout}
-              className="w-full py-2.5 px-4 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-semibold text-sm transition-colors border border-rose-500/20"
+              className="w-full py-3 px-4 rounded-2xl bg-havens-cream hover:bg-rose-50 text-rose-700 font-medium text-sm transition-colors border border-rose-200/80 shadow-xs"
             >
-              Sign Out
+              Sign out
             </button>
           </div>
         ) : (
-          /* Login Form State */
+          /* Sign-in Form */
           <form onSubmit={handleLoginSubmit} className="space-y-4">
             {errorMsg && (
-              <div className="p-3 text-xs bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg">
+              <div className="p-3 text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl">
                 {errorMsg}
               </div>
             )}
 
             <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1">Username</label>
+              <label className="block text-xs font-medium text-havens-muted mb-1.5">
+                Username
+              </label>
               <input
                 type="text"
                 value={usernameInput}
                 onChange={(e) => setUsernameInput(e.target.value)}
-                placeholder="Enter username"
-                className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors"
+                placeholder="Enter your username"
+                className="w-full px-4 py-2.5 rounded-2xl bg-havens-cream border border-havens-sand text-havens-charcoal text-sm focus:outline-none focus:border-havens-forest transition-colors placeholder:text-havens-muted/60"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1">Password</label>
+              <label className="block text-xs font-medium text-havens-muted mb-1.5">
+                Password
+              </label>
               <input
                 type="password"
                 value={passwordInput}
                 onChange={(e) => setPasswordInput(e.target.value)}
-                placeholder="Enter password"
-                className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors"
+                placeholder="Enter your password"
+                className="w-full px-4 py-2.5 rounded-2xl bg-havens-cream border border-havens-sand text-havens-charcoal text-sm focus:outline-none focus:border-havens-forest transition-colors placeholder:text-havens-muted/60"
               />
             </div>
 
             <button
               type="submit"
               disabled={isAuthenticating}
-              className="w-full py-2.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-sm transition-colors disabled:opacity-50"
+              className="w-full py-3 px-4 rounded-2xl bg-havens-forest hover:bg-havens-forest/90 text-havens-cream font-medium text-sm transition-colors shadow-xs disabled:opacity-60 mt-2"
             >
-              {isAuthenticating ? 'Authenticating...' : 'Sign In'}
+              {isAuthenticating ? 'Connecting...' : 'Sign in'}
             </button>
           </form>
         )}
 
-        {/* Footer info */}
-        <div className="mt-8 pt-4 border-t border-slate-800/60 text-center text-[10px] text-slate-500">
-          Backend Endpoint: <span className="font-mono text-slate-400">http://localhost:8000/graphql/</span>
+        {/* Footer */}
+        <div className="mt-8 pt-4 border-t border-havens-sand/80 text-center text-[11px] text-havens-muted">
+          connected to <span className="font-mono text-havens-forest">http://localhost:8000/graphql/</span>
         </div>
       </div>
     </div>

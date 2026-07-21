@@ -62,3 +62,25 @@ export const MY_PROFILE = gql`
     }
   }
 `;
+
+/**
+ * Query to fetch events, optionally filtered by geolocation coordinates and radius.
+ */
+export const ALL_EVENTS = gql`
+  query AllEvents($latitude: Float, $longitude: Float, $radiusKm: Float) {
+    allEvents(latitude: $latitude, longitude: $longitude, radiusKm: $radiusKm) {
+      id
+      title
+      description
+      latitude
+      longitude
+      pointsReward
+      visibility
+      trustScore
+      creator {
+        id
+        username
+      }
+    }
+  }
+`;

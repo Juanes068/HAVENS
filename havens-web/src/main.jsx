@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { ApolloProvider } from '@apollo/client'
 import { client } from './services/apollo'
 import { AuthProvider } from './context/AuthContext'
-import App from './App.jsx'
+import App from './App.tsx'
 import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(

@@ -1,21 +1,26 @@
 import { ApolloClient, InMemoryCache, createHttpLink } from '@apollo/client';
 import { setContext } from '@apollo/client/link/context';
 
-export const JWT_TOKEN_KEY = 'havens_jwt_token';
+/**
+ * Storage key for persisting the havens session JWT token in browser localStorage.
+ * Always formatted in lowercase as per havens brand guidelines.
+ */
+export const HAVENS_JWT_TOKEN_KEY = 'havens_jwt_token';
 
 /**
- * HTTP Link pointing to the local Django GraphQL backend.
+ * HTTP Link pointing to the local Django GraphQL backend server.
  */
 const httpLink = createHttpLink({
   uri: 'http://localhost:8000/graphql/',
 });
 
 /**
- * Authentication Link that reads the JWT token from browser localStorage
+ * Authentication Link that retrieves the JWT token from browser localStorage
  * and automatically injects it into every outgoing HTTP request header.
+ * Header format: Authorization: JWT <token>
  */
 const authLink = setContext((_, { headers }) => {
-  const token = localStorage.getItem(JWT_TOKEN_KEY);
+  const token = localStorage.getItem(HAVENS_JWT_TOKEN_KEY);
   return {
     headers: {
       ...headers,
@@ -25,7 +30,8 @@ const authLink = setContext((_, { headers }) => {
 });
 
 /**
- * Apollo Client instance configured with Auth Link and In-Memory Cache.
+ * Shared Apollo Client instance configured with Auth Link and InMemoryCache
+ * for the havens web application.
  */
 export const client = new ApolloClient({
   link: authLink.concat(httpLink),

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useLazyQuery, useApolloClient } from '@apollo/client';
 import { MY_PROFILE } from '../graphql/operations';
-import { JWT_TOKEN_KEY } from '../services/apollo';
+import { HAVENS_JWT_TOKEN_KEY } from '../services/apollo';
 
 export interface UserProfile {
   id: string;
@@ -24,8 +24,12 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/**
+ * AuthProvider component managing authentication state for the havens web app.
+ * Persists session tokens in browser localStorage and loads user profile metrics.
+ */
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem(JWT_TOKEN_KEY));
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem(HAVENS_JWT_TOKEN_KEY));
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const apolloClient = useApolloClient();
@@ -46,7 +50,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     },
   });
 
-  // Load user profile on mount if token is present
+  // Automatically fetch profile metrics on mount when token is present
   useEffect(() => {
     if (token) {
       setIsLoading(true);
@@ -58,20 +62,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [token, fetchProfile]);
 
   /**
-   * Log in user with token, save to localStorage, and load profile.
+   * Saves new JWT token to localStorage and populates active session state.
    */
   const login = async (newToken: string) => {
-    localStorage.setItem(JWT_TOKEN_KEY, newToken);
+    localStorage.setItem(HAVENS_JWT_TOKEN_KEY, newToken);
     setToken(newToken);
     setIsLoading(true);
     await fetchProfile();
   };
 
   /**
-   * Log out user, remove token from localStorage, clear cache, and reset state.
+   * Removes session token from localStorage, clears Apollo cache, and resets state.
    */
   const logout = () => {
-    localStorage.removeItem(JWT_TOKEN_KEY);
+    localStorage.removeItem(HAVENS_JWT_TOKEN_KEY);
     setToken(null);
     setUser(null);
     setIsLoading(false);
@@ -92,7 +96,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 };
 
 /**
- * Custom hook to access authentication state and methods.
+ * Custom hook to access havens authentication state and methods.
  */
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
