@@ -7,15 +7,21 @@ services:
     ports:
       - "3307:3306"
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      timeout: 20s
-      retries: 10
-      interval: 5s
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-pJuanes068"]
+      timeout: 5s
+      retries: 5
+      interval: 3s
+      start_period: 60s
+    volumes:
+      - db_data:/var/lib/mysql
 
   redis:
-    image: redis:alpine
+    image: redis:7-alpine
     ports:
       - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
 
   web:
     build: .
@@ -25,10 +31,8 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_started
+      - db
+      - redis
     environment:
       - DB_NAME=havens_db
       - DB_USER=root
@@ -42,10 +46,8 @@ services:
     volumes:
       - .:/app
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_started
+      - db
+      - redis
     environment:
       - DB_NAME=havens_db
       - DB_USER=root
@@ -53,13 +55,6 @@ services:
       - DB_HOST=db
       - DB_PORT=3306
 
-  frontend:
-    build: ./havens-web
-    ports:
-      - "5173:5173"
-    volumes:
-      - ./havens-web:/app
-      - /app/node_modules
-    environment:
-      - CHOKIDAR_USEPOLLING=true
-      - WATCHPACK_POLLING=true
+volumes:
+  db_data:
+  redis_data:
