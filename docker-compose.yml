@@ -56,6 +56,21 @@ services:
       - DB_HOST=db
       - DB_PORT=3306
 
+  frontend:
+    container_name: havens-frontend
+    build:
+      context: ./havens-web
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./havens-web:/app
+      - /app/node_modules
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    depends_on:
+      - web
+
 volumes:
   db_data:
   redis_data:
