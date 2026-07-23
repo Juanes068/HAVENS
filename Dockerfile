@@ -17,17 +17,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy requirements first for better caching
 COPY requirements.txt .
 
-# Upgrade pip and install dependencies with specific versions
+# Upgrade pip and install dependencies
 RUN pip install --upgrade pip setuptools wheel && \
     pip install -r requirements.txt
 
 # Copy application code
 COPY . .
-
-# Create non-root user for security
-RUN useradd -m -u 1000 appuser && \
-    chown -R appuser:appuser /app
-
-USER appuser
 
 CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]

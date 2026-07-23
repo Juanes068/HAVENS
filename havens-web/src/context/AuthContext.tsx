@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { useLazyQuery, useApolloClient } from '@apollo/client';
 import { MY_PROFILE } from '../graphql/operations';
 import { HAVENS_JWT_TOKEN_KEY } from '../services/apollo';
+import { secureStorage } from '../services/secureStore';
 
 export interface UserProfile {
   id: string;
@@ -25,11 +26,11 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 /**
- * AuthProvider component managing authentication state for the havens web app.
- * Persists session tokens in browser localStorage and loads user profile metrics.
+ * AuthProvider component managing authentication state for the havens app.
+ * Persists session tokens using secureStorage and loads user profile metrics.
  */
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem(HAVENS_JWT_TOKEN_KEY));
+  const [token, setToken] = useState<string | null>(() => secureStorage.getItemSync(HAVENS_JWT_TOKEN_KEY));
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const apolloClient = useApolloClient();
@@ -62,20 +63,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [token, fetchProfile]);
 
   /**
-   * Saves new JWT token to localStorage and populates active session state.
+   * Saves new JWT token using secureStorage and populates active session state.
    */
   const login = async (newToken: string) => {
-    localStorage.setItem(HAVENS_JWT_TOKEN_KEY, newToken);
+    await secureStorage.setItem(HAVENS_JWT_TOKEN_KEY, newToken);
     setToken(newToken);
     setIsLoading(true);
     await fetchProfile();
   };
 
   /**
-   * Removes session token from localStorage, clears Apollo cache, and resets state.
+   * Removes session token from secureStorage, clears Apollo cache, and resets state.
    */
   const logout = () => {
-    localStorage.removeItem(HAVENS_JWT_TOKEN_KEY);
+    secureStorage.removeItem(HAVENS_JWT_TOKEN_KEY);
     setToken(null);
     setUser(null);
     setIsLoading(false);

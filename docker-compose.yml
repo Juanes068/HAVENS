@@ -24,8 +24,9 @@ services:
       - redis_data:/data
 
   web:
+    container_name: havens-web-app
     build: .
-    command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+    command: sh -c "pip install -r requirements.txt && python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
     volumes:
       - .:/app
     ports:
@@ -42,7 +43,7 @@ services:
 
   celery:
     build: .
-    command: sh -c "python manage.py migrate && celery -A havens worker -l info"
+    command: sh -c "pip install -r requirements.txt && python manage.py migrate && celery -A havens worker -l info"
     volumes:
       - .:/app
     depends_on:

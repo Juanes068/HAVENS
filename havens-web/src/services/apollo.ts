@@ -1,8 +1,9 @@
 import { ApolloClient, InMemoryCache, createHttpLink } from '@apollo/client';
 import { setContext } from '@apollo/client/link/context';
+import { secureStorage } from './secureStore';
 
 /**
- * Storage key for persisting the havens session JWT token in browser localStorage.
+ * Storage key for persisting the havens session JWT token.
  * Always formatted in lowercase as per havens brand guidelines.
  */
 export const HAVENS_JWT_TOKEN_KEY = 'havens_jwt_token';
@@ -15,12 +16,12 @@ const httpLink = createHttpLink({
 });
 
 /**
- * Authentication Link that retrieves the JWT token from browser localStorage
+ * Authentication Link that retrieves the JWT token from secure storage
  * and automatically injects it into every outgoing HTTP request header.
  * Header format: Authorization: JWT <token>
  */
 const authLink = setContext((_, { headers }) => {
-  const token = localStorage.getItem(HAVENS_JWT_TOKEN_KEY);
+  const token = secureStorage.getItemSync(HAVENS_JWT_TOKEN_KEY);
   return {
     headers: {
       ...headers,
@@ -31,7 +32,7 @@ const authLink = setContext((_, { headers }) => {
 
 /**
  * Shared Apollo Client instance configured with Auth Link and InMemoryCache
- * for the havens web application.
+ * for the havens application.
  */
 export const client = new ApolloClient({
   link: authLink.concat(httpLink),
