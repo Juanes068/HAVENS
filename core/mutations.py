@@ -17,6 +17,8 @@ from .models import (
 from .decorators import login_required
 
 
+from .tasks import send_welcome_email
+
 # ───────────────────────────────────────────────
 # Feature 7 + 1: Create User (requires invitation code)
 # ───────────────────────────────────────────────
@@ -57,13 +59,20 @@ class CreateUser(graphene.Mutation):
             invite.used_at = timezone.now()
             invite.save()
 
-            # Create extended profile
+            # Create extended profile (auto-generates short invite_code)
             UserProfile.objects.create(
                 user=user,
                 bio=bio,
                 neighbourhood=neighbourhood,
                 photo_url=photo_url,
             )
+
+            # Trigger asynchronous Celery welcome email task (non-blocking)
+            try:
+                send_welcome_email.delay(user.email, user.username)
+            except Exception as celery_err:
+                # Log or fallback if Celery broker is temporarily unreachable
+                pass
 
             return cls(user=user, success=True, message="User created successfully")
         except Exception as e:

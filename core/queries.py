@@ -7,11 +7,12 @@ from .types import (
     UserType, UserProfileType, CommunityType, CommunityMembershipType,
     EventType, TicketType, ParticipationType, InvitationCodeType,
     EventRSVPType, FriendshipType, MatchType, MessageType,
+    HobbyCategoryType, HobbyType,
 )
 from .models import (
     Community, Event, Ticket, Participation, UserProfile,
     CommunityMembership, InvitationCode, EventRSVP, Friendship,
-    Match, Message,
+    Match, Message, HobbyCategory, Hobby,
 )
 from .utils import filter_events_by_radius
 from .decorators import login_required
@@ -19,6 +20,10 @@ from .decorators import login_required
 
 class Query(graphene.ObjectType):
     hello = graphene.String(default_value="Havens API v1")
+
+    # Hobbies Taxonomy
+    all_hobby_categories = graphene.List(HobbyCategoryType)
+    all_hobbies = graphene.List(HobbyType)
 
     # Users
     my_profile = graphene.Field(UserType)
@@ -71,6 +76,12 @@ class Query(graphene.ObjectType):
     user_profile_by_id = graphene.Field(UserProfileType, user_id=graphene.Int(required=True))
 
     # --- Resolvers ---
+
+    def resolve_all_hobby_categories(self, info):
+        return HobbyCategory.objects.prefetch_related('hobbies').all()
+
+    def resolve_all_hobbies(self, info):
+        return Hobby.objects.select_related('category').all()
 
     def resolve_my_profile(self, info):
         user = info.context.user

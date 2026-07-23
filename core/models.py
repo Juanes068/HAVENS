@@ -2,6 +2,14 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 import uuid
+import random
+import string
+
+
+def generate_short_invite_code(length=6):
+    """Generates a random 5 to 6 character alphanumeric invite code."""
+    chars = string.ascii_uppercase + string.digits
+    return ''.join(random.choices(chars, k=length))
 
 
 class Community(models.Model):
@@ -13,19 +21,55 @@ class Community(models.Model):
         return self.name
 
 
-# Feature 7: Extended User Profile
+class HobbyCategory(models.Model):
+    """Broad category for grouping specific hobbies (e.g., Sports & Fitness, Technology)."""
+    name = models.CharField(max_length=100, unique=True)
+
+    class Meta:
+        verbose_name_plural = 'Hobby Categories'
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class Hobby(models.Model):
+    """Specific hobby belonging to a category (e.g., Running, Artificial Intelligence)."""
+    category = models.ForeignKey(HobbyCategory, on_delete=models.CASCADE, related_name='hobbies')
+    name = models.CharField(max_length=100)
+
+    class Meta:
+        unique_together = ('category', 'name')
+        verbose_name_plural = 'Hobbies'
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.category.name} -> {self.name}"
+
+
+# Extended User Profile with Invite Code and Hobbies Taxonomy
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     total_points = models.IntegerField(default=0)
     bio = models.TextField(blank=True, default='')
     neighbourhood = models.CharField(max_length=200, blank=True, default='')
     photo_url = models.URLField(blank=True, default='')
+    invite_code = models.CharField(max_length=10, unique=True, null=True, blank=True)
+    hobbies = models.ManyToManyField(Hobby, blank=True, related_name='profiles')
+
+    def save(self, *args, **kwargs):
+        if not self.invite_code:
+            code = generate_short_invite_code(6)
+            while UserProfile.objects.filter(invite_code=code).exists():
+                code = generate_short_invite_code(6)
+            self.invite_code = code
+        super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.user.username} ({self.total_points} pts)"
+        return f"{self.user.username} ({self.total_points} pts) [Invite: {self.invite_code}]"
 
 
-# Feature 2: User - Community Connection
+# User - Community Connection
 class CommunityMembership(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='community_memberships')
     community = models.ForeignKey(Community, on_delete=models.CASCADE, related_name='memberships')
@@ -38,7 +82,7 @@ class CommunityMembership(models.Model):
         return f"{self.user.username} in {self.community.name}"
 
 
-# Feature 1: Exclusive Invitation System
+# Exclusive Invitation System
 class InvitationCode(models.Model):
     code = models.CharField(max_length=36, unique=True, default=uuid.uuid4, editable=False)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='invites_created')
@@ -70,12 +114,12 @@ class Event(models.Model):
     visibility = models.CharField(max_length=20, choices=VISIBILITY_CHOICES, default='public')
     scheduled_date = models.DateTimeField(default=timezone.now)
     created_at = models.DateTimeField(default=timezone.now)
+    hobbies = models.ManyToManyField(Hobby, blank=True, related_name='events')
 
     def __str__(self):
         return self.title
 
 
-# Feature 4: "Event Tinder" — EventRSVP
 class EventRSVP(models.Model):
     RESPONSE_CHOICES = [
         ('going', 'Going'),
@@ -122,7 +166,6 @@ class Participation(models.Model):
         return f"{self.user.username} @ {self.event.title} (+{self.points_awarded})"
 
 
-# Feature 3: Trust Network (Friend Requests)
 class Friendship(models.Model):
     STATUS_CHOICES = [
         ('pending', 'Pending'),
@@ -143,7 +186,6 @@ class Friendship(models.Model):
         return f"{self.from_user.username} → {self.to_user.username} ({self.status})"
 
 
-# Feature 5: Matches & Chat (Messaging)
 class Match(models.Model):
     user1 = models.ForeignKey(User, on_delete=models.CASCADE, related_name='matches_as_user1')
     user2 = models.ForeignKey(User, on_delete=models.CASCADE, related_name='matches_as_user2')

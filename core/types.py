@@ -4,15 +4,31 @@ from django.contrib.auth.models import User
 from .models import (
     Community, Event, Ticket, Participation, UserProfile,
     CommunityMembership, InvitationCode, EventRSVP, Friendship,
-    Match, Message,
+    Match, Message, HobbyCategory, Hobby,
 )
 
 
-# Feature 7: Extended User Profile
+class HobbyType(DjangoObjectType):
+    class Meta:
+        model = Hobby
+        fields = ("id", "name", "category")
+
+
+class HobbyCategoryType(DjangoObjectType):
+    hobbies = graphene.List(HobbyType)
+
+    class Meta:
+        model = HobbyCategory
+        fields = ("id", "name")
+
+    def resolve_hobbies(self, info):
+        return self.hobbies.all()
+
+
 class UserProfileType(DjangoObjectType):
     class Meta:
         model = UserProfile
-        fields = ("id", "user", "total_points", "bio", "neighbourhood", "photo_url")
+        fields = ("id", "user", "total_points", "bio", "neighbourhood", "photo_url", "invite_code", "hobbies")
 
 
 class UserType(DjangoObjectType):
@@ -20,6 +36,8 @@ class UserType(DjangoObjectType):
     bio = graphene.String()
     neighbourhood = graphene.String()
     photoUrl = graphene.String()
+    inviteCode = graphene.String()
+    hobbies = graphene.List(HobbyType)
 
     class Meta:
         model = User
@@ -53,6 +71,20 @@ class UserType(DjangoObjectType):
         except UserProfile.DoesNotExist:
             return ""
 
+    def resolve_inviteCode(self, info):
+        try:
+            profile = UserProfile.objects.get(user=self)
+            return profile.invite_code or ""
+        except UserProfile.DoesNotExist:
+            return ""
+
+    def resolve_hobbies(self, info):
+        try:
+            profile = UserProfile.objects.get(user=self)
+            return profile.hobbies.all()
+        except UserProfile.DoesNotExist:
+            return []
+
 
 class CommunityMembershipType(DjangoObjectType):
     class Meta:
@@ -85,6 +117,7 @@ class EventRSVPType(DjangoObjectType):
 
 class EventType(DjangoObjectType):
     trustScore = graphene.Int()
+    hobbies = graphene.List(HobbyType)
 
     class Meta:
         model = Event
@@ -93,6 +126,9 @@ class EventType(DjangoObjectType):
             "latitude", "longitude", "points_reward", "visibility",
             "scheduled_date", "created_at",
         )
+
+    def resolve_hobbies(self, info):
+        return self.hobbies.all()
 
     def resolve_trustScore(self, info):
         """
@@ -118,20 +154,17 @@ class EventType(DjangoObjectType):
                 score += 50
 
         # 15 pts per mutual friend who RSVPed 'going' (max 30 pts = 2 friends)
-        # Get user's friends
         user_friends = set()
         for f in Friendship.objects.filter(from_user=user, status='accepted'):
             user_friends.add(f.to_user_id)
         for f in Friendship.objects.filter(to_user=user, status='accepted'):
             user_friends.add(f.from_user_id)
 
-        # Get users who RSVPed 'going' to this event
         going_users = set(
             EventRSVP.objects.filter(event=self, response='going')
             .values_list('user_id', flat=True)
         )
 
-        # Intersection = mutual friends who are going
         mutual_going = user_friends & going_users
         score += min(len(mutual_going) * 15, 30)
 
