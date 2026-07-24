@@ -90,7 +90,21 @@ class Query(graphene.ObjectType):
         return None
 
     def resolve_all_users(self, info):
-        return User.objects.all()
+        user = info.context.user
+        queryset = User.objects.all()
+        if user and user.is_authenticated:
+            try:
+                user_hobbies = list(user.profile.hobbies.values_list('id', flat=True))
+                if user_hobbies:
+                    queryset = queryset.exclude(id=user.id).annotate(
+                        affinity_score=django_models.Count(
+                            'profile__hobbies',
+                            filter=django_models.Q(profile__hobbies__in=user_hobbies)
+                        )
+                    ).order_by('-affinity_score', '-id')
+            except UserProfile.DoesNotExist:
+                pass
+        return queryset
 
     def resolve_user_by_id(self, info, id):
         try:
@@ -119,6 +133,7 @@ class Query(graphene.ObjectType):
         return CommunityMembership.objects.filter(user=user).select_related('community')
 
     def resolve_all_events(self, info, latitude=None, longitude=None, radius_km=10.0):
+        user = info.context.user
         queryset = Event.objects.select_related('community', 'creator').all()
         if latitude is not None and longitude is not None:
             distance_expr = 6371 * ACos(
@@ -126,7 +141,21 @@ class Query(graphene.ObjectType):
                 Cos(Radians(F('longitude')) - Radians(Value(longitude))) +
                 Sin(Radians(Value(latitude))) * Sin(Radians(F('latitude')))
             )
-            return queryset.annotate(distance=distance_expr).filter(distance__lte=radius_km)
+            queryset = queryset.annotate(distance=distance_expr).filter(distance__lte=radius_km)
+
+        if user and user.is_authenticated:
+            try:
+                user_hobbies = list(user.profile.hobbies.values_list('id', flat=True))
+                if user_hobbies:
+                    queryset = queryset.annotate(
+                        affinity_score=django_models.Count(
+                            'hobbies',
+                            filter=django_models.Q(hobbies__in=user_hobbies)
+                        )
+                    ).order_by('-affinity_score', '-scheduled_date')
+            except UserProfile.DoesNotExist:
+                pass
+
         return queryset
 
     def resolve_event_by_id(self, info, id):

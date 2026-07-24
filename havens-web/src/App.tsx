@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom
 import { useAuth } from './context/AuthContext'
 import { Navigation } from './components/Navigation'
 import { AuthPage } from './pages/Auth'
+import { OnboardingView } from './pages/Onboarding'
 import { DiscoverView } from './pages/Discover'
 import { MyPlansView } from './pages/MyPlans'
 import { CalendarView } from './pages/Calendar'
@@ -44,6 +45,9 @@ export default function App() {
       <Routes>
         {/* Public Auth Route */}
         <Route path="/auth" element={<AuthPage />} />
+
+        {/* Standalone Onboarding Route */}
+        <Route path="/onboarding" element={<OnboardingView />} />
 
         {/* Private Application Routes */}
         <Route element={<ProtectedRoute />}>

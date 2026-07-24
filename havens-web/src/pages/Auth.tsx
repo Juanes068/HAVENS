@@ -24,7 +24,11 @@ export const AuthPage: React.FC = () => {
       if (data?.tokenAuth?.token) {
         await login(data.tokenAuth.token)
         setErrorMsg('')
-        navigate('/discover')
+        if (isRegisterMode) {
+          navigate('/onboarding')
+        } else {
+          navigate('/discover')
+        }
       } else {
         setErrorMsg('Authentication failed: Invalid credentials.')
       }

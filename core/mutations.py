@@ -587,6 +587,27 @@ class GenerateCloudinarySignature(graphene.Mutation):
             )
 
 
+class UpdateUserHobbies(graphene.Mutation):
+    class Arguments:
+        hobby_ids = graphene.List(graphene.Int, required=True)
+
+    success = graphene.Boolean()
+    message = graphene.String()
+    user = graphene.Field(UserType)
+
+    @classmethod
+    @login_required
+    def mutate(cls, root, info, hobby_ids):
+        user = info.context.user
+        try:
+            profile, _ = UserProfile.objects.get_or_create(user=user)
+            hobbies = Hobby.objects.filter(id__in=hobby_ids)
+            profile.hobbies.set(hobbies)
+            return cls(success=True, message="Hobbies updated successfully", user=user)
+        except Exception as e:
+            return cls(success=False, message=str(e), user=None)
+
+
 class Mutation(graphene.ObjectType):
     # Auth
     create_user = CreateUser.Field()
@@ -594,6 +615,7 @@ class Mutation(graphene.ObjectType):
     verify_token = graphql_jwt.Verify.Field()
     refresh_token = graphql_jwt.Refresh.Field()
     update_user_profile = UpdateUserProfile.Field()
+    update_user_hobbies = UpdateUserHobbies.Field()
 
     # Communities
     create_community = CreateCommunity.Field()
