@@ -73,6 +73,49 @@ export const MY_PROFILE = gql`
 `;
 
 /**
+ * Query to fetch all recommended users (sorted by implicit hobby affinity on backend).
+ */
+export const GET_ALL_USERS = gql`
+  query GetAllUsers {
+    allUsers {
+      id
+      username
+      email
+      bio
+      neighbourhood
+      photoUrl
+      hobbies {
+        id
+        name
+      }
+    }
+  }
+`;
+
+/**
+ * Mutation to create a match connection with another user (user2Id).
+ */
+export const CREATE_MATCH = gql`
+  mutation CreateMatch($user2Id: Int!) {
+    createMatch(user2Id: $user2Id) {
+      success
+      message
+      match {
+        id
+        user1 {
+          id
+          username
+        }
+        user2 {
+          id
+          username
+        }
+      }
+    }
+  }
+`;
+
+/**
  * Query to fetch all categorized hobbies for Spotify-style onboarding.
  */
 export const GET_ALL_HOBBY_CATEGORIES = gql`

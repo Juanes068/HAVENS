@@ -82,9 +82,13 @@ class CommunityMembership(models.Model):
         return f"{self.user.username} in {self.community.name}"
 
 
+def generate_6char_invite_code():
+    return generate_short_invite_code(6)
+
+
 # Exclusive Invitation System
 class InvitationCode(models.Model):
-    code = models.CharField(max_length=36, unique=True, default=uuid.uuid4, editable=False)
+    code = models.CharField(max_length=36, unique=True, default=generate_6char_invite_code, editable=False)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='invites_created')
     used_by = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='invited_with')
     is_used = models.BooleanField(default=False)

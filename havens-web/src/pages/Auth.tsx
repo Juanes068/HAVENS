@@ -189,10 +189,11 @@ export const AuthPage: React.FC = () => {
                 </label>
                 <input
                   type="text"
+                  maxLength={6}
                   value={invitationCode}
-                  onChange={(e) => setInvitationCode(e.target.value)}
-                  placeholder="Paste your 36-character invitation UUID"
-                  className="w-full px-4 py-2.5 rounded-xl bg-white border border-[#E2DBD0] text-[#2C2C2C] text-sm focus:outline-none focus:border-[#2D5A3D]"
+                  onChange={(e) => setInvitationCode(e.target.value.toUpperCase())}
+                  placeholder="Enter 6-character code (e.g. A8X9K2)"
+                  className="w-full px-4 py-2.5 rounded-xl bg-white border border-[#E2DBD0] text-[#2C2C2C] text-sm tracking-wider font-mono focus:outline-none focus:border-[#2D5A3D] uppercase"
                 />
               </div>
 
