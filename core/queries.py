@@ -94,14 +94,29 @@ class Query(graphene.ObjectType):
         queryset = User.objects.all()
         if user and user.is_authenticated:
             try:
-                user_hobbies = list(user.profile.hobbies.values_list('id', flat=True))
+                profile = user.profile
+                user_hobbies = list(profile.hobbies.values_list('id', flat=True))
+                queryset = queryset.exclude(id=user.id)
+
                 if user_hobbies:
-                    queryset = queryset.exclude(id=user.id).annotate(
+                    queryset = queryset.annotate(
                         affinity_score=django_models.Count(
                             'profile__hobbies',
                             filter=django_models.Q(profile__hobbies__in=user_hobbies)
                         )
-                    ).order_by('-affinity_score', '-id')
+                    )
+                else:
+                    queryset = queryset.annotate(affinity_score=Value(0))
+
+                if profile.latitude is not None and profile.longitude is not None:
+                    distance_expr = 6371 * ACos(
+                        Cos(Radians(Value(profile.latitude))) * Cos(Radians(F('profile__latitude'))) *
+                        Cos(Radians(F('profile__longitude')) - Radians(Value(profile.longitude))) +
+                        Sin(Radians(Value(profile.latitude))) * Sin(Radians(F('profile__latitude')))
+                    )
+                    queryset = queryset.annotate(distance=distance_expr).order_by('distance', '-affinity_score', '-id')
+                else:
+                    queryset = queryset.order_by('-affinity_score', '-id')
             except UserProfile.DoesNotExist:
                 pass
         return queryset

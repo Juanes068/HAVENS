@@ -24,6 +24,9 @@ export const CREATE_USER = gql`
     $invitationCode: String!
     $bio: String
     $neighbourhood: String
+    $cityName: String
+    $latitude: Float
+    $longitude: Float
     $photoUrl: String
   ) {
     createUser(
@@ -33,6 +36,9 @@ export const CREATE_USER = gql`
       invitationCode: $invitationCode
       bio: $bio
       neighbourhood: $neighbourhood
+      cityName: $cityName
+      latitude: $latitude
+      longitude: $longitude
       photoUrl: $photoUrl
     ) {
       success

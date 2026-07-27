@@ -28,13 +28,16 @@ class HobbyCategoryType(DjangoObjectType):
 class UserProfileType(DjangoObjectType):
     class Meta:
         model = UserProfile
-        fields = ("id", "user", "total_points", "bio", "neighbourhood", "photo_url", "invite_code", "hobbies")
+        fields = ("id", "user", "total_points", "bio", "neighbourhood", "city_name", "latitude", "longitude", "photo_url", "invite_code", "hobbies")
 
 
 class UserType(DjangoObjectType):
     totalPoints = graphene.Int()
     bio = graphene.String()
     neighbourhood = graphene.String()
+    cityName = graphene.String()
+    latitude = graphene.Float()
+    longitude = graphene.Float()
     photoUrl = graphene.String()
     inviteCode = graphene.String()
     hobbies = graphene.List(HobbyType)
@@ -58,6 +61,32 @@ class UserType(DjangoObjectType):
             return ""
 
     def resolve_neighbourhood(self, info):
+        try:
+            profile = UserProfile.objects.get(user=self)
+            return profile.neighbourhood
+        except UserProfile.DoesNotExist:
+            return ""
+
+    def resolve_cityName(self, info):
+        try:
+            profile = UserProfile.objects.get(user=self)
+            return profile.city_name
+        except UserProfile.DoesNotExist:
+            return ""
+
+    def resolve_latitude(self, info):
+        try:
+            profile = UserProfile.objects.get(user=self)
+            return profile.latitude
+        except UserProfile.DoesNotExist:
+            return None
+
+    def resolve_longitude(self, info):
+        try:
+            profile = UserProfile.objects.get(user=self)
+            return profile.longitude
+        except UserProfile.DoesNotExist:
+            return None
         try:
             profile = UserProfile.objects.get(user=self)
             return profile.neighbourhood

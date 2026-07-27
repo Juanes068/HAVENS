@@ -5,26 +5,26 @@ import { GET_ALL_HOBBY_CATEGORIES, UPDATE_USER_HOBBIES } from '../graphql/operat
 import { useAuth } from '../context/AuthContext';
 
 interface Hobby {
-  id: string;
+  id: string | number;
   name: string;
 }
 
 interface HobbyCategory {
-  id: string;
+  id: string | number;
   name: string;
   hobbies: Hobby[];
 }
 
 const MAX_PRIMARY_CATEGORIES = 3;
-const MAX_SECONDARY_HOBBIES = 5;
+const MAX_SUB_HOBBIES_PER_CATEGORY = 5;
 
 export const OnboardingView: React.FC = () => {
   const navigate = useNavigate();
   const { refetchUser } = useAuth();
 
-  const [step, setStep] = useState<1 | 2>(1);
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [selectedHobbyIds, setSelectedHobbyIds] = useState<string[]>([]);
+  const [expandedCategoryIds, setExpandedCategoryIds] = useState<string[]>([]);
   const [warningMsg, setWarningMsg] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string>('');
 
@@ -49,49 +49,72 @@ export const OnboardingView: React.FC = () => {
 
   const categories = data?.allHobbyCategories || [];
 
-  // Toggle Category selection (Step 1 - Max 3 Primary Categories)
-  const toggleCategory = (catId: string) => {
+  // Toggle Category Selection (Max 3 Primary Categories)
+  const toggleCategory = (catIdRaw: string | number) => {
+    const catId = String(catIdRaw);
     setWarningMsg('');
     setErrorMsg('');
+
     if (selectedCategoryIds.includes(catId)) {
+      // Unselect category and its associated sub-hobbies
+      const targetCategory = categories.find((c) => String(c.id) === catId);
+      const catHobbyIds = targetCategory ? targetCategory.hobbies.map((h) => String(h.id)) : [];
+      
       setSelectedCategoryIds((prev) => prev.filter((id) => id !== catId));
+      setSelectedHobbyIds((prev) => prev.filter((id) => !catHobbyIds.includes(id)));
+      setExpandedCategoryIds((prev) => prev.filter((id) => id !== catId));
     } else {
       if (selectedCategoryIds.length >= MAX_PRIMARY_CATEGORIES) {
         setWarningMsg(`You can select a maximum of ${MAX_PRIMARY_CATEGORIES} Primary categories.`);
         return;
       }
       setSelectedCategoryIds((prev) => [...prev, catId]);
+      // Auto-expand newly selected category
+      if (!expandedCategoryIds.includes(catId)) {
+        setExpandedCategoryIds((prev) => [...prev, catId]);
+      }
     }
   };
 
-  // Toggle Sub-Hobby selection (Step 2 - Max 5 Secondary Hobbies)
-  const toggleHobby = (hobbyId: string) => {
+  // Toggle Accordion Expansion for Category Tree
+  const toggleExpand = (catIdRaw: string | number) => {
+    const catId = String(catIdRaw);
+    setExpandedCategoryIds((prev) =>
+      prev.includes(catId) ? prev.filter((id) => id !== catId) : [...prev, catId]
+    );
+  };
+
+  // Toggle Sub-Hobby selection (Max 5 Sub-Hobbies PER Primary Category)
+  const toggleHobby = (categoryName: string, categoryHobbyIds: string[], hobbyIdRaw: string | number) => {
+    const hobbyId = String(hobbyIdRaw);
     setWarningMsg('');
     setErrorMsg('');
+
     if (selectedHobbyIds.includes(hobbyId)) {
       setSelectedHobbyIds((prev) => prev.filter((id) => id !== hobbyId));
     } else {
-      if (selectedHobbyIds.length >= MAX_SECONDARY_HOBBIES) {
-        setWarningMsg(`You can select a maximum of ${MAX_SECONDARY_HOBBIES} Secondary hobbies.`);
+      // Count how many selected sub-hobbies belong to this specific category
+      const currentCategoryHobbiesCount = selectedHobbyIds.filter((id) =>
+        categoryHobbyIds.includes(id)
+      ).length;
+
+      if (currentCategoryHobbiesCount >= MAX_SUB_HOBBIES_PER_CATEGORY) {
+        setWarningMsg(
+          `You can select a maximum of ${MAX_SUB_HOBBIES_PER_CATEGORY} subcategories for "${categoryName}".`
+        );
         return;
       }
       setSelectedHobbyIds((prev) => [...prev, hobbyId]);
     }
   };
 
-  const handleNextStep = () => {
+  const handleFinishOnboarding = () => {
     if (selectedCategoryIds.length === 0) {
-      setErrorMsg('Please select at least 1 category to personalize your feed.');
+      setErrorMsg('Please select at least 1 Primary Category to continue.');
       return;
     }
-    setWarningMsg('');
-    setErrorMsg('');
-    setStep(2);
-  };
-
-  const handleFinishOnboarding = () => {
     if (selectedHobbyIds.length === 0) {
-      setErrorMsg('Please choose at least 1 secondary hobby so we can personalize your recommendations.');
+      setErrorMsg('Please select at least 1 Subcategory under your chosen categories.');
       return;
     }
     setWarningMsg('');
@@ -106,7 +129,7 @@ export const OnboardingView: React.FC = () => {
     return (
       <div className="min-h-screen bg-[#F4EEE2] text-[#2C2C2C] flex items-center justify-center font-serif">
         <div className="text-center animate-pulse text-[#2D5A3D] text-lg">
-          Loading categorized hobbies...
+          Loading categorized hobbies tree...
         </div>
       </div>
     );
@@ -123,9 +146,6 @@ export const OnboardingView: React.FC = () => {
     );
   }
 
-  // Active categories for Step 2
-  const activeCategories = categories.filter((c) => selectedCategoryIds.includes(c.id));
-
   return (
     <div className="min-h-screen bg-[#F4EEE2] text-[#2C2C2C] flex flex-col items-center justify-between p-6 antialiased">
       <div className="max-w-3xl w-full my-auto">
@@ -133,132 +153,153 @@ export const OnboardingView: React.FC = () => {
         {/* Header */}
         <div className="text-center mb-8">
           <span className="text-xs font-semibold tracking-wider text-[#C47B5A] uppercase">
-            Step {step} of 2 • Personal Affinity Setup
+            Personal Interest Tree • Affinity Setup
           </span>
           <h1 className="text-3xl md:text-4xl font-serif font-semibold tracking-tight text-[#2D5A3D] mt-2 lowercase">
-            {step === 1 ? 'choose primary categories' : 'choose secondary hobbies'}
+            build your digital footprint
           </h1>
-          <p className="text-sm text-[#8a8278] font-normal mt-2 max-w-md mx-auto">
-            {step === 1
-              ? `Select up to ${MAX_PRIMARY_CATEGORIES} primary interest categories for your community.`
-              : `Select up to ${MAX_SECONDARY_HOBBIES} specific hobbies to customize your affinity match.`}
+          <p className="text-sm text-[#8a8278] font-normal mt-2 max-w-lg mx-auto">
+            Select up to <strong className="text-charcoal">{MAX_PRIMARY_CATEGORIES} Primary Categories</strong>. 
+            For each selected category, pick up to <strong className="text-charcoal">{MAX_SUB_HOBBIES_PER_CATEGORY} Subcategories</strong> (up to 15 subcategories total).
           </p>
         </div>
 
-        {/* Warning Toast / Alert */}
+        {/* Warning Alert Toast */}
         {warningMsg && (
-          <div className="p-3 text-xs bg-amber-50 border border-amber-300 text-amber-800 rounded-xl mb-6 text-center max-w-md mx-auto shadow-xs animate-bounce">
+          <div className="p-3.5 text-xs bg-amber-50 border border-amber-300 text-amber-900 rounded-xl mb-6 text-center max-w-lg mx-auto shadow-xs font-medium animate-bounce">
             ⚠️ {warningMsg}
           </div>
         )}
 
         {/* Error Alert */}
         {errorMsg && (
-          <div className="p-3 text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl mb-6 text-center max-w-md mx-auto">
+          <div className="p-3.5 text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl mb-6 text-center max-w-lg mx-auto font-medium">
             {errorMsg}
           </div>
         )}
 
-        {/* Step 1: Primary Category Selection (Max 3) */}
-        {step === 1 && (
+        {/* Progress Counter Summary */}
+        <div className="flex items-center justify-between bg-[#F0EAE0] border border-[#E2DBD0] rounded-2xl px-5 py-3 mb-6 text-xs text-[#5a5450] font-medium">
           <div>
-            <div className="flex justify-between items-center mb-3 text-xs text-[#8a8278] font-medium">
-              <span>Primary Categories</span>
-              <span>{selectedCategoryIds.length} of {MAX_PRIMARY_CATEGORIES} selected</span>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-10">
-              {categories.map((cat) => {
-                const isSelected = selectedCategoryIds.includes(cat.id);
-                return (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => toggleCategory(cat.id)}
-                    className={`p-4 rounded-2xl border text-left transition-all duration-200 flex flex-col justify-between h-28 cursor-pointer ${
-                      isSelected
-                        ? 'bg-[#2D5A3D] text-white border-[#2D5A3D] shadow-md scale-[1.02]'
-                        : 'bg-[#F0EAE0]/90 text-[#2C2C2C] border-[#E2DBD0] hover:border-[#2D5A3D]/40'
-                    }`}
-                  >
-                    <span className="text-sm font-medium leading-snug">{cat.name}</span>
-                    <span className={`text-[11px] font-normal ${isSelected ? 'text-white/80' : 'text-[#8a8278]'}`}>
-                      {cat.hobbies?.length || 0} topics
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+            Primary Categories: <span className="text-[#2D5A3D] font-bold">{selectedCategoryIds.length} / {MAX_PRIMARY_CATEGORIES}</span>
           </div>
-        )}
-
-        {/* Step 2: Specific Secondary Hobbies (Max 5) */}
-        {step === 2 && (
           <div>
-            <div className="flex justify-between items-center mb-3 text-xs text-[#8a8278] font-medium">
-              <span>Secondary Hobbies</span>
-              <span>{selectedHobbyIds.length} of {MAX_SECONDARY_HOBBIES} selected</span>
-            </div>
-            <div className="space-y-6 mb-10">
-              {activeCategories.map((cat) => (
-                <div key={cat.id} className="bg-[#F0EAE0]/70 border border-[#E2DBD0] rounded-2xl p-5">
-                  <h3 className="text-sm font-semibold text-[#2D5A3D] mb-3">{cat.name}</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {cat.hobbies.map((hb) => {
-                      const isSelected = selectedHobbyIds.includes(hb.id);
-                      return (
-                        <button
-                          key={hb.id}
-                          type="button"
-                          onClick={() => toggleHobby(hb.id)}
-                          className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-150 cursor-pointer ${
-                            isSelected
-                              ? 'bg-[#2D5A3D] text-white shadow-xs'
-                              : 'bg-white text-[#2C2C2C] border border-[#E2DBD0] hover:border-[#2D5A3D]'
-                          }`}
-                        >
-                          {isSelected ? '✓ ' : '+ '}{hb.name}
-                        </button>
-                      );
-                    })}
+            Subcategories Selected: <span className="text-[#2D5A3D] font-bold">{selectedHobbyIds.length} / {selectedCategoryIds.length * MAX_SUB_HOBBIES_PER_CATEGORY}</span>
+          </div>
+        </div>
+
+        {/* Expandable Hobbies Tree Container */}
+        <div className="space-y-4 mb-10 max-h-[55vh] overflow-y-auto pr-1">
+          {categories.map((cat) => {
+            const catIdStr = String(cat.id);
+            const isCategorySelected = selectedCategoryIds.includes(catIdStr);
+            const isExpanded = expandedCategoryIds.includes(catIdStr);
+
+            const categoryHobbyIdStrs = cat.hobbies.map((h) => String(h.id));
+            const selectedInThisCategoryCount = selectedHobbyIds.filter((id) =>
+              categoryHobbyIdStrs.includes(id)
+            ).length;
+
+            return (
+              <div
+                key={catIdStr}
+                className={`rounded-2xl border transition-all duration-200 overflow-hidden ${
+                  isCategorySelected
+                    ? 'bg-white border-[#2D5A3D] shadow-sm'
+                    : 'bg-[#F0EAE0]/70 border-[#E2DBD0] hover:border-[#2D5A3D]/40'
+                }`}
+              >
+                {/* Category Card Header */}
+                <div className="p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={isCategorySelected}
+                      onChange={() => toggleCategory(catIdStr)}
+                      className="w-4 h-4 accent-[#2D5A3D] rounded cursor-pointer"
+                    />
+                    <div>
+                      <h3
+                        onClick={() => toggleCategory(catIdStr)}
+                        className="text-sm font-semibold text-charcoal cursor-pointer hover:text-[#2D5A3D]"
+                      >
+                        {cat.name}
+                      </h3>
+                      <p className="text-[11px] text-[#8a8278]">
+                        {cat.hobbies.length} subcategories available
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    {isCategorySelected && (
+                      <span className="text-[11px] font-semibold bg-[#eaf3ed] text-[#2D5A3D] px-2.5 py-1 rounded-full border border-[#7aaa8a]/30">
+                        {selectedInThisCategoryCount} / {MAX_SUB_HOBBIES_PER_CATEGORY} selected
+                      </span>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => toggleExpand(catIdStr)}
+                      className="px-3 py-1.5 rounded-lg border border-[#E2DBD0] text-xs font-medium text-[#5a5450] hover:bg-[#F4EEE2] transition-colors cursor-pointer"
+                    >
+                      {isExpanded ? '▲ Collapse' : '▼ Expand Subcategories'}
+                    </button>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
 
-        {/* Footer Navigation Buttons */}
+                {/* Expanded Subcategories Chips Tree */}
+                {isExpanded && (
+                  <div className="px-5 pb-5 pt-2 border-t border-[#E2DBD0]/60 bg-[#F4EEE2]/40">
+                    <div className="flex flex-wrap gap-2">
+                      {cat.hobbies.map((hb) => {
+                        const hbIdStr = String(hb.id);
+                        const isSubSelected = selectedHobbyIds.includes(hbIdStr);
+
+                        return (
+                          <button
+                            key={hbIdStr}
+                            type="button"
+                            onClick={() => {
+                              if (!isCategorySelected) {
+                                toggleCategory(catIdStr);
+                              }
+                              toggleHobby(cat.name, categoryHobbyIdStrs, hbIdStr);
+                            }}
+                            className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
+                              isSubSelected
+                                ? 'bg-[#2D5A3D] text-white shadow-xs scale-105'
+                                : 'bg-white text-[#2C2C2C] border border-[#E2DBD0] hover:border-[#2D5A3D]'
+                            }`}
+                          >
+                            {isSubSelected ? '✓ ' : '+ '}{hb.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer Navigation Button */}
         <div className="flex items-center justify-between pt-4 border-t border-[#E2DBD0]">
-          {step === 2 ? (
-            <button
-              type="button"
-              onClick={() => setStep(1)}
-              className="px-5 py-2.5 rounded-xl border border-[#E2DBD0] text-[#2C2C2C] text-xs font-medium hover:bg-white transition-colors cursor-pointer"
-            >
-              ← Back to Categories
-            </button>
-          ) : (
-            <div />
-          )}
+          <div className="text-xs text-[#8a8278]">
+            Need help? You can update your digital footprint anytime in your Profile.
+          </div>
 
-          {step === 1 ? (
-            <button
-              type="button"
-              onClick={handleNextStep}
-              className="ml-auto px-8 py-3 rounded-xl bg-[#2D5A3D] text-white text-xs font-semibold shadow-sm hover:bg-[#3d7a55] transition-colors cursor-pointer"
-            >
-              Continue to Secondary Hobbies ({selectedCategoryIds.length}/{MAX_PRIMARY_CATEGORIES}) →
-            </button>
-          ) : (
-            <button
-              type="button"
-              disabled={isSaving}
-              onClick={handleFinishOnboarding}
-              className="px-8 py-3 rounded-xl bg-[#2D5A3D] text-white text-xs font-semibold shadow-sm hover:bg-[#3d7a55] transition-colors disabled:opacity-50 cursor-pointer"
-            >
-              {isSaving ? 'Saving Profile...' : `Finish Setup (${selectedHobbyIds.length}/${MAX_SECONDARY_HOBBIES} hobbies)`}
-            </button>
-          )}
+          <button
+            type="button"
+            disabled={isSaving || selectedCategoryIds.length === 0}
+            onClick={handleFinishOnboarding}
+            className="px-8 py-3 rounded-xl bg-[#2D5A3D] text-white text-xs font-semibold shadow-sm hover:bg-[#3d7a55] transition-colors disabled:opacity-50 cursor-pointer"
+          >
+            {isSaving
+              ? 'Saving Profile...'
+              : `Complete Onboarding (${selectedHobbyIds.length} subcategories selected)`}
+          </button>
         </div>
       </div>
     </div>

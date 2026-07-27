@@ -12,7 +12,7 @@ from .types import (
 from .models import (
     Community, Event, Ticket, Participation, UserProfile,
     InvitationCode, CommunityMembership, EventRSVP, Friendship,
-    Match, Message,
+    Match, Message, HobbyCategory, Hobby,
 )
 from .decorators import login_required
 
@@ -30,6 +30,9 @@ class CreateUser(graphene.Mutation):
         invitation_code = graphene.String(required=True)
         bio = graphene.String(default_value='')
         neighbourhood = graphene.String(default_value='')
+        city_name = graphene.String(default_value='')
+        latitude = graphene.Float()
+        longitude = graphene.Float()
         photo_url = graphene.String(default_value='')
 
     user = graphene.Field(UserType)
@@ -38,7 +41,7 @@ class CreateUser(graphene.Mutation):
 
     @classmethod
     def mutate(cls, root, info, username, email, password, invitation_code,
-               bio='', neighbourhood='', photo_url=''):
+               bio='', neighbourhood='', city_name='', latitude=None, longitude=None, photo_url=''):
         try:
             # Check invitation code
             try:
@@ -64,6 +67,9 @@ class CreateUser(graphene.Mutation):
                 user=user,
                 bio=bio,
                 neighbourhood=neighbourhood,
+                city_name=city_name,
+                latitude=latitude,
+                longitude=longitude,
                 photo_url=photo_url,
             )
 

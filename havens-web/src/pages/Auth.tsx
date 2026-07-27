@@ -3,6 +3,7 @@ import { useMutation } from '@apollo/client'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { TOKEN_AUTH, CREATE_USER } from '../graphql/operations'
+import { LocationAutocomplete, LocationResult } from '../components/LocationAutocomplete'
 
 export const AuthPage: React.FC = () => {
   const navigate = useNavigate()
@@ -14,7 +15,7 @@ export const AuthPage: React.FC = () => {
   const [password, setPassword] = useState('')
   const [invitationCode, setInvitationCode] = useState('')
   const [bio, setBio] = useState('')
-  const [neighbourhood, setNeighbourhood] = useState('')
+  const [selectedLocation, setSelectedLocation] = useState<LocationResult | null>(null)
   const [errorMsg, setErrorMsg] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
 
@@ -44,7 +45,6 @@ export const AuthPage: React.FC = () => {
       if (data?.createUser?.success) {
         setSuccessMsg('Account created successfully! Signing you in...')
         setErrorMsg('')
-        // Automatically sign in user after successful registration
         tokenAuthMutation({
           variables: { username, password },
         })
@@ -64,9 +64,15 @@ export const AuthPage: React.FC = () => {
 
     if (isRegisterMode) {
       if (!username || !email || !password || !invitationCode) {
-        setErrorMsg('Please fill in all required fields including your invitation code.')
+        setErrorMsg('Please fill in all required fields including your 6-character invitation code.')
         return
       }
+
+      if (!selectedLocation) {
+        setErrorMsg('Please search and select a valid location from the Google Maps suggestions dropdown.')
+        return
+      }
+
       createUserMutation({
         variables: {
           username,
@@ -74,7 +80,10 @@ export const AuthPage: React.FC = () => {
           password,
           invitationCode,
           bio,
-          neighbourhood,
+          neighbourhood: selectedLocation.neighbourhood,
+          cityName: selectedLocation.cityName,
+          latitude: selectedLocation.latitude,
+          longitude: selectedLocation.longitude,
         },
       })
     } else {
@@ -111,7 +120,7 @@ export const AuthPage: React.FC = () => {
               setErrorMsg('')
               setSuccessMsg('')
             }}
-            className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
+            className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${
               !isRegisterMode ? 'bg-white text-[#2C2C2C] shadow-sm' : 'text-[#8a8278] hover:text-[#2C2C2C]'
             }`}
           >
@@ -124,7 +133,7 @@ export const AuthPage: React.FC = () => {
               setErrorMsg('')
               setSuccessMsg('')
             }}
-            className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
+            className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${
               isRegisterMode ? 'bg-white text-[#2C2C2C] shadow-sm' : 'text-[#8a8278] hover:text-[#2C2C2C]'
             }`}
           >
@@ -198,13 +207,15 @@ export const AuthPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-[#8a8278] mb-1">Neighbourhood (Optional)</label>
-                <input
-                  type="text"
-                  value={neighbourhood}
-                  onChange={(e) => setNeighbourhood(e.target.value)}
-                  placeholder="e.g. Kitsilano, Vancouver"
-                  className="w-full px-4 py-2.5 rounded-xl bg-white border border-[#E2DBD0] text-[#2C2C2C] text-sm focus:outline-none focus:border-[#2D5A3D]"
+                <label className="block text-xs font-medium text-[#8a8278] mb-1">
+                  Location / Neighbourhood <span className="text-[#C47B5A]">*</span>
+                </label>
+                <LocationAutocomplete
+                  onSelectLocation={(loc) => {
+                    setSelectedLocation(loc)
+                    if (loc) setErrorMsg('')
+                  }}
+                  placeholder="Type location (e.g. Milenta, Bogotá)"
                 />
               </div>
             </>
@@ -212,8 +223,8 @@ export const AuthPage: React.FC = () => {
 
           <button
             type="submit"
-            disabled={isAuthenticating || isRegistering}
-            className="w-full py-3 px-4 rounded-xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white font-medium text-sm transition-colors shadow-xs disabled:opacity-50 mt-4"
+            disabled={isAuthenticating || isRegistering || (isRegisterMode && !selectedLocation)}
+            className="w-full py-3 px-4 rounded-xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white font-medium text-sm transition-colors shadow-xs disabled:opacity-50 mt-4 cursor-pointer"
           >
             {isAuthenticating || isRegistering
               ? 'Processing...'
@@ -222,10 +233,6 @@ export const AuthPage: React.FC = () => {
               : 'Sign In'}
           </button>
         </form>
-
-        <div className="mt-8 pt-4 border-t border-[#E2DBD0] text-center text-[11px] text-[#8a8278]">
-          connected to <span className="font-mono text-[#2D5A3D]">http://localhost:8000/graphql/</span>
-        </div>
       </div>
     </div>
   )
