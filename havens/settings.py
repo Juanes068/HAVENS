@@ -118,7 +118,7 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 
 # GraphQL JWT Authentication Settings (v0.3.x compatible)
-JWT_EXPIRATION_DELTA = timedelta(minutes=60)
+JWT_EXPIRATION_DELTA = timedelta(days=7)
 JWT_REFRESH_EXPIRATION_DELTA = timedelta(days=7)
 JWT_ALLOW_REFRESH = True
 JWT_VERIFY_EXPIRATION = True
