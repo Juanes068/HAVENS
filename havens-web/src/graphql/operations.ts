@@ -79,7 +79,7 @@ export const MY_PROFILE = gql`
 `;
 
 /**
- * Query to fetch all recommended users (sorted by implicit hobby affinity on backend).
+ * Query to fetch all recommended users (sorted by implicit hobby affinity & location proximity).
  */
 export const GET_ALL_USERS = gql`
   query GetAllUsers {
@@ -113,6 +113,126 @@ export const CREATE_MATCH = gql`
           username
         }
         user2 {
+          id
+          username
+        }
+      }
+    }
+  }
+`;
+
+/**
+ * Query to fetch active user matches.
+ */
+export const MY_MATCHES = gql`
+  query MyMatches {
+    myMatches {
+      id
+      createdAt
+      user1 {
+        id
+        username
+        photoUrl
+        neighbourhood
+      }
+      user2 {
+        id
+        username
+        photoUrl
+        neighbourhood
+      }
+    }
+  }
+`;
+
+/**
+ * Query to fetch pending incoming friend requests.
+ */
+export const MY_FRIEND_REQUESTS = gql`
+  query MyFriendRequests {
+    myFriendRequests {
+      id
+      status
+      createdAt
+      fromUser {
+        id
+        username
+        photoUrl
+        neighbourhood
+      }
+    }
+  }
+`;
+
+/**
+ * Mutation to respond to a friend request ('accepted' or 'rejected').
+ */
+export const RESPOND_FRIEND_REQUEST = gql`
+  mutation RespondFriendRequest($requestId: Int!, $action: String!) {
+    respondFriendRequest(requestId: $requestId, action: $action) {
+      success
+      message
+    }
+  }
+`;
+
+/**
+ * Query to fetch all micro-communities / circles.
+ */
+export const GET_ALL_COMMUNITIES = gql`
+  query GetAllCommunities {
+    allCommunities {
+      id
+      name
+      subdomain
+      createdAt
+    }
+  }
+`;
+
+/**
+ * Mutation to join a micro-community circle.
+ */
+export const JOIN_COMMUNITY = gql`
+  mutation JoinCommunity($communityId: Int!) {
+    joinCommunity(communityId: $communityId) {
+      success
+      message
+    }
+  }
+`;
+
+/**
+ * Query to fetch chat messages for a specific match thread.
+ */
+export const MESSAGES_BY_MATCH = gql`
+  query MessagesByMatch($matchId: Int!) {
+    messagesByMatch(matchId: $matchId) {
+      id
+      content
+      createdAt
+      isRead
+      sender {
+        id
+        username
+      }
+    }
+  }
+`;
+
+/**
+ * Mutation to send a message in a match chat.
+ */
+export const SEND_MESSAGE = gql`
+  mutation SendMessage($matchId: Int!, $content: String!) {
+    sendMessage(matchId: $matchId, content: $content) {
+      success
+      message
+      messageObject {
+        id
+        content
+        createdAt
+        sender {
           id
           username
         }
@@ -275,6 +395,25 @@ export const GENERATE_CLOUDINARY_SIGNATURE = gql`
       apiKey
       success
       message
+    }
+  }
+`;
+
+/**
+ * Mutation to update user profile details (bio, neighbourhood, photoUrl).
+ */
+export const UPDATE_USER_PROFILE = gql`
+  mutation UpdateUserProfile($bio: String, $neighbourhood: String, $photoUrl: String) {
+    updateUserProfile(bio: $bio, neighbourhood: $neighbourhood, photoUrl: $photoUrl) {
+      success
+      message
+      profile {
+        id
+        username
+        bio
+        neighbourhood
+        photoUrl
+      }
     }
   }
 `;

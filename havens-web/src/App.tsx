@@ -5,6 +5,7 @@ import { Navigation } from './components/Navigation'
 import { AuthPage } from './pages/Auth'
 import { OnboardingView } from './pages/Onboarding'
 import { DiscoverView } from './pages/Discover'
+import { SocialView } from './pages/Social'
 import { MyPlansView } from './pages/MyPlans'
 import { CalendarView } from './pages/Calendar'
 import { SavedView } from './pages/Saved'
@@ -53,6 +54,7 @@ export default function App() {
         <Route element={<ProtectedRoute />}>
           <Route path="/" element={<Navigate to="/discover" replace />} />
           <Route path="/discover" element={<DiscoverView />} />
+          <Route path="/social" element={<SocialView />} />
           <Route path="/my-plans" element={<MyPlansView />} />
           <Route path="/calendar" element={<CalendarView />} />
           <Route path="/saved" element={<SavedView />} />

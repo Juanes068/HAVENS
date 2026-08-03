@@ -1,9 +1,8 @@
 import React, { useState } from 'react'
-import { useQuery, useMutation } from '@apollo/client'
+import { useQuery } from '@apollo/client'
 import { SectionHeading } from '../components/SectionHeading'
 import { EventCard, DiscoverPlan } from '../components/EventCard'
-import { GET_ALL_EVENTS, GET_ALL_USERS, CREATE_MATCH } from '../graphql/operations'
-import { useAuth } from '../context/AuthContext'
+import { GET_ALL_EVENTS } from '../graphql/operations'
 
 const CATEGORIES = ['All', 'Outdoors', 'Food & Drink', 'Arts', 'Social', 'Wellness']
 
@@ -16,43 +15,15 @@ const DEFAULT_IMAGES = [
 ]
 
 export const DiscoverView: React.FC = () => {
-  const { user: currentUser } = useAuth()
   const [activeCategory, setActiveCategory] = useState('All')
   const [savedIds, setSavedIds] = useState<number[]>([])
-  const [matchedUserIds, setMatchedUserIds] = useState<number[]>([])
-  const [matchStatusMsg, setMatchStatusMsg] = useState<string>('')
 
   // Fetch events dynamically from the Django GraphQL backend
   const { data, loading, error, refetch } = useQuery(GET_ALL_EVENTS, {
     fetchPolicy: 'cache-and-network',
   })
 
-  // Fetch recommended profiles (sorted by implicit hobby affinity on backend)
-  const { data: usersData, loading: usersLoading } = useQuery(GET_ALL_USERS, {
-    fetchPolicy: 'cache-and-network',
-  })
-
-  // CreateMatch Mutation
-  const [createMatchMutation, { loading: isMatching }] = useMutation(CREATE_MATCH, {
-    onCompleted: (res) => {
-      if (res?.createMatch?.success) {
-        setMatchStatusMsg(res.createMatch.message || 'Match connection created successfully!')
-      } else {
-        setMatchStatusMsg(res?.createMatch?.message || 'Match request sent.')
-      }
-    },
-    onError: (err) => {
-      setMatchStatusMsg(`Error: ${err.message}`)
-    },
-  })
-
   const rawEvents = data?.allEvents || []
-  const recommendedUsers = usersData?.allUsers || []
-
-  // Filter out current user from recommendations
-  const otherUsers = recommendedUsers.filter(
-    (u: any) => u.id !== currentUser?.id && u.username !== currentUser?.username
-  )
 
   // Adapt GraphQL backend event data into DiscoverPlan shape for UI cards
   const plans: DiscoverPlan[] = rawEvents.map((evt: any, idx: number) => ({
@@ -77,23 +48,13 @@ export const DiscoverView: React.FC = () => {
   const toggleSave = (id: number) =>
     setSavedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
 
-  const handleConnectMatch = (user2IdStr: string) => {
-    const user2Id = parseInt(user2IdStr, 10)
-    if (!user2Id) return
-    setMatchedUserIds((prev) => [...prev, user2Id])
-    setMatchStatusMsg('')
-    createMatchMutation({
-      variables: { user2Id },
-    })
-  }
-
   return (
-    <div className="max-w-[1400px] mx-auto px-6 py-8 space-y-12">
+    <div className="max-w-[1400px] mx-auto px-6 py-8 space-y-8">
       {/* Header */}
       <div className="flex items-end justify-between">
         <div>
-          <SectionHeading>Discover plans & circle recommendations</SectionHeading>
-          <p className="text-sm text-muted mt-1">What your trusted circle and recommended members are getting up to</p>
+          <SectionHeading>Discover community plans</SectionHeading>
+          <p className="text-sm text-muted mt-1">Explore upcoming gatherings and warm local events posted by members</p>
         </div>
         <div className="flex items-center gap-2 bg-sand rounded-xl p-1">
           <button className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white text-charcoal shadow-sm">
@@ -104,77 +65,11 @@ export const DiscoverView: React.FC = () => {
           </button>
           <button
             onClick={() => refetch()}
-            className="px-3 py-1.5 rounded-lg text-xs font-medium text-forest hover:underline"
+            className="px-3 py-1.5 rounded-lg text-xs font-medium text-forest hover:underline cursor-pointer"
           >
             Refresh
           </button>
         </div>
-      </div>
-
-      {/* Recommended Profiles Section (Implicit Affinity Matching) */}
-      <div className="bg-[#F0EAE0]/70 border border-[#E2DBD0] rounded-3xl p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-xl font-serif font-semibold text-[#2D5A3D]">Recommended Circle Matches</h2>
-            <p className="text-xs text-[#8a8278]">Members sharing implicit hobby affinity with you</p>
-          </div>
-          {matchStatusMsg && (
-            <span className="text-xs font-medium text-[#2D5A3D] bg-[#eaf3ed] px-3 py-1 rounded-full border border-[#7aaa8a]/40">
-              {matchStatusMsg}
-            </span>
-          )}
-        </div>
-
-        {usersLoading ? (
-          <div className="text-xs text-[#8a8278] animate-pulse py-4">Finding affinity matches...</div>
-        ) : otherUsers.length === 0 ? (
-          <div className="text-xs text-[#8a8278] py-2">No other members registered yet. Invite your friends!</div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {otherUsers.slice(0, 4).map((usr: any) => {
-              const uId = parseInt(usr.id, 10)
-              const isMatched = matchedUserIds.includes(uId)
-              return (
-                <div key={usr.id} className="bg-white border border-[#E2DBD0] rounded-2xl p-4 flex flex-col justify-between shadow-xs">
-                  <div>
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-full bg-[#2D5A3D] text-white flex items-center justify-center font-bold text-sm">
-                        {usr.username ? usr.username.charAt(0).toUpperCase() : 'U'}
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-semibold text-charcoal">@{usr.username}</h4>
-                        <span className="text-[11px] text-[#8a8278]">{usr.neighbourhood || 'Trusted Circle'}</span>
-                      </div>
-                    </div>
-
-                    {usr.hobbies && usr.hobbies.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mb-4">
-                        {usr.hobbies.slice(0, 3).map((hb: any) => (
-                          <span key={hb.id} className="text-[10px] bg-[#F4EEE2] text-[#2D5A3D] px-2 py-0.5 rounded-md font-medium">
-                            {hb.name}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <button
-                    type="button"
-                    disabled={isMatched || isMatching}
-                    onClick={() => handleConnectMatch(usr.id)}
-                    className={`w-full py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                      isMatched
-                        ? 'bg-[#eaf3ed] text-[#2D5A3D] border border-[#7aaa8a]/40'
-                        : 'bg-[#2D5A3D] text-white hover:bg-[#3d7a55] shadow-xs'
-                    }`}
-                  >
-                    {isMatched ? '✓ Match Connected' : 'Connect / Match'}
-                  </button>
-                </div>
-              )
-            })}
-          </div>
-        )}
       </div>
 
       {/* Category pills */}
@@ -205,7 +100,7 @@ export const DiscoverView: React.FC = () => {
       {error && !loading && (
         <div className="p-4 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-sm mb-6 flex justify-between items-center">
           <span>Failed to load events: {error.message}</span>
-          <button onClick={() => refetch()} className="text-xs font-semibold underline">
+          <button onClick={() => refetch()} className="text-xs font-semibold underline cursor-pointer">
             Retry
           </button>
         </div>
@@ -278,7 +173,7 @@ export const DiscoverView: React.FC = () => {
                       <path d="M3 2h10v12l-5-3-5 3V2z" />
                     </svg>
                   </button>
-                  <button className="px-4 py-2 rounded-lg bg-forest text-white text-sm font-medium hover:bg-forest-light transition-colors">
+                  <button className="px-4 py-2 rounded-lg bg-forest text-white text-sm font-medium hover:bg-forest-light transition-colors cursor-pointer">
                     I'm in
                   </button>
                 </div>
@@ -298,6 +193,13 @@ export const DiscoverView: React.FC = () => {
             ))}
           </div>
         </>
+      )}
+
+      {!loading && filtered.length > 0 && (
+        <div className="text-center py-10 text-muted">
+          <p className="text-sm font-serif">Looking for new connection matches or circle groups?</p>
+          <p className="text-xs mt-1">Head over to the exclusive <strong className="text-[#2D5A3D]">Social</strong> tab to connect!</p>
+        </div>
       )}
 
       {!loading && filtered.length === 0 && (
