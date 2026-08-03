@@ -388,7 +388,7 @@ export const SWIPE_EVENT = gql`
  * Mutation to generate Cloudinary upload signature from backend.
  */
 export const GENERATE_CLOUDINARY_SIGNATURE = gql`
-  mutation GenerateCloudinarySignature($paramsToSign: JSONString) {
+  mutation GenerateCloudinarySignature($paramsToSign: JSONString!) {
     generateCloudinarySignature(paramsToSign: $paramsToSign) {
       signature
       timestamp

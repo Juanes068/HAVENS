@@ -16,12 +16,19 @@ const httpLink = createHttpLink({
 });
 
 /**
- * Authentication Link that retrieves the JWT token from secure storage
- * and automatically injects it into every outgoing HTTP request header.
+ * Authentication Link that dynamically retrieves the JWT token on EVERY outgoing HTTP request.
  * Header format: Authorization: JWT <token>
  */
 const authLink = setContext((_, { headers }) => {
-  const token = secureStorage.getItemSync(HAVENS_JWT_TOKEN_KEY);
+  // Dynamically read token on every request from secureStore and fallback localStorage keys
+  let token = secureStorage.getItemSync(HAVENS_JWT_TOKEN_KEY);
+  if (!token && typeof window !== 'undefined' && window.localStorage) {
+    token =
+      localStorage.getItem('token') ||
+      localStorage.getItem('havens_jwt_token') ||
+      localStorage.getItem(HAVENS_JWT_TOKEN_KEY);
+  }
+
   return {
     headers: {
       ...headers,

@@ -572,8 +572,18 @@ class GenerateCloudinarySignature(graphene.Mutation):
                     success=False, message="Cloudinary credentials not configured in environment"
                 )
 
-            # Convert to dictionary and populate timestamp if not present
-            params = dict(params_to_sign) if params_to_sign else {}
+            # Safely parse params_to_sign whether string or dictionary
+            if isinstance(params_to_sign, str):
+                import json
+                try:
+                    params = json.loads(params_to_sign)
+                except Exception:
+                    params = {}
+            elif isinstance(params_to_sign, dict):
+                params = dict(params_to_sign)
+            else:
+                params = {}
+
             if 'timestamp' not in params:
                 params['timestamp'] = int(time.time())
 

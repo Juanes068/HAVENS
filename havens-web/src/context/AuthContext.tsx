@@ -30,7 +30,17 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
  * Persists session tokens using secureStorage and loads user profile metrics.
  */
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [token, setToken] = useState<string | null>(() => secureStorage.getItemSync(HAVENS_JWT_TOKEN_KEY));
+  const [token, setToken] = useState<string | null>(() => {
+    let t = secureStorage.getItemSync(HAVENS_JWT_TOKEN_KEY);
+    if (!t && typeof window !== 'undefined' && window.localStorage) {
+      t =
+        localStorage.getItem('token') ||
+        localStorage.getItem('havens_jwt_token') ||
+        localStorage.getItem(HAVENS_JWT_TOKEN_KEY);
+    }
+    return t;
+  });
+
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const apolloClient = useApolloClient();
@@ -67,6 +77,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
    */
   const login = async (newToken: string) => {
     await secureStorage.setItem(HAVENS_JWT_TOKEN_KEY, newToken);
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.setItem('token', newToken);
+      localStorage.setItem('havens_jwt_token', newToken);
+      localStorage.setItem(HAVENS_JWT_TOKEN_KEY, newToken);
+    }
     setToken(newToken);
     setIsLoading(true);
     await fetchProfile();
@@ -77,6 +92,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
    */
   const logout = () => {
     secureStorage.removeItem(HAVENS_JWT_TOKEN_KEY);
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('havens_jwt_token');
+      localStorage.removeItem(HAVENS_JWT_TOKEN_KEY);
+    }
     setToken(null);
     setUser(null);
     setIsLoading(false);

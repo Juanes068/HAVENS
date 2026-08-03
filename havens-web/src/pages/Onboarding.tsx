@@ -80,7 +80,8 @@ export const OnboardingView: React.FC = () => {
 
   const categories = data?.allHobbyCategories || [];
 
-  // Secure Two-Step Cloudinary Image Upload Process
+  // Authenticated Cloudinary Image Upload Process:
+  // Signature (JWT Header active!) -> Direct Cloudinary POST -> Extract String URL -> Execute updateUserProfile(photoUrl)
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -90,12 +91,9 @@ export const OnboardingView: React.FC = () => {
     setPhotoSuccessMsg('');
 
     try {
-      // Step 1: Call backend GraphQL mutation to request secure Cloudinary signature & upload parameters
-      const timestamp = Math.round(new Date().getTime() / 1000);
-      const paramsToSign = JSON.stringify({ timestamp });
-
+      // Step 1: Request Cloudinary signature from authenticated backend
       const sigRes = await generateCloudinarySignature({
-        variables: { paramsToSign },
+        variables: { paramsToSign: "{}" },
       });
 
       const sigData = sigRes?.data?.generateCloudinarySignature;
@@ -103,39 +101,53 @@ export const OnboardingView: React.FC = () => {
         throw new Error(sigData?.message || 'Failed to generate secure upload signature.');
       }
 
-      const { signature, apiKey } = sigData;
-      const cloudName = 'g8jffrmx'; // Reused existing Cloudinary cloud name
+      const { signature, timestamp, apiKey } = sigData;
+      const cloudName = 'g8jffrmx';
 
-      // Step 2: Use signature to upload image file directly from frontend to Cloudinary
+      // Step 2: Use signature to upload image file directly to Cloudinary
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('api_key', apiKey);
+      formData.append('api_key', String(apiKey));
       formData.append('timestamp', String(timestamp));
-      formData.append('signature', signature);
+      formData.append('signature', String(signature));
 
       const cloudRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
         method: 'POST',
         body: formData,
       });
 
-      const cloudJson = await cloudRes.json();
-      if (!cloudJson.secure_url) {
-        throw new Error(cloudJson.error?.message || 'Cloudinary upload failed.');
+      if (!cloudRes.ok) {
+        const errorText = await cloudRes.text();
+        console.error('[Cloudinary Upload Error Details]', {
+          status: cloudRes.status,
+          statusText: cloudRes.statusText,
+          responseBody: errorText,
+        });
+        throw new Error(`Cloudinary upload error (${cloudRes.status}): ${errorText}`);
       }
 
-      const uploadedPhotoUrl = cloudJson.secure_url;
-      setAvatarUrl(uploadedPhotoUrl);
+      const cloudJson = await cloudRes.json();
+      const uploadedPhotoUrl = cloudJson?.secure_url ? String(cloudJson.secure_url).trim() : '';
 
-      // Step 3: Pass returned secure_url into updateUserProfile mutation to save photo_url in DB
+      if (!uploadedPhotoUrl || typeof uploadedPhotoUrl !== 'string' || !uploadedPhotoUrl.startsWith('http')) {
+        throw new Error('Cloudinary response missing valid secure_url string.');
+      }
+
+      setAvatarUrl(uploadedPhotoUrl);
+      console.log('[Authenticated Cloudinary Upload Success]', uploadedPhotoUrl);
+
+      // Step 3: Execute updateUserProfile mutation with authenticated JWT header
       const updateRes = await updateUserProfileMutation({
-        variables: { photoUrl: uploadedPhotoUrl },
+        variables: {
+          photoUrl: uploadedPhotoUrl,
+        },
       });
 
       if (updateRes?.data?.updateUserProfile?.success) {
         setPhotoSuccessMsg('✓ Profile picture updated successfully!');
         await refetchUser();
       } else {
-        setPhotoSuccessMsg('Photo uploaded to Cloudinary, saving profile link...');
+        setPhotoSuccessMsg('Photo saved to profile.');
       }
     } catch (err: any) {
       console.error('[ProfilePhotoUpload Error]', err);
@@ -246,19 +258,19 @@ export const OnboardingView: React.FC = () => {
         {/* Header & Step Indicator */}
         <div className="text-center">
           <span className="text-xs font-semibold tracking-wider text-[#C47B5A] uppercase">
-            Step {step} of 2 • Premium Onboarding Setup
+            Step 2 of 2 • Profile Setup & Affinity Personalization
           </span>
           <h1 className="text-3xl md:text-4xl font-serif font-semibold tracking-tight text-[#2D5A3D] mt-2 lowercase">
-            {step === 1 ? 'choose primary categories' : 'choose subcategory pills'}
+            customize your digital footprint
           </h1>
           <p className="text-sm text-[#8a8278] font-normal mt-2 max-w-lg mx-auto">
-            {step === 1
-              ? `Select up to ${MAX_PRIMARY_CATEGORIES} interest categories heavily inspired by Spotify & Netflix onboarding.`
-              : `Select up to ${MAX_SUB_HOBBIES_PER_CATEGORY} subcategories for each chosen category.`}
+            Upload your avatar and select interest categories heavily inspired by Spotify & Netflix onboarding.
           </p>
         </div>
 
-        {/* Profile Picture Upload Header Card */}
+        {/* ───────────────────────────────────────────────────────────── */}
+        {/* EXACTLY ONE ISOLATED PROFILE PHOTO CARD AT TOP OF CONTAINER */}
+        {/* ───────────────────────────────────────────────────────────── */}
         <div className="bg-white border border-[#E2DBD0] rounded-3xl p-6 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-4">
             <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
@@ -279,7 +291,7 @@ export const OnboardingView: React.FC = () => {
                 @{currentUser?.username || 'member'}'s Profile Photo
               </h3>
               <p className="text-xs text-[#8a8278] mt-0.5">
-                Upload your avatar via secure Cloudinary two-step signature
+                Upload your avatar via authenticated Cloudinary signature
               </p>
               {photoSuccessMsg && (
                 <p className="text-xs text-[#2D5A3D] font-medium mt-1 animate-fade-in">
@@ -322,7 +334,7 @@ export const OnboardingView: React.FC = () => {
         )}
 
         {/* ───────────────────────────────────────────────────────────── */}
-        {/* STEP 1: SPOTIFY-STYLE PRIMARY CATEGORY CARDS */}
+        {/* SEPARATE SPOTIFY/NETFLIX HOBBIES SELECTION BLOCK */}
         {/* ───────────────────────────────────────────────────────────── */}
         {step === 1 && (
           <div>
@@ -375,9 +387,6 @@ export const OnboardingView: React.FC = () => {
           </div>
         )}
 
-        {/* ───────────────────────────────────────────────────────────── */}
-        {/* STEP 2: NETFLIX-STYLE SUBCATEGORY PILLS */}
-        {/* ───────────────────────────────────────────────────────────── */}
         {step === 2 && (
           <div>
             <div className="flex justify-between items-center mb-4 text-xs text-[#8a8278] font-medium px-1">

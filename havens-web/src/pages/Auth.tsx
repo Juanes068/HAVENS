@@ -16,64 +16,69 @@ export const AuthPage: React.FC = () => {
   const [invitationCode, setInvitationCode] = useState('')
   const [bio, setBio] = useState('')
   const [selectedLocation, setSelectedLocation] = useState<LocationResult | null>(null)
+  
+  // Pipeline Status & Messages
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [statusText, setStatusText] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
 
-  // Login Mutation Hook
-  const [tokenAuthMutation, { loading: isAuthenticating }] = useMutation(TOKEN_AUTH, {
-    onCompleted: async (data) => {
-      if (data?.tokenAuth?.token) {
-        await login(data.tokenAuth.token)
-        setErrorMsg('')
-        if (isRegisterMode) {
-          navigate('/onboarding')
-        } else {
-          navigate('/discover')
-        }
-      } else {
-        setErrorMsg('Authentication failed: Invalid credentials.')
-      }
-    },
-    onError: (err) => {
-      setErrorMsg(err.message || 'Authentication error.')
-    },
-  })
+  // GraphQL Mutations
+  const [tokenAuthMutation] = useMutation(TOKEN_AUTH)
+  const [createUserMutation] = useMutation(CREATE_USER)
 
-  // Register Mutation Hook
-  const [createUserMutation, { loading: isRegistering }] = useMutation(CREATE_USER, {
-    onCompleted: (data) => {
-      if (data?.createUser?.success) {
-        setSuccessMsg('Account created successfully! Signing you in...')
-        setErrorMsg('')
-        tokenAuthMutation({
-          variables: { username, password },
-        })
-      } else {
-        setErrorMsg(data?.createUser?.message || 'Registration failed.')
-      }
-    },
-    onError: (err) => {
-      setErrorMsg(err.message || 'Registration error.')
-    },
-  })
-
-  const handleSubmit = (e: React.FormEvent) => {
+  // Step 1 Submission Handler
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErrorMsg('')
     setSuccessMsg('')
 
-    if (isRegisterMode) {
-      if (!username || !email || !password || !invitationCode) {
-        setErrorMsg('Please fill in all required fields including your 6-character invitation code.')
+    if (!isRegisterMode) {
+      // ───────────── SIGN IN FLOW ─────────────
+      if (!username || !password) {
+        setErrorMsg('Please enter both username and password.')
         return
       }
 
-      if (!selectedLocation) {
-        setErrorMsg('Please search and select a valid location from the Google Maps suggestions dropdown.')
-        return
-      }
+      setIsProcessing(true)
+      setStatusText('Authenticating...')
 
-      createUserMutation({
+      try {
+        const loginRes = await tokenAuthMutation({
+          variables: { username, password },
+        })
+
+        if (loginRes?.data?.tokenAuth?.token) {
+          await login(loginRes.data.tokenAuth.token)
+          navigate('/discover')
+        } else {
+          setErrorMsg('Authentication failed: Invalid credentials.')
+        }
+      } catch (err: any) {
+        setErrorMsg(err.message || 'Authentication error.')
+      } finally {
+        setIsProcessing(false)
+      }
+      return
+    }
+
+    // ───────────── STEP 1: ACCOUNT CREATION FLOW ─────────────
+    if (!username || !email || !password || !invitationCode) {
+      setErrorMsg('Please fill in all required fields including your 6-character invitation code.')
+      return
+    }
+
+    if (!selectedLocation) {
+      setErrorMsg('Please search and select a valid location from the Google Maps suggestions dropdown.')
+      return
+    }
+
+    setIsProcessing(true)
+
+    try {
+      // Step 1.1: Create User Account in Django Database
+      setStatusText('Step 1/2: Creating your Havens account...')
+      const regRes = await createUserMutation({
         variables: {
           username,
           email,
@@ -86,23 +91,43 @@ export const AuthPage: React.FC = () => {
           longitude: selectedLocation.longitude,
         },
       })
-    } else {
-      if (!username || !password) {
-        setErrorMsg('Please enter both username and password.')
-        return
+
+      if (!regRes?.data?.createUser?.success) {
+        throw new Error(regRes?.data?.createUser?.message || 'Registration failed.')
       }
-      tokenAuthMutation({
+
+      // Step 1.2: Authenticate User and Save JWT Token to Context & Apollo Headers
+      setStatusText('Authenticating session & injecting JWT headers...')
+      const loginRes = await tokenAuthMutation({
         variables: { username, password },
       })
+
+      const token = loginRes?.data?.tokenAuth?.token
+      if (!token) {
+        throw new Error('Auto-login after registration failed.')
+      }
+
+      // Injects JWT token into secureStore and updates Apollo Client Authorization headers
+      await login(token)
+
+      setSuccessMsg('Account created successfully! Proceeding to Profile Setup...')
+      
+      // Step 1.3: Immediately proceed to Step 2 (Profile Setup & Hobbies)
+      navigate('/onboarding')
+    } catch (err: any) {
+      console.error('[Step 1 Account Creation Error]', err)
+      setErrorMsg(err.message || 'Registration failed.')
+    } finally {
+      setIsProcessing(false)
     }
   }
 
   return (
     <div className="min-h-screen bg-[#F4EEE2] text-[#2C2C2C] flex flex-col items-center justify-center p-6 antialiased">
-      <div className="max-w-md w-full bg-[#F0EAE0]/80 border border-[#E2DBD0] rounded-3xl p-8 shadow-sm">
+      <div className="max-w-md w-full bg-[#F0EAE0]/80 border border-[#E2DBD0] rounded-3xl p-8 shadow-sm relative">
         
         {/* Brand Title */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-6">
           <h1 className="text-4xl font-serif font-semibold tracking-tight text-[#2D5A3D] lowercase">
             havens
           </h1>
@@ -150,6 +175,15 @@ export const AuthPage: React.FC = () => {
         {successMsg && (
           <div className="p-3 text-xs bg-[#eaf3ed] border border-[#7aaa8a]/40 text-[#2D5A3D] rounded-xl mb-4">
             {successMsg}
+          </div>
+        )}
+
+        {/* Processing Loading Overlay */}
+        {isProcessing && (
+          <div className="absolute inset-0 z-50 bg-[#F0EAE0]/95 backdrop-blur-xs rounded-3xl flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-200">
+            <div className="w-10 h-10 border-4 border-[#2D5A3D] border-t-transparent rounded-full animate-spin mb-4" />
+            <h3 className="text-sm font-semibold text-[#2D5A3D]">Setting up your Havens session...</h3>
+            <p className="text-xs text-[#8a8278] mt-1 font-mono">{statusText}</p>
           </div>
         )}
 
@@ -223,13 +257,13 @@ export const AuthPage: React.FC = () => {
 
           <button
             type="submit"
-            disabled={isAuthenticating || isRegistering || (isRegisterMode && !selectedLocation)}
+            disabled={isProcessing || (isRegisterMode && !selectedLocation)}
             className="w-full py-3 px-4 rounded-xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white font-medium text-sm transition-colors shadow-xs disabled:opacity-50 mt-4 cursor-pointer"
           >
-            {isAuthenticating || isRegistering
+            {isProcessing
               ? 'Processing...'
               : isRegisterMode
-              ? 'Complete Registration'
+              ? 'Continue to Profile Setup (Step 1 of 2) →'
               : 'Sign In'}
           </button>
         </form>
