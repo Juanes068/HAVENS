@@ -14,6 +14,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Calendar', path: '/calendar' },
   { label: 'Saved', path: '/saved' },
   { label: 'Post a Plan', path: '/post-a-plan' },
+  { label: 'Profile', path: '/profile' },
 ]
 
 export const Navigation: React.FC = () => {
@@ -54,13 +55,16 @@ export const Navigation: React.FC = () => {
 
         <div className="flex items-center gap-3">
           {user && (
-            <span className="text-xs font-medium text-[#2D5A3D] bg-[#eaf3ed] px-2.5 py-1 rounded-full">
+            <span
+              onClick={() => navigate('/profile')}
+              className="text-xs font-medium text-[#2D5A3D] bg-[#eaf3ed] px-2.5 py-1 rounded-full cursor-pointer hover:bg-[#2D5A3D] hover:text-white transition-colors"
+            >
               @{user.username}
             </span>
           )}
           <button
             onClick={handleLogout}
-            className="px-3 py-1.5 rounded-lg border border-border text-xs font-medium text-muted hover:text-rose-700 hover:border-rose-200 transition-colors"
+            className="px-3 py-1.5 rounded-lg border border-border text-xs font-medium text-muted hover:text-rose-700 hover:border-rose-200 transition-colors cursor-pointer"
           >
             Sign out
           </button>

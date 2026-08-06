@@ -417,3 +417,49 @@ export const UPDATE_USER_PROFILE = gql`
     }
   }
 `;
+
+/**
+ * Mutation to update general account info and password security credentials.
+ */
+export const UPDATE_ACCOUNT_SECURITY = gql`
+  mutation UpdateAccountSecurity(
+    $email: String
+    $newUsername: String
+    $newPassword: String
+    $currentPassword: String
+    $bio: String
+    $neighbourhood: String
+  ) {
+    updateAccountSecurity(
+      email: $email
+      newUsername: $newUsername
+      newPassword: $newPassword
+      currentPassword: $currentPassword
+      bio: $bio
+      neighbourhood: $neighbourhood
+    ) {
+      success
+      message
+      user {
+        id
+        username
+        email
+        bio
+        neighbourhood
+      }
+    }
+  }
+`;
+
+/**
+ * Mutation to delete user account.
+ */
+export const DELETE_ACCOUNT = gql`
+  mutation DeleteAccount {
+    deleteAccount {
+      success
+      message
+    }
+  }
+`;
+

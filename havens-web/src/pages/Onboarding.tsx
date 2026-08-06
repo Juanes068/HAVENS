@@ -2,12 +2,15 @@ import React, { useState, useRef } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
 import { useNavigate } from 'react-router-dom';
 import {
+  TOKEN_AUTH,
+  CREATE_USER,
   GET_ALL_HOBBY_CATEGORIES,
   UPDATE_USER_HOBBIES,
   GENERATE_CLOUDINARY_SIGNATURE,
   UPDATE_USER_PROFILE,
 } from '../graphql/operations';
 import { useAuth } from '../context/AuthContext';
+import { LocationAutocomplete, LocationResult } from '../components/LocationAutocomplete';
 
 interface Hobby {
   id: string | number;
@@ -39,125 +42,122 @@ const CATEGORY_GRADIENTS = [
 
 export const OnboardingView: React.FC = () => {
   const navigate = useNavigate();
-  const { user: currentUser, refetchUser } = useAuth();
+  const { token, user: currentUser, login, refetchUser } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [step, setStep] = useState<1 | 2>(1);
+  // 4-Step Wizard State (Step 1: Account, Step 2: Primary Hobbies, Step 3: Secondary Hobbies, Step 4: Photo)
+  const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(() => (token ? 2 : 1));
+
+  // Step 1: Account Creation State
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [invitationCode, setInvitationCode] = useState('');
+  const [selectedLocation, setSelectedLocation] = useState<LocationResult | null>(null);
+
+  // Step 2 & 3: Hobbies Selection State
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [selectedHobbyIds, setSelectedHobbyIds] = useState<string[]>([]);
-  const [expandedCategoryIds, setExpandedCategoryIds] = useState<string[]>([]);
-  
-  // Profile Picture Upload State
-  const [avatarUrl, setAvatarUrl] = useState<string>(currentUser?.photoUrl || '');
+
+  // Step 4: Profile Photo State
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string>(currentUser?.photoUrl || '');
   const [isUploadingPhoto, setIsUploadingPhoto] = useState<boolean>(false);
   const [photoSuccessMsg, setPhotoSuccessMsg] = useState<string>('');
 
+  // General Status & Alert Messages
+  const [isProcessingStep1, setIsProcessingStep1] = useState(false);
+  const [step1StatusText, setStep1StatusText] = useState('');
   const [warningMsg, setWarningMsg] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string>('');
 
   // GraphQL Queries & Mutations
-  const { data, loading, error } = useQuery<{ allHobbyCategories: HobbyCategory[] }>(
-    GET_ALL_HOBBY_CATEGORIES
-  );
+  const { data, loading: loadingTaxonomy, error: taxonomyError } = useQuery<{
+    allHobbyCategories: HobbyCategory[];
+  }>(GET_ALL_HOBBY_CATEGORIES);
 
+  const [createUserMutation] = useMutation(CREATE_USER);
+  const [tokenAuthMutation] = useMutation(TOKEN_AUTH);
   const [generateCloudinarySignature] = useMutation(GENERATE_CLOUDINARY_SIGNATURE);
   const [updateUserProfileMutation] = useMutation(UPDATE_USER_PROFILE);
-
-  const [updateHobbies, { loading: isSaving }] = useMutation(UPDATE_USER_HOBBIES, {
-    onCompleted: async (res) => {
-      if (res?.updateUserHobbies?.success) {
-        await refetchUser();
-        // Programmatically navigate to Main Home Screen of Havens (/discover)
-        navigate('/discover');
-      } else {
-        setErrorMsg(res?.updateUserHobbies?.message || 'Failed to save onboarding preferences.');
-      }
-    },
-    onError: (err) => {
-      setErrorMsg(err.message || 'Error saving hobbies.');
-    },
-  });
+  const [updateHobbies, { loading: isSavingHobbies }] = useMutation(UPDATE_USER_HOBBIES);
 
   const categories = data?.allHobbyCategories || [];
+  const activeCategories = categories.filter((c) => selectedCategoryIds.includes(String(c.id)));
 
-  // Authenticated Cloudinary Image Upload Process:
-  // Signature (JWT Header active!) -> Direct Cloudinary POST -> Extract String URL -> Execute updateUserProfile(photoUrl)
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsUploadingPhoto(true);
+  // ─────────────────────────────────────────────────────────────
+  // STEP 1: ACCOUNT CREATION & PASSWORD MATCHING VALIDATION
+  // ─────────────────────────────────────────────────────────────
+  const handleStep1Submit = async (e: React.FormEvent) => {
+    e.preventDefault();
     setErrorMsg('');
-    setPhotoSuccessMsg('');
+
+    if (!username || !email || !password || !confirmPassword || !invitationCode) {
+      setErrorMsg('Please fill in all required fields.');
+      return;
+    }
+
+    // Client-side Password Confirmation Validation
+    if (password !== confirmPassword) {
+      setErrorMsg('⚠️ Password and Password Confirmation do not match.');
+      return;
+    }
+
+    if (!selectedLocation) {
+      setErrorMsg('Please select a valid location from the Google Places autocomplete dropdown.');
+      return;
+    }
+
+    setIsProcessingStep1(true);
 
     try {
-      // Step 1: Request Cloudinary signature from authenticated backend
-      const sigRes = await generateCloudinarySignature({
-        variables: { paramsToSign: "{}" },
-      });
-
-      const sigData = sigRes?.data?.generateCloudinarySignature;
-      if (!sigData || !sigData.success) {
-        throw new Error(sigData?.message || 'Failed to generate secure upload signature.');
-      }
-
-      const { signature, timestamp, apiKey } = sigData;
-      const cloudName = 'g8jffrmx';
-
-      // Step 2: Use signature to upload image file directly to Cloudinary
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('api_key', String(apiKey));
-      formData.append('timestamp', String(timestamp));
-      formData.append('signature', String(signature));
-
-      const cloudRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!cloudRes.ok) {
-        const errorText = await cloudRes.text();
-        console.error('[Cloudinary Upload Error Details]', {
-          status: cloudRes.status,
-          statusText: cloudRes.statusText,
-          responseBody: errorText,
-        });
-        throw new Error(`Cloudinary upload error (${cloudRes.status}): ${errorText}`);
-      }
-
-      const cloudJson = await cloudRes.json();
-      const uploadedPhotoUrl = cloudJson?.secure_url ? String(cloudJson.secure_url).trim() : '';
-
-      if (!uploadedPhotoUrl || typeof uploadedPhotoUrl !== 'string' || !uploadedPhotoUrl.startsWith('http')) {
-        throw new Error('Cloudinary response missing valid secure_url string.');
-      }
-
-      setAvatarUrl(uploadedPhotoUrl);
-      console.log('[Authenticated Cloudinary Upload Success]', uploadedPhotoUrl);
-
-      // Step 3: Execute updateUserProfile mutation with authenticated JWT header
-      const updateRes = await updateUserProfileMutation({
+      // 1. Execute createUser mutation
+      setStep1StatusText('Step 1/4: Registering account...');
+      const regRes = await createUserMutation({
         variables: {
-          photoUrl: uploadedPhotoUrl,
+          username,
+          email,
+          password,
+          invitationCode,
+          neighbourhood: selectedLocation.neighbourhood,
+          cityName: selectedLocation.cityName,
+          latitude: selectedLocation.latitude,
+          longitude: selectedLocation.longitude,
         },
       });
 
-      if (updateRes?.data?.updateUserProfile?.success) {
-        setPhotoSuccessMsg('✓ Profile picture updated successfully!');
-        await refetchUser();
-      } else {
-        setPhotoSuccessMsg('Photo saved to profile.');
+      if (!regRes?.data?.createUser?.success) {
+        throw new Error(regRes?.data?.createUser?.message || 'Registration failed.');
       }
+
+      // 2. Execute tokenAuth mutation & save token
+      setStep1StatusText('Authenticating session & injecting JWT headers...');
+      const loginRes = await tokenAuthMutation({
+        variables: { username, password },
+      });
+
+      const newToken = loginRes?.data?.tokenAuth?.token;
+      if (!newToken) {
+        throw new Error('Auto-login after registration failed.');
+      }
+
+      await login(newToken);
+      setErrorMsg('');
+
+      // Advance to Step 2
+      setWizardStep(2);
     } catch (err: any) {
-      console.error('[ProfilePhotoUpload Error]', err);
-      setErrorMsg(err.message || 'Failed to upload profile picture.');
-    } finally {
-      setIsUploadingPhoto(false);
+      console.error('[Step 1 Account Error]', err);
+      setErrorMsg(err.message || 'Registration failed.');
+    }  finally {
+      setIsProcessingStep1(false);
     }
   };
 
-  // Toggle Category selection (Step 1 - Max 3 Primary Categories)
+  // ─────────────────────────────────────────────────────────────
+  // STEP 2: PRIMARY HOBBIES CATEGORY TOGGLE (MAX 3)
+  // ─────────────────────────────────────────────────────────────
   const toggleCategory = (catIdRaw: string | number) => {
     const catId = String(catIdRaw);
     setWarningMsg('');
@@ -166,23 +166,31 @@ export const OnboardingView: React.FC = () => {
     if (selectedCategoryIds.includes(catId)) {
       const targetCategory = categories.find((c) => String(c.id) === catId);
       const catHobbyIds = targetCategory ? targetCategory.hobbies.map((h) => String(h.id)) : [];
-      
+
       setSelectedCategoryIds((prev) => prev.filter((id) => id !== catId));
       setSelectedHobbyIds((prev) => prev.filter((id) => !catHobbyIds.includes(id)));
-      setExpandedCategoryIds((prev) => prev.filter((id) => id !== catId));
     } else {
       if (selectedCategoryIds.length >= MAX_PRIMARY_CATEGORIES) {
         setWarningMsg(`You can select a maximum of ${MAX_PRIMARY_CATEGORIES} Primary categories.`);
         return;
       }
       setSelectedCategoryIds((prev) => [...prev, catId]);
-      if (!expandedCategoryIds.includes(catId)) {
-        setExpandedCategoryIds((prev) => [...prev, catId]);
-      }
     }
   };
 
-  // Toggle Sub-Hobby selection (Step 2 - Max 5 Sub-Hobbies PER Primary Category)
+  const handleStep2Next = () => {
+    if (selectedCategoryIds.length === 0) {
+      setErrorMsg('Please select at least 1 primary category to personalize your feed.');
+      return;
+    }
+    setWarningMsg('');
+    setErrorMsg('');
+    setWizardStep(3);
+  };
+
+  // ─────────────────────────────────────────────────────────────
+  // STEP 3: SECONDARY HOBBIES SUBCATEGORIES TOGGLE (MAX 5 PER CAT)
+  // ─────────────────────────────────────────────────────────────
   const toggleHobby = (categoryName: string, categoryHobbyIds: string[], hobbyIdRaw: string | number) => {
     const hobbyId = String(hobbyIdRaw);
     setWarningMsg('');
@@ -205,128 +213,164 @@ export const OnboardingView: React.FC = () => {
     }
   };
 
-  const handleNextStep = () => {
-    if (selectedCategoryIds.length === 0) {
-      setErrorMsg('Please select at least 1 primary category to personalize your feed.');
-      return;
-    }
-    setWarningMsg('');
-    setErrorMsg('');
-    setStep(2);
-  };
-
-  const handleFinishOnboarding = () => {
+  const handleStep3Next = async () => {
     if (selectedHobbyIds.length === 0) {
-      setErrorMsg('Please choose at least 1 subcategory so we can personalize your affinity match.');
+      setErrorMsg('Please select at least 1 subcategory so we can personalize your affinity match.');
       return;
     }
     setWarningMsg('');
     setErrorMsg('');
-    const numericHobbyIds = selectedHobbyIds.map((id) => parseInt(id, 10));
-    updateHobbies({
-      variables: { hobbyIds: numericHobbyIds },
-    });
+
+    try {
+      const numericHobbyIds = selectedHobbyIds.map((id) => parseInt(id, 10));
+      const res = await updateHobbies({
+        variables: { hobbyIds: numericHobbyIds },
+      });
+
+      if (res?.data?.updateUserHobbies?.success) {
+        await refetchUser();
+        // Advance to Step 4
+        setWizardStep(4);
+      } else {
+        setErrorMsg(res?.data?.updateUserHobbies?.message || 'Failed to save hobbies.');
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Error saving hobbies.');
+    }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#F4EEE2] text-[#2C2C2C] flex items-center justify-center font-serif">
-        <div className="text-center animate-pulse text-[#2D5A3D] text-lg">
-          Loading Spotify-style interest taxonomy...
-        </div>
-      </div>
-    );
-  }
+  // ─────────────────────────────────────────────────────────────
+  // STEP 4: PROFILE PHOTO UPLOAD (OPTIONAL WITH SKIP FOR NOW)
+  // ─────────────────────────────────────────────────────────────
+  const handleAvatarFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedImageFile(file);
+      setImagePreviewUrl(URL.createObjectURL(file));
+      setErrorMsg('');
+    }
+  };
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-[#F4EEE2] flex items-center justify-center p-6">
-        <div className="p-6 bg-rose-50 border border-rose-200 text-rose-700 rounded-2xl max-w-md text-center">
-          <p className="font-semibold text-sm">Failed to load onboarding taxonomy</p>
-          <p className="text-xs mt-1">{error.message}</p>
-        </div>
-      </div>
-    );
-  }
+  const handleStep4UploadAndFinish = async () => {
+    if (!selectedImageFile) {
+      // If no new photo selected, finish onboarding
+      navigate('/discover');
+      return;
+    }
 
-  const activeCategories = categories.filter((c) => selectedCategoryIds.includes(String(c.id)));
+    setIsUploadingPhoto(true);
+    setErrorMsg('');
+    setPhotoSuccessMsg('');
+
+    try {
+      // 1. Get Cloudinary signature from backend (paramsToSign: "{}")
+      const sigRes = await generateCloudinarySignature({
+        variables: { paramsToSign: '{}' },
+      });
+
+      const sigData = sigRes?.data?.generateCloudinarySignature;
+      if (!sigData || !sigData.success) {
+        throw new Error(sigData?.message || 'Failed to obtain Cloudinary upload signature.');
+      }
+
+      const { signature, timestamp, apiKey } = sigData;
+      const cloudName = 'g8jffrmx';
+
+      // 2. Direct POST to Cloudinary API endpoint
+      const formData = new FormData();
+      formData.append('file', selectedImageFile);
+      formData.append('api_key', String(apiKey));
+      formData.append('timestamp', String(timestamp));
+      formData.append('signature', String(signature));
+
+      const cloudRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!cloudRes.ok) {
+        const errorText = await cloudRes.text();
+        throw new Error(`Cloudinary upload failed (${cloudRes.status}): ${errorText}`);
+      }
+
+      const cloudJson = await cloudRes.json();
+      const uploadedPhotoUrl = cloudJson?.secure_url ? String(cloudJson.secure_url).trim() : '';
+
+      if (!uploadedPhotoUrl || !uploadedPhotoUrl.startsWith('http')) {
+        throw new Error('Cloudinary response missing valid secure_url string.');
+      }
+
+      // 3. Execute updateUserProfile mutation with string URL
+      const updateRes = await updateUserProfileMutation({
+        variables: { photoUrl: uploadedPhotoUrl },
+      });
+
+      if (updateRes?.data?.updateUserProfile?.success) {
+        setPhotoSuccessMsg('✓ Profile picture updated!');
+        await refetchUser();
+      }
+
+      // Final Redirect to Dashboard
+      navigate('/discover');
+    } catch (err: any) {
+      console.error('[Step 4 Upload Error]', err);
+      setErrorMsg(err.message || 'Failed to upload photo.');
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
+
+  const handleSkipPhotoStep = () => {
+    // Finish Onboarding and redirect to Dashboard without photo upload
+    navigate('/discover');
+  };
 
   return (
     <div className="min-h-screen bg-[#F4EEE2] text-[#2C2C2C] flex flex-col items-center justify-between p-6 antialiased">
       <div className="max-w-4xl w-full my-auto space-y-8">
         
-        {/* Header & Step Indicator */}
+        {/* Wizard Header & Progress Bar */}
         <div className="text-center">
+          <div className="flex items-center justify-center gap-2 mb-3">
+            {[1, 2, 3, 4].map((stepNum) => (
+              <div
+                key={stepNum}
+                className={`h-2 rounded-full transition-all duration-300 ${
+                  wizardStep === stepNum
+                    ? 'w-10 bg-[#2D5A3D]'
+                    : wizardStep > stepNum
+                    ? 'w-6 bg-[#2D5A3D]/40'
+                    : 'w-6 bg-[#E2DBD0]'
+                }`}
+              />
+            ))}
+          </div>
+
           <span className="text-xs font-semibold tracking-wider text-[#C47B5A] uppercase">
-            Step 2 of 2 • Profile Setup & Affinity Personalization
+            Step {wizardStep} of 4 • Havens Onboarding Wizard
           </span>
-          <h1 className="text-3xl md:text-4xl font-serif font-semibold tracking-tight text-[#2D5A3D] mt-2 lowercase">
-            customize your digital footprint
+          <h1 className="text-3xl md:text-4xl font-serif font-semibold tracking-tight text-[#2D5A3D] mt-1 lowercase">
+            {wizardStep === 1 && 'create your account'}
+            {wizardStep === 2 && 'choose primary categories'}
+            {wizardStep === 3 && 'choose subcategory pills'}
+            {wizardStep === 4 && 'upload profile photo'}
           </h1>
-          <p className="text-sm text-[#8a8278] font-normal mt-2 max-w-lg mx-auto">
-            Upload your avatar and select interest categories heavily inspired by Spotify & Netflix onboarding.
+          <p className="text-sm text-[#8a8278] font-normal mt-1.5 max-w-lg mx-auto">
+            {wizardStep === 1 && 'Enter your details, 6-character invitation code, and location.'}
+            {wizardStep === 2 && `Select up to ${MAX_PRIMARY_CATEGORIES} Spotify-inspired interest categories.`}
+            {wizardStep === 3 && `Select up to ${MAX_SUB_HOBBIES_PER_CATEGORY} subcategories per primary category.`}
+            {wizardStep === 4 && 'Add an optional profile picture or skip to enter your dashboard.'}
           </p>
         </div>
 
-        {/* ───────────────────────────────────────────────────────────── */}
-        {/* EXACTLY ONE ISOLATED PROFILE PHOTO CARD AT TOP OF CONTAINER */}
-        {/* ───────────────────────────────────────────────────────────── */}
-        <div className="bg-white border border-[#E2DBD0] rounded-3xl p-6 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
-            <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-              <div className="w-16 h-16 rounded-full bg-[#2D5A3D] text-white flex items-center justify-center font-bold text-xl overflow-hidden border-2 border-[#E2DBD0] shadow-sm">
-                {avatarUrl ? (
-                  <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover" />
-                ) : (
-                  currentUser?.username?.charAt(0).toUpperCase() || 'U'
-                )}
-              </div>
-              <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-white text-xs font-semibold">
-                📷 Edit
-              </div>
-            </div>
-
-            <div>
-              <h3 className="text-sm font-semibold text-charcoal">
-                @{currentUser?.username || 'member'}'s Profile Photo
-              </h3>
-              <p className="text-xs text-[#8a8278] mt-0.5">
-                Upload your avatar via authenticated Cloudinary signature
-              </p>
-              {photoSuccessMsg && (
-                <p className="text-xs text-[#2D5A3D] font-medium mt-1 animate-fade-in">
-                  {photoSuccessMsg}
-                </p>
-              )}
-            </div>
-          </div>
-
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            accept="image/*"
-            className="hidden"
-          />
-
-          <button
-            type="button"
-            disabled={isUploadingPhoto}
-            onClick={() => fileInputRef.current?.click()}
-            className="px-5 py-2.5 rounded-xl bg-[#F0EAE0] hover:bg-[#E2DBD0] text-[#2C2C2C] text-xs font-semibold border border-[#E2DBD0] transition-colors disabled:opacity-50 cursor-pointer"
-          >
-            {isUploadingPhoto ? 'Uploading to Cloudinary...' : 'Upload Photo'}
-          </button>
-        </div>
-
-        {/* Warning Toast / Alert */}
+        {/* Global Warning Alert */}
         {warningMsg && (
           <div className="p-3 text-xs bg-amber-50 border border-amber-300 text-amber-900 rounded-xl text-center max-w-lg mx-auto shadow-xs animate-bounce font-medium">
             ⚠️ {warningMsg}
           </div>
         )}
 
-        {/* Error Alert */}
+        {/* Global Error Alert */}
         {errorMsg && (
           <div className="p-3 text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-center max-w-lg mx-auto font-medium">
             {errorMsg}
@@ -334,60 +378,196 @@ export const OnboardingView: React.FC = () => {
         )}
 
         {/* ───────────────────────────────────────────────────────────── */}
-        {/* SEPARATE SPOTIFY/NETFLIX HOBBIES SELECTION BLOCK */}
+        {/* STEP 1: ACCOUNT CREATION & PASSWORD MATCHING VALIDATION */}
         {/* ───────────────────────────────────────────────────────────── */}
-        {step === 1 && (
+        {wizardStep === 1 && (
+          <div className="bg-[#F0EAE0]/80 border border-[#E2DBD0] rounded-3xl p-8 max-w-md mx-auto shadow-xs relative">
+            {isProcessingStep1 && (
+              <div className="absolute inset-0 z-50 bg-[#F0EAE0]/95 backdrop-blur-xs rounded-3xl flex flex-col items-center justify-center p-6 text-center">
+                <div className="w-10 h-10 border-4 border-[#2D5A3D] border-t-transparent rounded-full animate-spin mb-4" />
+                <h3 className="text-sm font-semibold text-[#2D5A3D]">Creating your Havens account...</h3>
+                <p className="text-xs text-[#8a8278] mt-1 font-mono">{step1StatusText}</p>
+              </div>
+            )}
+
+            <form onSubmit={handleStep1Submit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-[#8a8278] mb-1">Username / Name</label>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Enter username"
+                  className="w-full px-4 py-2.5 rounded-xl bg-white border border-[#E2DBD0] text-[#2C2C2C] text-sm focus:outline-none focus:border-[#2D5A3D]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#8a8278] mb-1">Email</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="name@example.com"
+                  className="w-full px-4 py-2.5 rounded-xl bg-white border border-[#E2DBD0] text-[#2C2C2C] text-sm focus:outline-none focus:border-[#2D5A3D]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#8a8278] mb-1">Password</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter password"
+                  className="w-full px-4 py-2.5 rounded-xl bg-white border border-[#E2DBD0] text-[#2C2C2C] text-sm focus:outline-none focus:border-[#2D5A3D]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#8a8278] mb-1">
+                  Password Confirmation <span className="text-[#C47B5A]">*</span>
+                </label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Re-enter password to confirm"
+                  className={`w-full px-4 py-2.5 rounded-xl bg-white border text-[#2C2C2C] text-sm focus:outline-none ${
+                    confirmPassword && confirmPassword !== password
+                      ? 'border-rose-400 focus:border-rose-500'
+                      : 'border-[#E2DBD0] focus:border-[#2D5A3D]'
+                  }`}
+                />
+                {confirmPassword && confirmPassword !== password && (
+                  <p className="text-[11px] text-rose-600 mt-1 font-medium">
+                    ⚠️ Passwords do not match.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#8a8278] mb-1">
+                  Invitation Code <span className="text-[#C47B5A]">*</span>
+                </label>
+                <input
+                  type="text"
+                  maxLength={6}
+                  value={invitationCode}
+                  onChange={(e) => setInvitationCode(e.target.value.toUpperCase())}
+                  placeholder="Enter 6-character code (e.g. A8X9K2)"
+                  className="w-full px-4 py-2.5 rounded-xl bg-white border border-[#E2DBD0] text-[#2C2C2C] text-sm tracking-wider font-mono focus:outline-none focus:border-[#2D5A3D] uppercase"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#8a8278] mb-1">
+                  Location / Neighbourhood <span className="text-[#C47B5A]">*</span>
+                </label>
+                <LocationAutocomplete
+                  onSelectLocation={(loc) => {
+                    setSelectedLocation(loc);
+                    if (loc) setErrorMsg('');
+                  }}
+                  placeholder="Type location (e.g. Milenta, Bogotá)"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isProcessingStep1 || (confirmPassword !== '' && password !== confirmPassword)}
+                className="w-full py-3 px-4 rounded-xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white font-medium text-sm transition-colors shadow-xs disabled:opacity-50 mt-4 cursor-pointer"
+              >
+                Create Account & Continue (Step 1 of 4) →
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* ───────────────────────────────────────────────────────────── */}
+        {/* STEP 2: SPOTIFY-STYLE PRIMARY CATEGORY CARDS ONLY */}
+        {/* ───────────────────────────────────────────────────────────── */}
+        {wizardStep === 2 && (
           <div>
             <div className="flex justify-between items-center mb-4 text-xs text-[#8a8278] font-medium px-1">
               <span>Primary Interest Categories</span>
               <span>{selectedCategoryIds.length} of {MAX_PRIMARY_CATEGORIES} selected</span>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-8">
-              {categories.map((cat, idx) => {
-                const catIdStr = String(cat.id);
-                const isSelected = selectedCategoryIds.includes(catIdStr);
-                const gradientClass = CATEGORY_GRADIENTS[idx % CATEGORY_GRADIENTS.length];
+            {loadingTaxonomy ? (
+              <div className="text-center py-12 text-[#2D5A3D] animate-pulse text-sm">
+                Loading Spotify taxonomy cards...
+              </div>
+            ) : taxonomyError ? (
+              <div className="p-4 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs text-center">
+                {taxonomyError.message}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-8">
+                {categories.map((cat, idx) => {
+                  const catIdStr = String(cat.id);
+                  const isSelected = selectedCategoryIds.includes(catIdStr);
+                  const gradientClass = CATEGORY_GRADIENTS[idx % CATEGORY_GRADIENTS.length];
 
-                return (
-                  <div
-                    key={catIdStr}
-                    onClick={() => toggleCategory(catIdStr)}
-                    className={`relative rounded-3xl p-5 cursor-pointer transition-all duration-300 transform flex flex-col justify-between h-36 overflow-hidden shadow-sm hover:scale-[1.03] active:scale-95 ${
-                      isSelected
-                        ? 'bg-gradient-to-br from-[#2D5A3D] to-slate-900 text-white ring-4 ring-[#2D5A3D]/40 shadow-lg'
-                        : `bg-gradient-to-br ${gradientClass} text-white/90 opacity-90 hover:opacity-100`
-                    }`}
-                  >
-                    {/* Top Badge */}
-                    <div className="flex justify-between items-start">
-                      <span className="text-[10px] uppercase font-bold tracking-widest text-white/70">
-                        {cat.hobbies?.length || 0} Topics
-                      </span>
-                      {isSelected && (
-                        <span className="w-6 h-6 rounded-full bg-white text-[#2D5A3D] flex items-center justify-center text-xs font-bold shadow-xs">
-                          ✓
+                  return (
+                    <div
+                      key={catIdStr}
+                      onClick={() => toggleCategory(catIdStr)}
+                      className={`relative rounded-3xl p-5 cursor-pointer transition-all duration-300 transform flex flex-col justify-between h-36 overflow-hidden shadow-sm hover:scale-[1.03] active:scale-95 ${
+                        isSelected
+                          ? 'bg-gradient-to-br from-[#2D5A3D] to-slate-900 text-white ring-4 ring-[#2D5A3D]/40 shadow-lg'
+                          : `bg-gradient-to-br ${gradientClass} text-white/90 opacity-90 hover:opacity-100`
+                      }`}
+                    >
+                      <div className="flex justify-between items-start">
+                        <span className="text-[10px] uppercase font-bold tracking-widest text-white/70">
+                          {cat.hobbies?.length || 0} Topics
                         </span>
-                      )}
-                    </div>
+                        {isSelected && (
+                          <span className="w-6 h-6 rounded-full bg-white text-[#2D5A3D] flex items-center justify-center text-xs font-bold shadow-xs">
+                            ✓
+                          </span>
+                        )}
+                      </div>
 
-                    {/* Category Title */}
-                    <div>
-                      <h3 className="text-base font-serif font-bold leading-tight text-white">
-                        {cat.name}
-                      </h3>
-                      <p className="text-[11px] text-white/80 mt-1 font-light">
-                        {isSelected ? 'Selected Category' : 'Tap to select'}
-                      </p>
+                      <div>
+                        <h3 className="text-base font-serif font-bold leading-tight text-white">
+                          {cat.name}
+                        </h3>
+                        <p className="text-[11px] text-white/80 mt-1 font-light">
+                          {isSelected ? 'Selected Category' : 'Tap to select'}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-4 border-t border-[#E2DBD0]">
+              <button
+                type="button"
+                onClick={() => setWizardStep(1)}
+                className="px-5 py-2.5 rounded-xl border border-[#E2DBD0] text-[#2C2C2C] text-xs font-medium hover:bg-white transition-colors cursor-pointer"
+              >
+                ← Back to Account
+              </button>
+
+              <button
+                type="button"
+                onClick={handleStep2Next}
+                className="px-8 py-3 rounded-xl bg-[#2D5A3D] text-white text-xs font-semibold shadow-sm hover:bg-[#3d7a55] transition-colors cursor-pointer"
+              >
+                Continue to Secondary Hobbies ({selectedCategoryIds.length}/{MAX_PRIMARY_CATEGORIES}) →
+              </button>
             </div>
           </div>
         )}
 
-        {step === 2 && (
+        {/* ───────────────────────────────────────────────────────────── */}
+        {/* STEP 3: NETFLIX-STYLE SECONDARY SUBCATEGORY PILLS ONLY */}
+        {/* ───────────────────────────────────────────────────────────── */}
+        {wizardStep === 3 && (
           <div>
             <div className="flex justify-between items-center mb-4 text-xs text-[#8a8278] font-medium px-1">
               <span>Subcategories (Max {MAX_SUB_HOBBIES_PER_CATEGORY} per category)</span>
@@ -440,42 +620,106 @@ export const OnboardingView: React.FC = () => {
                 );
               })}
             </div>
+
+            <div className="flex items-center justify-between pt-4 border-t border-[#E2DBD0]">
+              <button
+                type="button"
+                onClick={() => setWizardStep(2)}
+                className="px-5 py-2.5 rounded-xl border border-[#E2DBD0] text-[#2C2C2C] text-xs font-medium hover:bg-white transition-colors cursor-pointer"
+              >
+                ← Back to Primary Categories
+              </button>
+
+              <button
+                type="button"
+                disabled={isSavingHobbies}
+                onClick={handleStep3Next}
+                className="px-8 py-3 rounded-xl bg-[#2D5A3D] text-white text-xs font-semibold shadow-sm hover:bg-[#3d7a55] transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                {isSavingHobbies ? 'Saving Preferences...' : 'Save & Continue to Profile Photo (Step 3 of 4) →'}
+              </button>
+            </div>
           </div>
         )}
 
-        {/* Footer Navigation Buttons */}
-        <div className="flex items-center justify-between pt-4 border-t border-[#E2DBD0]">
-          {step === 2 ? (
-            <button
-              type="button"
-              onClick={() => setStep(1)}
-              className="px-5 py-2.5 rounded-xl border border-[#E2DBD0] text-[#2C2C2C] text-xs font-medium hover:bg-white transition-colors cursor-pointer"
-            >
-              ← Back to Categories
-            </button>
-          ) : (
-            <div />
-          )}
+        {/* ───────────────────────────────────────────────────────────── */}
+        {/* STEP 4: ISOLATED PROFILE PHOTO UPLOAD (OPTIONAL WITH SKIP) */}
+        {/* ───────────────────────────────────────────────────────────── */}
+        {wizardStep === 4 && (
+          <div className="bg-white border border-[#E2DBD0] rounded-3xl p-8 max-w-lg mx-auto shadow-xs text-center space-y-6">
+            <div>
+              <span className="text-[10px] font-bold text-[#C47B5A] uppercase tracking-wider">
+                Step 4 of 4 • Optional Profile Picture
+              </span>
+              <h3 className="text-2xl font-serif font-semibold text-[#2D5A3D] mt-1">
+                Add a Face to Your Profile
+              </h3>
+              <p className="text-xs text-[#8a8278] mt-1">
+                Helps trusted members recognize you in local circles. You can also skip this step!
+              </p>
+            </div>
 
-          {step === 1 ? (
-            <button
-              type="button"
-              onClick={handleNextStep}
-              className="ml-auto px-8 py-3 rounded-xl bg-[#2D5A3D] text-white text-xs font-semibold shadow-sm hover:bg-[#3d7a55] transition-colors cursor-pointer"
-            >
-              Continue to Subcategories ({selectedCategoryIds.length}/{MAX_PRIMARY_CATEGORIES}) →
-            </button>
-          ) : (
-            <button
-              type="button"
-              disabled={isSaving}
-              onClick={handleFinishOnboarding}
-              className="px-8 py-3 rounded-xl bg-[#2D5A3D] text-white text-xs font-semibold shadow-sm hover:bg-[#3d7a55] transition-colors disabled:opacity-50 cursor-pointer"
-            >
-              {isSaving ? 'Saving Profile...' : `Finish Setup (${selectedHobbyIds.length} subcategories selected)`}
-            </button>
-          )}
-        </div>
+            {/* Avatar Preview & File Input */}
+            <div className="flex flex-col items-center justify-center">
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="relative w-28 h-28 rounded-full bg-[#2D5A3D] text-white flex items-center justify-center font-bold text-3xl cursor-pointer overflow-hidden border-4 border-[#F4EEE2] shadow-md group transition-transform hover:scale-105"
+              >
+                {imagePreviewUrl ? (
+                  <img src={imagePreviewUrl} alt="Avatar Preview" className="w-full h-full object-cover" />
+                ) : (
+                  <span>{currentUser?.username?.charAt(0).toUpperCase() || '📷'}</span>
+                )}
+                <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-white text-xs font-semibold">
+                  Choose Photo
+                </div>
+              </div>
+
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleAvatarFileSelect}
+                accept="image/*"
+                className="hidden"
+              />
+
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="mt-3 text-xs text-[#2D5A3D] font-semibold hover:underline cursor-pointer"
+              >
+                {selectedImageFile ? `Selected: ${selectedImageFile.name}` : '+ Choose Image File'}
+              </button>
+
+              {photoSuccessMsg && (
+                <p className="text-xs text-[#2D5A3D] font-medium mt-2">
+                  {photoSuccessMsg}
+                </p>
+              )}
+            </div>
+
+            {/* Step 4 Action Buttons (Upload vs Skip for Now) */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4 border-t border-[#E2DBD0]">
+              <button
+                type="button"
+                onClick={handleSkipPhotoStep}
+                className="w-full sm:w-auto px-6 py-2.5 rounded-xl border border-[#E2DBD0] text-[#5a5450] hover:bg-[#F4EEE2] text-xs font-semibold transition-colors cursor-pointer"
+              >
+                Skip for now
+              </button>
+
+              <button
+                type="button"
+                disabled={isUploadingPhoto}
+                onClick={handleStep4UploadAndFinish}
+                className="w-full sm:w-auto px-8 py-2.5 rounded-xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white text-xs font-semibold transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
+              >
+                {isUploadingPhoto ? 'Uploading to Cloudinary...' : selectedImageFile ? 'Upload Photo & Finish' : 'Finish Onboarding'}
+              </button>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );

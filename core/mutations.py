@@ -624,6 +624,75 @@ class UpdateUserHobbies(graphene.Mutation):
             return cls(success=False, message=str(e), user=None)
 
 
+# ───────────────────────────────────────────────
+# Profile Settings: Update Account Security & Delete Account
+# ───────────────────────────────────────────────
+class UpdateAccountSecurity(graphene.Mutation):
+    class Arguments:
+        email = graphene.String()
+        new_username = graphene.String()
+        new_password = graphene.String()
+        current_password = graphene.String()
+        bio = graphene.String()
+        neighbourhood = graphene.String()
+
+    user = graphene.Field(UserType)
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @classmethod
+    @login_required
+    def mutate(cls, root, info, email=None, new_username=None, new_password=None, current_password=None, bio=None, neighbourhood=None):
+        try:
+            user = info.context.user
+            profile, _ = UserProfile.objects.get_or_create(user=user)
+
+            # Security Check: Require current_password if changing username or password
+            if new_username or new_password:
+                if not current_password or not user.check_password(current_password):
+                    return cls(user=None, success=False, message="Current password is required and must be correct to authorize username or password changes.")
+
+            if new_username and new_username != user.username:
+                if User.objects.filter(username=new_username).exclude(pk=user.pk).exists():
+                    return cls(user=None, success=False, message="Username is already taken.")
+                user.username = new_username
+
+            if email and email != user.email:
+                if User.objects.filter(email=email).exclude(pk=user.pk).exists():
+                    return cls(user=None, success=False, message="Email is already taken.")
+                user.email = email
+
+            if new_password:
+                user.set_password(new_password)
+
+            user.save()
+
+            if bio is not None:
+                profile.bio = bio
+            if neighbourhood is not None:
+                profile.neighbourhood = neighbourhood
+            profile.save()
+
+            return cls(user=user, success=True, message="Profile and security settings updated successfully.")
+        except Exception as e:
+            return cls(user=None, success=False, message=str(e))
+
+
+class DeleteAccount(graphene.Mutation):
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @classmethod
+    @login_required
+    def mutate(cls, root, info):
+        try:
+            user = info.context.user
+            user.delete()
+            return cls(success=True, message="Account deleted successfully.")
+        except Exception as e:
+            return cls(success=False, message=str(e))
+
+
 class Mutation(graphene.ObjectType):
     # Auth
     create_user = CreateUser.Field()
@@ -632,6 +701,8 @@ class Mutation(graphene.ObjectType):
     refresh_token = graphql_jwt.Refresh.Field()
     update_user_profile = UpdateUserProfile.Field()
     update_user_hobbies = UpdateUserHobbies.Field()
+    update_account_security = UpdateAccountSecurity.Field()
+    delete_account = DeleteAccount.Field()
 
     # Communities
     create_community = CreateCommunity.Field()
@@ -656,3 +727,4 @@ class Mutation(graphene.ObjectType):
     # Images (Feature 6)
     presigned_url = PresignedURL.Field()
     generate_cloudinary_signature = GenerateCloudinarySignature.Field()
+
