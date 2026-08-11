@@ -46,6 +46,7 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'core.middleware.JWTAuthenticationMiddleware',  # custom JWT auth before GraphQL
+    'core.rate_limit.GraphQLRateLimitMiddleware',  # Redis rate limiting for auth & GraphQL
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -70,7 +71,7 @@ TEMPLATES = [
 WSGI_APPLICATION = 'havens.wsgi.application'
 
 
-# Database
+# Database Connection Recycling for MVP Performance
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
@@ -79,6 +80,16 @@ DATABASES = {
         'PASSWORD': os.getenv('DB_PASSWORD'),
         'HOST': os.getenv('DB_HOST'),
         'PORT': os.getenv('DB_PORT'),
+        'CONN_MAX_AGE': int(os.getenv('CONN_MAX_AGE', '600')),
+        'OPTIONS': {'charset': 'utf8mb4'},
+    }
+}
+
+# Redis Cache Setup for Rate Limiting & Session Caching
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": os.getenv("REDIS_URL", "redis://redis:6379/1"),
     }
 }
 

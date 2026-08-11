@@ -30,8 +30,27 @@ class UserProfileType(DjangoObjectType):
         model = UserProfile
         fields = ("id", "user", "total_points", "bio", "neighbourhood", "city_name", "latitude", "longitude", "photo_url", "invite_code", "hobbies")
 
+    def resolve_invite_code(self, info):
+        user = info.context.user
+        if user and user.is_authenticated and (user.id == self.user_id or user.is_staff):
+            return self.invite_code
+        return None
+
+    def resolve_latitude(self, info):
+        user = info.context.user
+        if user and user.is_authenticated and (user.id == self.user_id or user.is_staff):
+            return self.latitude
+        return None
+
+    def resolve_longitude(self, info):
+        user = info.context.user
+        if user and user.is_authenticated and (user.id == self.user_id or user.is_staff):
+            return self.longitude
+        return None
+
 
 class UserType(DjangoObjectType):
+    email = graphene.String()
     totalPoints = graphene.Int()
     bio = graphene.String()
     neighbourhood = graphene.String()
@@ -45,6 +64,12 @@ class UserType(DjangoObjectType):
     class Meta:
         model = User
         fields = ("id", "username", "email")
+
+    def resolve_email(self, info):
+        user = info.context.user
+        if user and user.is_authenticated and (user.id == self.id or user.is_staff):
+            return self.email
+        return None
 
     def resolve_totalPoints(self, info):
         try:
@@ -75,23 +100,24 @@ class UserType(DjangoObjectType):
             return ""
 
     def resolve_latitude(self, info):
-        try:
-            profile = UserProfile.objects.get(user=self)
-            return profile.latitude
-        except UserProfile.DoesNotExist:
-            return None
+        user = info.context.user
+        if user and user.is_authenticated and (user.id == self.id or user.is_staff):
+            try:
+                profile = UserProfile.objects.get(user=self)
+                return profile.latitude
+            except UserProfile.DoesNotExist:
+                return None
+        return None
 
     def resolve_longitude(self, info):
-        try:
-            profile = UserProfile.objects.get(user=self)
-            return profile.longitude
-        except UserProfile.DoesNotExist:
-            return None
-        try:
-            profile = UserProfile.objects.get(user=self)
-            return profile.neighbourhood
-        except UserProfile.DoesNotExist:
-            return ""
+        user = info.context.user
+        if user and user.is_authenticated and (user.id == self.id or user.is_staff):
+            try:
+                profile = UserProfile.objects.get(user=self)
+                return profile.longitude
+            except UserProfile.DoesNotExist:
+                return None
+        return None
 
     def resolve_photoUrl(self, info):
         try:
@@ -101,11 +127,14 @@ class UserType(DjangoObjectType):
             return ""
 
     def resolve_inviteCode(self, info):
-        try:
-            profile = UserProfile.objects.get(user=self)
-            return profile.invite_code or ""
-        except UserProfile.DoesNotExist:
-            return ""
+        user = info.context.user
+        if user and user.is_authenticated and (user.id == self.id or user.is_staff):
+            try:
+                profile = UserProfile.objects.get(user=self)
+                return profile.invite_code or ""
+            except UserProfile.DoesNotExist:
+                return ""
+        return None
 
     def resolve_hobbies(self, info):
         try:

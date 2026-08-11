@@ -121,6 +121,7 @@ class Query(graphene.ObjectType):
                 pass
         return queryset
 
+    @login_required
     def resolve_user_by_id(self, info, id):
         try:
             return User.objects.get(id=id)
@@ -182,29 +183,55 @@ class Query(graphene.ObjectType):
     def resolve_events_by_community(self, info, community_id):
         return Event.objects.filter(community_id=community_id)
 
+    @login_required
     def resolve_all_tickets(self, info):
-        return Ticket.objects.select_related('user', 'event').all()
+        user = info.context.user
+        if user.is_staff:
+            return Ticket.objects.select_related('user', 'event').all()
+        return Ticket.objects.filter(user=user).select_related('user', 'event')
 
+    @login_required
     def resolve_ticket_by_id(self, info, id):
+        user = info.context.user
         try:
-            return Ticket.objects.get(id=id)
+            ticket = Ticket.objects.get(id=id)
+            if ticket.user == user or user.is_staff:
+                return ticket
+            return None
         except Ticket.DoesNotExist:
             return None
 
+    @login_required
     def resolve_tickets_by_user(self, info, user_id):
-        return Ticket.objects.filter(user_id=user_id)
+        user = info.context.user
+        if user.id == user_id or user.is_staff:
+            return Ticket.objects.filter(user_id=user_id).select_related('user', 'event')
+        return Ticket.objects.none()
 
+    @login_required
     def resolve_all_participations(self, info):
-        return Participation.objects.select_related('user', 'event').all()
+        user = info.context.user
+        if user.is_staff:
+            return Participation.objects.select_related('user', 'event').all()
+        return Participation.objects.filter(user=user).select_related('user', 'event')
 
+    @login_required
     def resolve_participation_by_id(self, info, id):
+        user = info.context.user
         try:
-            return Participation.objects.get(id=id)
+            part = Participation.objects.get(id=id)
+            if part.user == user or user.is_staff:
+                return part
+            return None
         except Participation.DoesNotExist:
             return None
 
+    @login_required
     def resolve_participations_by_user(self, info, user_id):
-        return Participation.objects.filter(user_id=user_id)
+        user = info.context.user
+        if user.id == user_id or user.is_staff:
+            return Participation.objects.filter(user_id=user_id).select_related('user', 'event')
+        return Participation.objects.none()
 
     # Feature 1: Invitations
     @login_required
@@ -232,6 +259,7 @@ class Query(graphene.ObjectType):
         return Friendship.objects.filter(to_user=user, status='pending')
 
     # Feature 4: Event RSVPs
+    @login_required
     def resolve_event_rsvps(self, info, event_id):
         return EventRSVP.objects.filter(event_id=event_id).select_related('user', 'event')
 
@@ -251,14 +279,21 @@ class Query(graphene.ObjectType):
     @login_required
     def resolve_messages_by_match(self, info, match_id):
         user = info.context.user
-        match = Match.objects.get(id=match_id)
-        if user != match.user1 and user != match.user2:
+        try:
+            match = Match.objects.get(id=match_id)
+            if user != match.user1 and user != match.user2:
+                return []
+            return Message.objects.filter(match_id=match_id).select_related('sender', 'match')
+        except Match.DoesNotExist:
             return []
-        return Message.objects.filter(match_id=match_id).select_related('sender', 'match')
 
     # Feature 7: User Profile
+    @login_required
     def resolve_user_profile_by_id(self, info, user_id):
-        try:
-            return UserProfile.objects.get(user_id=user_id)
-        except UserProfile.DoesNotExist:
-            return None
+        user = info.context.user
+        if user.id == user_id or user.is_staff:
+            try:
+                return UserProfile.objects.get(user_id=user_id)
+            except UserProfile.DoesNotExist:
+                return None
+        return None
