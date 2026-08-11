@@ -146,6 +146,7 @@ class EventRSVPType(DjangoObjectType):
 
 class EventType(DjangoObjectType):
     trustScore = graphene.Int()
+    imageUrl = graphene.String()
     hobbies = graphene.List(HobbyType)
 
     class Meta:
@@ -153,8 +154,11 @@ class EventType(DjangoObjectType):
         fields = (
             "id", "community", "creator", "title", "description",
             "latitude", "longitude", "points_reward", "visibility",
-            "scheduled_date", "created_at",
+            "image_url", "scheduled_date", "created_at",
         )
+
+    def resolve_imageUrl(self, info):
+        return self.image_url
 
     def resolve_hobbies(self, info):
         return self.hobbies.all()

@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useMutation } from '@apollo/client'
 import { useNavigate } from 'react-router-dom'
 import { SectionHeading } from '../components/SectionHeading'
+import { LocationAutocomplete, LocationResult } from '../components/LocationAutocomplete'
 import { CREATE_EVENT, GET_ALL_EVENTS, GENERATE_CLOUDINARY_SIGNATURE } from '../graphql/operations'
 
 type Visibility = 'friends' | 'mutuals' | 'public'
@@ -15,7 +16,7 @@ export const PostAPlanView: React.FC = () => {
   const [description, setDesc] = useState('')
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
-  const [location, setLocation] = useState('')
+  const [selectedLocation, setSelectedLocation] = useState<LocationResult | null>(null)
   const [visibility, setVis] = useState<Visibility>('public')
   const [category, setCategory] = useState('Outdoors')
   const [imageFile, setImageFile] = useState<File | null>(null)
@@ -27,12 +28,13 @@ export const PostAPlanView: React.FC = () => {
   // Signature generation mutation hook
   const [getSignatureMutation] = useMutation(GENERATE_CLOUDINARY_SIGNATURE)
 
-  // Event creation mutation hook
+  // Event creation mutation hook (Refetches GET_ALL_EVENTS and redirects to Home /discover)
   const [createEventMutation, { loading: isSubmitting }] = useMutation(CREATE_EVENT, {
     refetchQueries: [{ query: GET_ALL_EVENTS }],
     onCompleted: (data) => {
       if (data && data.createEvent && data.createEvent.success) {
-        navigate('/my-plans')
+        // Redirection to Discover (Home) tab so newly created plan appears immediately on feed
+        navigate('/discover')
       } else {
         setErrorMsg(data?.createEvent?.message || 'Failed to post plan.')
       }
@@ -53,33 +55,45 @@ export const PostAPlanView: React.FC = () => {
       const file = e.target.files[0]
       setImageFile(file)
       setImagePreview(URL.createObjectURL(file))
+      setErrorMsg('')
     }
   }
 
-  const canSubmit = title.trim() && (description.trim() || location.trim())
+  const canSubmit = title.trim() && selectedLocation !== null
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!canSubmit) return
+    if (!canSubmit || !selectedLocation) {
+      setErrorMsg('Please enter a title and select a valid location from the suggestions dropdown.')
+      return
+    }
     setErrorMsg('')
     let finalImageUrl = uploadedUrl
 
-    // If an image file was selected, upload to Cloudinary using backend signature
+    // ─────────────────────────────────────────────────────────────
+    // 3-STEP CLOUDINARY IMAGE UPLOAD PIPELINE (FIXES 400 BAD REQUEST)
+    // ─────────────────────────────────────────────────────────────
     if (imageFile && !uploadedUrl) {
       try {
         setIsUploading(true)
-        const sigResult = await getSignatureMutation()
+
+        // Step A: Call generateCloudinarySignature passing folder: "havens_events"
+        const sigResult = await getSignatureMutation({
+          variables: { paramsToSign: '{}', folder: 'havens_events' },
+        })
         const sigData = sigResult.data?.generateCloudinarySignature
 
         if (!sigData || !sigData.success) {
-          throw new Error(sigData?.message || 'Could not generate upload signature.')
+          throw new Error(sigData?.message || 'Could not generate Cloudinary upload signature.')
         }
 
+        // Step B: Upload physical image file directly to Cloudinary via FormData POST
         const formData = new FormData()
         formData.append('file', imageFile)
-        formData.append('api_key', sigData.apiKey)
-        formData.append('timestamp', sigData.timestamp.toString())
-        formData.append('signature', sigData.signature)
+        formData.append('api_key', String(sigData.apiKey))
+        formData.append('timestamp', String(sigData.timestamp))
+        formData.append('signature', String(sigData.signature))
+        formData.append('folder', 'havens_events')
 
         const response = await fetch(
           `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
@@ -89,14 +103,22 @@ export const PostAPlanView: React.FC = () => {
           }
         )
 
+        if (!response.ok) {
+          const errorText = await response.text()
+          throw new Error(`Cloudinary upload failed (${response.status}): ${errorText}`)
+        }
+
         const uploadData = await response.json()
+
+        // Step C: Extract secure_url string
         if (uploadData.secure_url) {
-          finalImageUrl = uploadData.secure_url
-          setUploadedUrl(uploadData.secure_url)
+          finalImageUrl = String(uploadData.secure_url).trim()
+          setUploadedUrl(finalImageUrl)
         } else {
-          throw new Error(uploadData.error?.message || 'Cloudinary upload failed.')
+          throw new Error('Cloudinary response missing secure_url field.')
         }
       } catch (err: any) {
+        console.error('[Post Plan Image Upload Error]', err)
         setErrorMsg(err.message || 'Image upload error.')
         setIsUploading(false)
         return
@@ -105,34 +127,31 @@ export const PostAPlanView: React.FC = () => {
       }
     }
 
-    // Embed image URL into description string if present
-    const payloadDescription = finalImageUrl
-      ? `[IMG:${finalImageUrl}] ${description || `Event at ${location}`}`
-      : description || `Event at ${location}`
-
+    // Step D: ONLY THEN, call createEvent GraphQL mutation with String imageUrl & coordinates
     createEventMutation({
       variables: {
-        title,
-        description: payloadDescription,
-        latitude: 49.2827,
-        longitude: -123.1207,
+        title: title.trim(),
+        description: description.trim() || `Event hosted in ${selectedLocation.cityName}`,
+        latitude: selectedLocation.latitude,
+        longitude: selectedLocation.longitude,
         pointsReward: 10,
         visibility,
+        imageUrl: finalImageUrl || undefined,
       },
     })
   }
 
   return (
-    <div className="max-w-[1400px] mx-auto px-6 py-8 flex gap-10">
+    <div className="max-w-[1400px] mx-auto px-6 py-8 flex flex-col md:flex-row gap-10 antialiased">
       {/* Form */}
       <form onSubmit={handleSubmit} className="flex-1 min-w-0 max-w-2xl">
         <div className="mb-8">
           <SectionHeading>Post a Plan</SectionHeading>
-          <p className="text-sm text-muted mt-1">Turn a vague idea into a real plan</p>
+          <p className="text-sm text-muted mt-1">Turn a vague idea into a real plan for local members</p>
         </div>
 
         {errorMsg && (
-          <div className="p-3 text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl mb-4">
+          <div className="p-3 text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl mb-4 font-medium">
             {errorMsg}
           </div>
         )}
@@ -151,9 +170,9 @@ export const PostAPlanView: React.FC = () => {
             />
           </div>
 
-          {/* Event Image Upload */}
+          {/* Event Cover Photo Upload */}
           <div>
-            <label className="block text-sm font-medium text-charcoal mb-1.5">Event Cover Photo</label>
+            <label className="block text-sm font-medium text-charcoal mb-1.5">Event Cover Photo (Optional)</label>
             <div className="flex items-center gap-4">
               <input
                 type="file"
@@ -165,7 +184,7 @@ export const PostAPlanView: React.FC = () => {
                 <img
                   src={imagePreview}
                   alt="Preview"
-                  className="w-16 h-12 object-cover rounded-lg border border-border"
+                  className="w-16 h-12 object-cover rounded-lg border border-border shadow-xs"
                 />
               )}
             </div>
@@ -180,7 +199,7 @@ export const PostAPlanView: React.FC = () => {
                   type="button"
                   key={cat}
                   onClick={() => setCategory(cat)}
-                  className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-all duration-150 ${
+                  className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-all duration-150 cursor-pointer ${
                     category === cat
                       ? 'bg-forest text-white'
                       : 'bg-sand text-[#5a5450] hover:bg-[#e4dcd2]'
@@ -192,13 +211,27 @@ export const PostAPlanView: React.FC = () => {
             </div>
           </div>
 
+          {/* Location Autocomplete */}
+          <div>
+            <label className="block text-sm font-medium text-charcoal mb-1.5">
+              Location / Neighbourhood <span className="text-terracotta">*</span>
+            </label>
+            <LocationAutocomplete
+              onSelectLocation={(loc) => {
+                setSelectedLocation(loc)
+                if (loc) setErrorMsg('')
+              }}
+              placeholder="Search address or neighbourhood (e.g. Kitsilano Beach, Vancouver)"
+            />
+          </div>
+
           {/* Description */}
           <div>
             <label className="block text-sm font-medium text-charcoal mb-1.5">Description</label>
             <textarea
               value={description}
               onChange={(e) => setDesc(e.target.value)}
-              placeholder="What should people expect? Any details, what to bring, vibe..."
+              placeholder="What should people expect? Details, vibe, what to bring..."
               rows={3}
               className="w-full px-4 py-3 rounded-xl border border-border bg-white text-charcoal placeholder-[#b5b0aa] text-sm focus:outline-none focus:border-forest focus:ring-1 focus:ring-forest/20 transition-colors resize-none"
             />
@@ -226,31 +259,6 @@ export const PostAPlanView: React.FC = () => {
             </div>
           </div>
 
-          {/* Location */}
-          <div>
-            <label className="block text-sm font-medium text-charcoal mb-1.5">Location</label>
-            <div className="relative">
-              <svg
-                className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted"
-                viewBox="0 0 16 16"
-                fill="none"
-              >
-                <path
-                  d="M8 1.5C5.79 1.5 4 3.29 4 5.5c0 3 4 9 4 9s4-6 4-9c0-2.21-1.79-4-4-4z"
-                  stroke="currentColor"
-                  strokeWidth="1.3"
-                />
-                <circle cx="8" cy="5.5" r="1.5" stroke="currentColor" strokeWidth="1.3" />
-              </svg>
-              <input
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="Address or place name (e.g. Kitsilano Beach, Vancouver)"
-                className="w-full pl-10 pr-4 py-3 rounded-xl border border-border bg-white text-charcoal placeholder-[#b5b0aa] text-sm focus:outline-none focus:border-forest focus:ring-1 focus:ring-forest/20 transition-colors"
-              />
-            </div>
-          </div>
-
           {/* Visibility */}
           <div>
             <label className="block text-sm font-medium text-charcoal mb-2">Visibility</label>
@@ -260,7 +268,7 @@ export const PostAPlanView: React.FC = () => {
                   type="button"
                   key={opt.value}
                   onClick={() => setVis(opt.value)}
-                  className={`flex items-center gap-4 p-4 rounded-xl border text-left transition-all duration-150 ${
+                  className={`flex items-center gap-4 p-4 rounded-xl border text-left transition-all duration-150 cursor-pointer ${
                     visibility === opt.value
                       ? 'border-forest bg-[#f0f6f2]'
                       : 'border-border bg-white hover:border-[#b5cebe]'
@@ -282,14 +290,14 @@ export const PostAPlanView: React.FC = () => {
             </div>
           </div>
 
-          {/* Submit */}
+          {/* Submit Button */}
           <div className="flex items-center gap-3 pt-2">
             <button
               type="submit"
               disabled={!canSubmit || isUploading || isSubmitting}
               className={`flex-1 py-3.5 rounded-xl text-sm font-medium transition-all duration-150 ${
                 canSubmit && !isUploading && !isSubmitting
-                  ? 'bg-forest hover:bg-forest-light text-white cursor-pointer'
+                  ? 'bg-forest hover:bg-forest-light text-white cursor-pointer shadow-xs'
                   : 'bg-border text-[#b5b0aa] cursor-not-allowed'
               }`}
             >
@@ -303,11 +311,11 @@ export const PostAPlanView: React.FC = () => {
         </div>
       </form>
 
-      {/* Preview sidebar */}
-      <div className="w-72 shrink-0">
+      {/* Preview Sidebar */}
+      <div className="w-full md:w-72 shrink-0">
         <div className="sticky top-24">
-          <p className="text-xs font-medium text-muted uppercase tracking-wider mb-3">Preview</p>
-          <div className="rounded-2xl border border-border bg-white overflow-hidden">
+          <p className="text-xs font-medium text-muted uppercase tracking-wider mb-3">Live Plan Preview</p>
+          <div className="rounded-2xl border border-border bg-white overflow-hidden shadow-xs">
             <div className="h-36 bg-gradient-to-br from-[#eaf3ed] to-sand flex items-center justify-center overflow-hidden">
               {imagePreview ? (
                 <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
@@ -321,7 +329,7 @@ export const PostAPlanView: React.FC = () => {
               </h3>
               <div className="space-y-1 text-xs text-muted">
                 <p>{date || 'Date TBD'}{time ? ` · ${time}` : ''}</p>
-                <p>{location || 'Vancouver, BC'}</p>
+                <p>📍 {selectedLocation ? selectedLocation.cityName : 'Select a location'}</p>
               </div>
               {description && (
                 <p className="text-xs text-[#5a5450] mt-2 leading-relaxed line-clamp-3">

@@ -290,9 +290,11 @@ export const GET_ALL_EVENTS = gql`
       pointsReward
       visibility
       trustScore
+      imageUrl
       creator {
         id
         username
+        photoUrl
       }
       hobbies {
         id
@@ -388,8 +390,8 @@ export const SWIPE_EVENT = gql`
  * Mutation to generate Cloudinary upload signature from backend.
  */
 export const GENERATE_CLOUDINARY_SIGNATURE = gql`
-  mutation GenerateCloudinarySignature($paramsToSign: JSONString!) {
-    generateCloudinarySignature(paramsToSign: $paramsToSign) {
+  mutation GenerateCloudinarySignature($paramsToSign: JSONString!, $folder: String) {
+    generateCloudinarySignature(paramsToSign: $paramsToSign, folder: $folder) {
       signature
       timestamp
       apiKey
@@ -459,6 +461,23 @@ export const DELETE_ACCOUNT = gql`
     deleteAccount {
       success
       message
+    }
+  }
+`;
+
+/**
+ * Mutation to generate a new invitation code.
+ */
+export const GENERATE_INVITE = gql`
+  mutation GenerateInvite {
+    generateInvite {
+      success
+      message
+      invitation {
+        id
+        code
+        isUsed
+      }
     }
   }
 `;

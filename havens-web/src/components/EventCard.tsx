@@ -24,11 +24,16 @@ export const EventCard: React.FC<EventCardProps> = ({ plan, isSaved, onToggleSav
   return (
     <div className="rounded-xl overflow-hidden border border-border bg-white group cursor-pointer hover:shadow-md transition-shadow duration-200">
       <div className="h-40 relative overflow-hidden bg-sand">
-        <img
-          src={plan.img}
-          alt={plan.title}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-        />
+        {plan.img ? (
+          <img
+            src={plan.img}
+            alt={plan.title}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+          />
+        ) : (
+          <div className="w-full h-full bg-[#E2DBD0]" />
+        )}
+
         <div className="absolute top-3 right-3">
           <button
             onClick={(e) => {

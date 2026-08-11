@@ -5,6 +5,7 @@ import {
   MY_PROFILE,
   UPDATE_ACCOUNT_SECURITY,
   DELETE_ACCOUNT,
+  GENERATE_INVITE,
 } from '../graphql/operations';
 import { useAuth } from '../context/AuthContext';
 
@@ -48,6 +49,7 @@ export const ProfileSettingsView: React.FC = () => {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
 
   // UI Feedback States
   const [successMsg, setSuccessMsg] = useState('');
@@ -63,12 +65,32 @@ export const ProfileSettingsView: React.FC = () => {
       setEmail(profile.email || '');
       setBio(profile.bio || '');
       setNeighbourhood(profile.neighbourhood || '');
+      setInviteCode(profile.inviteCode || '');
     }
   }, [profile]);
 
   // GraphQL Mutations
   const [updateSecurityMutation, { loading: isUpdating }] = useMutation(UPDATE_ACCOUNT_SECURITY);
   const [deleteAccountMutation, { loading: isDeleting }] = useMutation(DELETE_ACCOUNT);
+  const [generateInviteMutation, { loading: isGeneratingInvite }] = useMutation(GENERATE_INVITE);
+
+  const handleGenerateInvite = async () => {
+    setSuccessMsg('');
+    setErrorMsg('');
+    try {
+      const res = await generateInviteMutation();
+      if (res?.data?.generateInvite?.success && res?.data?.generateInvite?.invitation?.code) {
+        const newCode = res.data.generateInvite.invitation.code;
+        setInviteCode(newCode);
+        setSuccessMsg(`✓ Generated new invitation code: ${newCode}`);
+        await refetch();
+      } else {
+        setErrorMsg(res?.data?.generateInvite?.message || 'Failed to generate invitation code.');
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Error generating invitation code.');
+    }
+  };
 
   // General Info & Security Form Submit Handler
   const handleUpdateSecurity = async (e: React.FormEvent) => {
@@ -212,9 +234,27 @@ export const ProfileSettingsView: React.FC = () => {
                 </span>
               </h2>
               <p className="text-xs text-[#8a8278] mt-0.5">{profile.email}</p>
-              <p className="text-xs text-[#8a8278] mt-1 font-mono">
-                📍 {profile.neighbourhood || 'No location set'} • Invite Code: <span className="font-semibold text-[#C47B5A]">{profile.inviteCode}</span>
-              </p>
+              <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                <span className="text-xs text-[#8a8278] font-mono">
+                  📍 {profile.neighbourhood || 'No location set'}
+                </span>
+                <span className="text-[#8a8278]">•</span>
+                <div className="inline-flex items-center gap-1.5 bg-[#F4EEE2] px-2.5 py-1 rounded-lg border border-[#E2DBD0]">
+                  <span className="text-xs font-medium text-[#8a8278]">Invite Code:</span>
+                  <span className="text-xs font-mono font-bold text-[#C47B5A]">
+                    {inviteCode || profile.inviteCode || 'N/A'}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={isGeneratingInvite}
+                    onClick={handleGenerateInvite}
+                    title="Generate new invitation code"
+                    className="ml-1 p-1 rounded-md hover:bg-[#E2DBD0] text-xs transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    {isGeneratingInvite ? '⏳' : '🔄'}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 

@@ -263,9 +263,9 @@ export const OnboardingView: React.FC = () => {
     setPhotoSuccessMsg('');
 
     try {
-      // 1. Get Cloudinary signature from backend (paramsToSign: "{}")
+      // 1. Get Cloudinary signature from backend (folder: "havens_profiles")
       const sigRes = await generateCloudinarySignature({
-        variables: { paramsToSign: '{}' },
+        variables: { paramsToSign: '{}', folder: 'havens_profiles' },
       });
 
       const sigData = sigRes?.data?.generateCloudinarySignature;
@@ -282,6 +282,7 @@ export const OnboardingView: React.FC = () => {
       formData.append('api_key', String(apiKey));
       formData.append('timestamp', String(timestamp));
       formData.append('signature', String(signature));
+      formData.append('folder', 'havens_profiles');
 
       const cloudRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
         method: 'POST',

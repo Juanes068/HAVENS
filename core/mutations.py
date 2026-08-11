@@ -449,6 +449,7 @@ class CreateEvent(graphene.Mutation):
         communityId = graphene.Int()
         pointsReward = graphene.Int(default_value=10)
         visibility = graphene.String(default_value='public')
+        imageUrl = graphene.String()
 
     event = graphene.Field(EventType)
     success = graphene.Boolean()
@@ -457,7 +458,7 @@ class CreateEvent(graphene.Mutation):
     @classmethod
     @login_required
     def mutate(cls, root, info, title, description, latitude, longitude,
-               communityId=None, pointsReward=10, visibility='public'):
+               communityId=None, pointsReward=10, visibility='public', imageUrl=None):
         try:
             user = info.context.user
             community = Community.objects.get(id=communityId) if communityId else None
@@ -470,6 +471,7 @@ class CreateEvent(graphene.Mutation):
                 creator=user,
                 points_reward=pointsReward,
                 visibility=visibility,
+                image_url=imageUrl,
                 scheduled_date=timezone.now(),
             )
             return cls(event=event, success=True, message="Event created successfully")
@@ -542,12 +544,13 @@ class ConfirmAttendance(graphene.Mutation):
 class GenerateCloudinarySignature(graphene.Mutation):
     """
     Generates a secure upload signature for Cloudinary.
-    The frontend (React Native) sends the parameters to sign (e.g., folder, public_id),
+    The frontend sends the parameters to sign (e.g., folder, public_id),
     and this mutation returns the signature, timestamp, and API Key required to upload
-    directly to Cloudinary from the mobile app.
+    directly to Cloudinary.
     """
     class Arguments:
         params_to_sign = graphene.JSONString(required=True)
+        folder = graphene.String()
 
     signature = graphene.String()
     timestamp = graphene.Int()
@@ -557,7 +560,7 @@ class GenerateCloudinarySignature(graphene.Mutation):
 
     @classmethod
     @login_required
-    def mutate(cls, root, info, params_to_sign):
+    def mutate(cls, root, info, params_to_sign, folder=None):
         import os
         import time
         import cloudinary.utils
@@ -583,6 +586,9 @@ class GenerateCloudinarySignature(graphene.Mutation):
                 params = dict(params_to_sign)
             else:
                 params = {}
+
+            if folder:
+                params['folder'] = folder
 
             if 'timestamp' not in params:
                 params['timestamp'] = int(time.time())

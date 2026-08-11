@@ -14,7 +14,6 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Calendar', path: '/calendar' },
   { label: 'Saved', path: '/saved' },
   { label: 'Post a Plan', path: '/post-a-plan' },
-  { label: 'Profile', path: '/profile' },
 ]
 
 export const Navigation: React.FC = () => {
@@ -55,12 +54,17 @@ export const Navigation: React.FC = () => {
 
         <div className="flex items-center gap-3">
           {user && (
-            <span
+            <div
               onClick={() => navigate('/profile')}
-              className="text-xs font-medium text-[#2D5A3D] bg-[#eaf3ed] px-2.5 py-1 rounded-full cursor-pointer hover:bg-[#2D5A3D] hover:text-white transition-colors"
+              title={`View @${user.username}'s Profile`}
+              className="w-9 h-9 rounded-full bg-[#2D5A3D] text-white flex items-center justify-center font-bold text-xs cursor-pointer overflow-hidden border-2 border-white shadow-xs hover:scale-105 transition-transform shrink-0"
             >
-              @{user.username}
-            </span>
+              {user.photoUrl ? (
+                <img src={user.photoUrl} alt={user.username} className="w-full h-full object-cover" />
+              ) : (
+                user.username.charAt(0).toUpperCase()
+              )}
+            </div>
           )}
           <button
             onClick={handleLogout}
