@@ -38,9 +38,9 @@ export const ProtectedRoute: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-cream text-charcoal font-sans antialiased">
+    <div className="min-h-screen bg-[#F4EEE2] text-[#2C2C2C] font-sans antialiased overflow-x-hidden flex flex-col">
       <Navigation />
-      <main>
+      <main className="flex-1 w-full max-w-[100vw] overflow-x-hidden">
         <Outlet />
       </main>
     </div>
