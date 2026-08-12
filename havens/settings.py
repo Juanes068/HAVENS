@@ -118,6 +118,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 GRAPHENE = {
     'SCHEMA': 'havens.schema.schema',
+    'FORMAT_ERROR': 'core.utils.format_graphql_error',
 }
 
 CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://redis:6379/0')

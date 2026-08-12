@@ -15,3 +15,19 @@ def filter_events_by_radius(queryset, latitude, longitude, radius_km):
         event for event in queryset
         if haversine_km(latitude, longitude, event.latitude, event.longitude) <= radius_km
     ]
+
+
+def format_graphql_error(error):
+    """
+    Format GraphQL errors safely to mask stack traces and internal DB structures
+    from end users in production/non-debug mode.
+    """
+    from django.conf import settings
+    formatted = error.formatted
+    message = str(formatted.get('message', 'An unexpected error occurred.'))
+
+    if not settings.DEBUG:
+        if any(term in message for term in ['OperationalError', 'DatabaseError', 'ProgrammingError', 'IntegrityError', 'Traceback', 'SQL', 'mysql']):
+            formatted['message'] = "An error occurred while processing your request. Please try again later."
+
+    return formatted
