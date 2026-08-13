@@ -28,7 +28,7 @@ const TYPE_BADGE: Record<EventType, { bg: string; text: string; label: string }>
   friend: { bg: 'bg-[#eaf3ed]', text: 'text-[#2D5A3D]', label: "Friend's plan" },
   mutual: { bg: 'bg-[#f0f6f2]', text: 'text-[#5a8a6a]', label: 'Mutual' },
   conflict: { bg: 'bg-[#fdf0eb]', text: 'text-[#C47B5A]', label: 'Conflict' },
-}
+}   
 
 function getDaysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate()

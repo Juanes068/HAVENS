@@ -306,6 +306,7 @@ export const GET_ALL_EVENTS = gql`
 
 /**
  * Mutation to create a new event on the Django backend.
+ * imageUrl: the Cloudinary secure_url returned after a successful upload.
  */
 export const CREATE_EVENT = gql`
   mutation CreateEvent(
@@ -316,6 +317,7 @@ export const CREATE_EVENT = gql`
     $communityId: Int
     $pointsReward: Int
     $visibility: String
+    $imageUrl: String
   ) {
     createEvent(
       title: $title
@@ -325,6 +327,7 @@ export const CREATE_EVENT = gql`
       communityId: $communityId
       pointsReward: $pointsReward
       visibility: $visibility
+      imageUrl: $imageUrl
     ) {
       success
       message
@@ -336,6 +339,7 @@ export const CREATE_EVENT = gql`
         longitude
         pointsReward
         visibility
+        imageUrl
         trustScore
         creator {
           id

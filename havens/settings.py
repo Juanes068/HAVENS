@@ -145,3 +145,21 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://localhost:8081",  # Metro bundler for Expo / React Native
 ]
+
+# ─── Email Configuration ────────────────────────────────────────────────────
+# Set EMAIL_HOST in .env to enable real SMTP delivery (e.g. SendGrid, Mailgun).
+# Without EMAIL_HOST, falls back to console backend so development never blocks.
+_EMAIL_HOST = os.getenv('EMAIL_HOST', '')
+
+if _EMAIL_HOST:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST = _EMAIL_HOST
+    EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+    EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() in ('true', '1', 't')
+    EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+    EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+else:
+    # Development fallback — prints emails to the Django console instead of sending
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'welcome@havens.app')
