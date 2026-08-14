@@ -4,8 +4,6 @@ import { GoogleMap, useLoadScript, MarkerF, InfoWindowF } from '@react-google-ma
 import { SWIPE_EVENT } from '../graphql/operations';
 import { EventItem } from './SwipeCardsView';
 
-const LIBRARIES: ('places')[] = ['places'];
-
 interface DiscoveryMapViewProps {
   events: EventItem[];
   onRefetch?: () => void;
@@ -38,7 +36,6 @@ export const DiscoveryMapView: React.FC<DiscoveryMapViewProps> = ({ events }) =>
 
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey: apiKey,
-    libraries: LIBRARIES,
   });
 
   const [selectedEvent, setSelectedEvent] = useState<EventItem | null>(events[0] || null);

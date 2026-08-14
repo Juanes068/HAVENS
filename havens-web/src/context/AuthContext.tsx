@@ -45,21 +45,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const apolloClient = useApolloClient();
 
-  const [fetchProfile] = useLazyQuery(MY_PROFILE, {
+  const [fetchProfile, { data: profileData, error: profileError }] = useLazyQuery(MY_PROFILE, {
     fetchPolicy: 'network-only',
-    onCompleted: (data) => {
-      if (data && data.myProfile) {
-        setUser(data.myProfile);
+  });
+
+  // Handle lazy query result via standard React useEffect (Apollo 3.14+ compliant)
+  useEffect(() => {
+    if (profileData) {
+      if (profileData.myProfile) {
+        setUser(profileData.myProfile);
       } else {
         setUser(null);
       }
       setIsLoading(false);
-    },
-    onError: () => {
+    } else if (profileError) {
       setUser(null);
       setIsLoading(false);
-    },
-  });
+    }
+  }, [profileData, profileError]);
 
   // Automatically fetch profile metrics on mount when token is present
   useEffect(() => {

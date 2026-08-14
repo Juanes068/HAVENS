@@ -105,7 +105,7 @@ export const OnboardingView: React.FC = () => {
     }
 
     if (!selectedLocation) {
-      setErrorMsg('Please select a valid location from the Google Places autocomplete dropdown.');
+      setErrorMsg('Please select a valid location from the location suggestions dropdown.');
       return;
     }
 

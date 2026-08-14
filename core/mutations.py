@@ -15,9 +15,11 @@ from .models import (
     Match, Message, HobbyCategory, Hobby,
 )
 from .decorators import login_required
+import logging
 
+logger = logging.getLogger(__name__)
 
-from .tasks import send_welcome_email
+from .tasks import send_welcome_email_task, send_welcome_email
 
 # ───────────────────────────────────────────────
 # Feature 7 + 1: Create User (requires invitation code)
@@ -75,10 +77,10 @@ class CreateUser(graphene.Mutation):
 
             # Trigger asynchronous Celery welcome email task (non-blocking)
             try:
-                send_welcome_email.delay(user.email, user.username)
+                send_welcome_email_task.delay(user.email, user.username)
+                logger.info(f"[CreateUser] Queued welcome email task for {user.email}")
             except Exception as celery_err:
-                # Log or fallback if Celery broker is temporarily unreachable
-                pass
+                logger.warning(f"[CreateUser] Could not queue Celery welcome email for {user.email}: {celery_err}")
 
             return cls(user=user, success=True, message="User created successfully")
         except Exception as e:

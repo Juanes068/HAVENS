@@ -1,36 +1,98 @@
+import logging
 from celery import shared_task
 from django.core.mail import send_mail
+from django.template.loader import render_to_string
+from django.utils.html import strip_tags
 from django.conf import settings
-import logging
 
 logger = logging.getLogger(__name__)
 
 
-@shared_task
-def send_welcome_email(user_email, username):
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def send_welcome_email_task(self, user_email, username, app_url=None):
     """
-    Asynchronous Celery task to send a welcome email to a newly registered user.
-    Executes in background without blocking GraphQL HTTP response.
+    Asynchronous Celery task to send a rich HTML welcome email to newly registered users.
+    Executes in background without blocking GraphQL HTTP mutations.
     """
-    subject = "Welcome to havens!"
-    message = (
-        f"Hi {username},\n\n"
-        f"Welcome to havens! We are excited to have you join our trusted community circles.\n\n"
-        f"Explore local events, connect with friends, and customize your profile hobbies.\n\n"
-        f"Warmly,\n"
-        f"The havens Team"
-    )
+    if not user_email:
+        logger.warning("[Celery Email] Skipped welcome email: No email provided.")
+        return "No email provided"
+
+    subject = "Welcome to Havens! 🌿"
+    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'Havens <welcome@havens.app>')
+    
+    # Default app URL for CTA
+    app_link = app_url or getattr(settings, 'FRONTEND_URL', 'http://localhost:5173/discover')
+
+    context = {
+        'username': username,
+        'app_url': app_link,
+    }
+
     try:
-        if user_email:
-            send_mail(
-                subject=subject,
-                message=message,
-                from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'welcome@havens.app'),
-                recipient_list=[user_email],
-                fail_silently=True,
-            )
-            logger.info(f"[Celery Task] Welcome email dispatched to {user_email} for user {username}")
-            return f"Welcome email dispatched to {user_email}"
-    except Exception as e:
-        logger.error(f"[Celery Task] Error sending welcome email to {user_email}: {e}")
-        return f"Error sending welcome email: {e}"
+        html_content = render_to_string('emails/welcome_email.html', context)
+        plain_message = strip_tags(html_content)
+
+        send_mail(
+            subject=subject,
+            message=plain_message,
+            from_email=from_email,
+            recipient_list=[user_email],
+            html_message=html_content,
+            fail_silently=False,
+        )
+        logger.info(f"[Celery Email] Successfully sent welcome email to {user_email} (user: {username})")
+        return f"Welcome email sent to {user_email}"
+    except Exception as exc:
+        logger.error(f"[Celery Email] Error sending welcome email to {user_email}: {exc}")
+        # Retry with exponential backoff on transient SMTP failures
+        try:
+            raise self.retry(exc=exc)
+        except Exception:
+            return f"Failed to send welcome email: {exc}"
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def send_system_alert_task(self, user_email, alert_subject, alert_message, username=None, action_url=None, action_text=None):
+    """
+    Asynchronous Celery task to send critical notifications, security notices, or updates.
+    """
+    if not user_email:
+        logger.warning("[Celery Email] Skipped system alert: No email provided.")
+        return "No email provided"
+
+    subject = f"[Havens] {alert_subject}"
+    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'Havens <welcome@havens.app>')
+
+    context = {
+        'username': username,
+        'alert_subject': alert_subject,
+        'alert_message': alert_message,
+        'action_url': action_url,
+        'action_text': action_text,
+    }
+
+    try:
+        html_content = render_to_string('emails/system_alert.html', context)
+        plain_message = strip_tags(html_content)
+
+        send_mail(
+            subject=subject,
+            message=plain_message,
+            from_email=from_email,
+            recipient_list=[user_email],
+            html_message=html_content,
+            fail_silently=False,
+        )
+        logger.info(f"[Celery Email] System alert '{alert_subject}' dispatched to {user_email}")
+        return f"System alert sent to {user_email}"
+    except Exception as exc:
+        logger.error(f"[Celery Email] Error sending system alert to {user_email}: {exc}")
+        try:
+            raise self.retry(exc=exc)
+        except Exception:
+            return f"Failed to send system alert: {exc}"
+
+
+# Backward-compatibility alias
+send_welcome_email = send_welcome_email_task

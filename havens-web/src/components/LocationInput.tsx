@@ -1,7 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { useLoadScript, Autocomplete } from '@react-google-maps/api';
-
-const LIBRARIES: ('places')[] = ['places'];
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useLoadScript } from '@react-google-maps/api';
 
 export interface LocationData {
   formatted_address: string;
@@ -9,7 +7,7 @@ export interface LocationData {
   lng: number;
   cityName?: string;
   neighbourhood?: string;
-  // Aliases for seamless compatibility
+  // Aliases for seamless compatibility across forms
   formattedAddress?: string;
   latitude?: number;
   longitude?: number;
@@ -23,6 +21,15 @@ export interface LocationInputProps {
   required?: boolean;
 }
 
+interface PlacePrediction {
+  place_id?: string;
+  description: string;
+  main_text: string;
+  secondary_text?: string;
+  lat?: number;
+  lng?: number;
+}
+
 export const LocationInput: React.FC<LocationInputProps> = ({
   onSelectLocation,
   placeholder = 'Search address, neighbourhood or city (e.g. Kitsilano Beach, Vancouver)',
@@ -34,7 +41,6 @@ export const LocationInput: React.FC<LocationInputProps> = ({
 
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey: apiKey,
-    libraries: LIBRARIES,
   });
 
   const [inputValue, setInputValue] = useState(initialValue);
@@ -50,8 +56,15 @@ export const LocationInput: React.FC<LocationInputProps> = ({
         }
       : null
   );
-  const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null);
+
+  const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
+  const [isLoadingPredictions, setIsLoadingPredictions] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const geocoderRef = useRef<google.maps.Geocoder | null>(null);
 
   // Sync initialValue changes
   useEffect(() => {
@@ -60,68 +73,229 @@ export const LocationInput: React.FC<LocationInputProps> = ({
     }
   }, [initialValue]);
 
-  const onLoad = (autoC: google.maps.places.Autocomplete) => {
-    setAutocomplete(autoC);
-  };
-
-  const onPlaceChanged = () => {
-    if (autocomplete !== null) {
-      const place = autocomplete.getPlace();
-
-      if (!place || !place.geometry || !place.geometry.location) {
-        return;
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
       }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
-      const lat = place.geometry.location.lat();
-      const lng = place.geometry.location.lng();
-      const formatted_address = place.formatted_address || place.name || inputValue;
+  // Initialize Geocoder once Google Maps JS is loaded
+  useEffect(() => {
+    if (isLoaded && window.google?.maps?.Geocoder) {
+      geocoderRef.current = new window.google.maps.Geocoder();
+    }
+  }, [isLoaded]);
 
-      let cityName = '';
-      let neighbourhood = '';
+  // Safe modern asynchronous prediction fetcher (Photon / OpenStreetMap Geocoding API)
+  const fetchPredictions = useCallback(async (query: string) => {
+    if (!query || query.trim().length < 2) {
+      setPredictions([]);
+      setIsDropdownOpen(false);
+      setIsLoadingPredictions(false);
+      return;
+    }
 
-      if (place.address_components) {
-        for (const comp of place.address_components) {
-          if (comp.types.includes('locality') || comp.types.includes('postal_town')) {
-            cityName = comp.long_name;
-          } else if (!cityName && comp.types.includes('administrative_area_level_2')) {
-            cityName = comp.long_name;
-          }
+    setIsLoadingPredictions(true);
 
-          if (
-            comp.types.includes('neighborhood') ||
-            comp.types.includes('sublocality') ||
-            comp.types.includes('sublocality_level_1')
-          ) {
-            neighbourhood = comp.long_name;
-          }
+    try {
+      // Query modern global places search endpoint
+      const res = await fetch(
+        `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=6`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.features && data.features.length > 0) {
+          const list: PlacePrediction[] = data.features.map((f: any) => {
+            const props = f.properties || {};
+            const name = props.name || props.street || '';
+            const city = props.city || props.town || props.state || '';
+            const country = props.country || '';
+            const sub = [city, country].filter(Boolean).join(', ');
+            const full = [name, sub].filter(Boolean).join(', ');
+
+            return {
+              place_id: String(props.osm_id || Math.random()),
+              description: full || query,
+              main_text: name || city || query,
+              secondary_text: sub,
+              lat: f.geometry?.coordinates ? f.geometry.coordinates[1] : undefined,
+              lng: f.geometry?.coordinates ? f.geometry.coordinates[0] : undefined,
+            };
+          });
+
+          setPredictions(list);
+          setIsDropdownOpen(true);
+          setHighlightedIndex(-1);
+          setIsLoadingPredictions(false);
+          return;
         }
       }
 
-      if (!neighbourhood && place.name && place.name !== formatted_address) {
-        neighbourhood = place.name;
+      // Fallback: Google Maps Geocoder if available
+      if (geocoderRef.current) {
+        geocoderRef.current.geocode({ address: query }, (results, status) => {
+          setIsLoadingPredictions(false);
+          if (status === 'OK' && results && results.length > 0) {
+            const list: PlacePrediction[] = results.slice(0, 5).map((r) => ({
+              place_id: r.place_id,
+              description: r.formatted_address,
+              main_text: r.formatted_address.split(',')[0],
+              secondary_text: r.formatted_address.split(',').slice(1).join(',').trim(),
+              lat: r.geometry.location.lat(),
+              lng: r.geometry.location.lng(),
+            }));
+            setPredictions(list);
+            setIsDropdownOpen(true);
+            setHighlightedIndex(-1);
+          } else {
+            setPredictions([]);
+          }
+        });
+      } else {
+        setPredictions([]);
+        setIsLoadingPredictions(false);
       }
-      if (!neighbourhood) {
-        neighbourhood = cityName || formatted_address.split(',')[0];
+    } catch {
+      // Fallback to Google Geocoder on network error
+      if (geocoderRef.current) {
+        geocoderRef.current.geocode({ address: query }, (results, status) => {
+          setIsLoadingPredictions(false);
+          if (status === 'OK' && results && results.length > 0) {
+            const list: PlacePrediction[] = results.slice(0, 5).map((r) => ({
+              place_id: r.place_id,
+              description: r.formatted_address,
+              main_text: r.formatted_address.split(',')[0],
+              secondary_text: r.formatted_address.split(',').slice(1).join(',').trim(),
+              lat: r.geometry.location.lat(),
+              lng: r.geometry.location.lng(),
+            }));
+            setPredictions(list);
+            setIsDropdownOpen(true);
+            setHighlightedIndex(-1);
+          } else {
+            setPredictions([]);
+          }
+        });
+      } else {
+        setPredictions([]);
+        setIsLoadingPredictions(false);
       }
-      if (!cityName) {
-        cityName = neighbourhood;
-      }
-
-      const locData: LocationData = {
-        formatted_address,
-        lat,
-        lng,
-        cityName,
-        neighbourhood,
-        formattedAddress: formatted_address,
-        latitude: lat,
-        longitude: lng,
-      };
-
-      setSelectedLocation(locData);
-      setInputValue(formatted_address);
-      onSelectLocation(locData);
     }
+  }, []);
+
+  // Debounce query inputs by 250ms
+  useEffect(() => {
+    if (selectedLocation && inputValue === selectedLocation.formatted_address) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      if (inputValue && inputValue.trim().length >= 2) {
+        fetchPredictions(inputValue);
+      } else {
+        setPredictions([]);
+        setIsDropdownOpen(false);
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [inputValue, selectedLocation, fetchPredictions]);
+
+  // Handle place selection and extract exact location metrics
+  const handleSelectPrediction = (prediction: PlacePrediction) => {
+    setIsLoadingPredictions(true);
+    setIsDropdownOpen(false);
+
+    // If Google Geocoder is available, get verified address components and coordinates
+    if (geocoderRef.current) {
+      const geocodeReq = prediction.place_id && !prediction.place_id.includes('.')
+        ? { placeId: prediction.place_id }
+        : { address: prediction.description };
+
+      geocoderRef.current.geocode(geocodeReq, (results, status) => {
+        setIsLoadingPredictions(false);
+        if (status === 'OK' && results && results[0]) {
+          const result = results[0];
+          const lat = result.geometry.location.lat();
+          const lng = result.geometry.location.lng();
+          const formatted_address = result.formatted_address || prediction.description;
+
+          let cityName = '';
+          let neighbourhood = '';
+
+          if (result.address_components) {
+            for (const comp of result.address_components) {
+              if (comp.types.includes('locality') || comp.types.includes('postal_town')) {
+                cityName = comp.long_name;
+              } else if (!cityName && comp.types.includes('administrative_area_level_2')) {
+                cityName = comp.long_name;
+              }
+
+              if (
+                comp.types.includes('neighborhood') ||
+                comp.types.includes('sublocality') ||
+                comp.types.includes('sublocality_level_1')
+              ) {
+                neighbourhood = comp.long_name;
+              }
+            }
+          }
+
+          if (!neighbourhood && prediction.main_text && prediction.main_text !== formatted_address) {
+            neighbourhood = prediction.main_text;
+          }
+          if (!neighbourhood) {
+            neighbourhood = cityName || formatted_address.split(',')[0];
+          }
+          if (!cityName) {
+            cityName = neighbourhood;
+          }
+
+          const locData: LocationData = {
+            formatted_address,
+            lat,
+            lng,
+            cityName,
+            neighbourhood,
+            formattedAddress: formatted_address,
+            latitude: lat,
+            longitude: lng,
+          };
+
+          setSelectedLocation(locData);
+          setInputValue(formatted_address);
+          onSelectLocation(locData);
+          return;
+        }
+
+        // Fallback using prediction coordinates
+        resolveWithPredictionCoords(prediction);
+      });
+    } else {
+      resolveWithPredictionCoords(prediction);
+    }
+  };
+
+  const resolveWithPredictionCoords = (prediction: PlacePrediction) => {
+    setIsLoadingPredictions(false);
+    const locData: LocationData = {
+      formatted_address: prediction.description,
+      lat: prediction.lat ?? 0,
+      lng: prediction.lng ?? 0,
+      cityName: prediction.secondary_text || prediction.main_text,
+      neighbourhood: prediction.main_text,
+      formattedAddress: prediction.description,
+      latitude: prediction.lat ?? 0,
+      longitude: prediction.lng ?? 0,
+    };
+    setSelectedLocation(locData);
+    setInputValue(prediction.description);
+    onSelectLocation(locData);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -137,77 +311,90 @@ export const LocationInput: React.FC<LocationInputProps> = ({
   const handleClear = () => {
     setInputValue('');
     setSelectedLocation(null);
+    setPredictions([]);
+    setIsDropdownOpen(false);
     onSelectLocation(null);
     if (inputRef.current) {
       inputRef.current.focus();
     }
   };
 
-  if (loadError) {
-    return (
-      <div className="w-full">
+  // Keyboard navigation inside suggestions list
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isDropdownOpen || predictions.length === 0) {
+      if (e.key === 'Enter' && inputValue.trim().length >= 2 && !selectedLocation) {
+        e.preventDefault();
+        // Geocode whatever is currently typed
+        handleSelectPrediction({
+          description: inputValue.trim(),
+          main_text: inputValue.trim(),
+        });
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIndex((prev) => (prev < predictions.length - 1 ? prev + 1 : 0));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : predictions.length - 1));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (highlightedIndex >= 0 && highlightedIndex < predictions.length) {
+        handleSelectPrediction(predictions[highlightedIndex]);
+      } else if (predictions.length > 0) {
+        handleSelectPrediction(predictions[0]);
+      }
+    } else if (e.key === 'Escape') {
+      setIsDropdownOpen(false);
+    }
+  };
+
+  return (
+    <div className="relative w-full" ref={dropdownRef}>
+      <div className="relative">
         <input
+          ref={inputRef}
           type="text"
           value={inputValue}
           onChange={handleInputChange}
+          onKeyDown={handleKeyDown}
+          onFocus={() => {
+            if (predictions.length > 0 && !selectedLocation) {
+              setIsDropdownOpen(true);
+            }
+          }}
           placeholder={placeholder}
-          className={`w-full px-4 py-2.5 rounded-xl bg-white border border-[#E2DBD0] text-[#2C2C2C] text-sm focus:outline-none focus:border-[#2D5A3D] ${className}`}
+          required={required}
+          autoComplete="off"
+          className={`w-full px-4 py-2.5 rounded-xl bg-white border text-[#2C2C2C] text-sm focus:outline-none transition-colors ${
+            selectedLocation
+              ? 'border-[#2D5A3D] pr-20'
+              : inputValue.length > 2
+              ? 'border-amber-400 focus:border-amber-500 pr-10'
+              : 'border-[#E2DBD0] focus:border-[#2D5A3D] pr-10'
+          } ${className}`}
         />
-        <p className="text-[11px] text-amber-700 mt-1">
-          Google Maps failed to load. Please verify your API key and connection.
-        </p>
-      </div>
-    );
-  }
-
-  if (!isLoaded) {
-    return (
-      <div className="relative w-full">
-        <input
-          type="text"
-          disabled
-          placeholder="Loading Google Places Autocomplete..."
-          className={`w-full px-4 py-2.5 rounded-xl bg-[#F4EEE2]/40 border border-[#E2DBD0] text-[#8a8278] text-sm animate-pulse cursor-wait ${className}`}
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div className="relative w-full">
-      <div className="relative">
-        <Autocomplete onLoad={onLoad} onPlaceChanged={onPlaceChanged}>
-          <input
-            ref={inputRef}
-            type="text"
-            value={inputValue}
-            onChange={handleInputChange}
-            placeholder={placeholder}
-            required={required}
-            className={`w-full px-4 py-2.5 rounded-xl bg-white border text-[#2C2C2C] text-sm focus:outline-none transition-colors ${
-              selectedLocation
-                ? 'border-[#2D5A3D] pr-20'
-                : inputValue.length > 2
-                ? 'border-amber-400 focus:border-amber-500 pr-10'
-                : 'border-[#E2DBD0] focus:border-[#2D5A3D] pr-10'
-            } ${className}`}
-          />
-        </Autocomplete>
 
         {selectedLocation ? (
           <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-            <span className="text-[10px] font-bold text-[#2D5A3D] bg-[#eaf3ed] px-2 py-0.5 rounded-md flex items-center gap-0.5">
+            <span className="text-[10px] font-bold text-[#2D5A3D] bg-[#eaf3ed] px-2 py-0.5 rounded-md">
               ✓ Verified
             </span>
             <button
               type="button"
               onClick={handleClear}
-              className="text-[#8a8278] hover:text-[#2C2C2C] text-xs px-1 rounded cursor-pointer"
+              className="text-[#8a8278] hover:text-[#2C2C2C] text-xs px-1 cursor-pointer"
               title="Clear selection"
             >
               ✕
             </button>
           </div>
+        ) : isLoadingPredictions ? (
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#8a8278] animate-spin">
+            ⌛
+          </span>
         ) : inputValue ? (
           <button
             type="button"
@@ -220,10 +407,36 @@ export const LocationInput: React.FC<LocationInputProps> = ({
         ) : null}
       </div>
 
-      {inputValue.length > 2 && !selectedLocation && (
+      {/* Helper warning if text typed without selection */}
+      {inputValue.length > 2 && !selectedLocation && !isDropdownOpen && (
         <p className="text-[11px] text-amber-700 mt-1 font-medium flex items-center gap-1">
-          📍 Please select a suggested location from the Google Places dropdown list.
+          📍 Please select a suggested location from the dropdown list.
         </p>
+      )}
+
+      {/* Suggestions Dropdown Menu */}
+      {isDropdownOpen && predictions.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-[#E2DBD0] rounded-2xl shadow-xl max-h-60 overflow-y-auto divide-y divide-[#E2DBD0]/40">
+          {predictions.map((item, idx) => (
+            <button
+              key={item.place_id || idx}
+              type="button"
+              onClick={() => handleSelectPrediction(item)}
+              onMouseEnter={() => setHighlightedIndex(idx)}
+              className={`w-full px-4 py-2.5 text-left text-xs transition-colors flex items-start gap-2.5 cursor-pointer ${
+                idx === highlightedIndex ? 'bg-[#F4EEE2]' : 'hover:bg-[#F4EEE2]/60'
+              }`}
+            >
+              <span className="text-sm mt-0.5 shrink-0">📍</span>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-charcoal truncate">{item.main_text}</p>
+                {item.secondary_text && (
+                  <p className="text-[11px] text-[#8a8278] truncate">{item.secondary_text}</p>
+                )}
+              </div>
+            </button>
+          ))}
+        </div>
       )}
     </div>
   );
