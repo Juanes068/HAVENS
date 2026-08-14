@@ -22,6 +22,7 @@ media/
 .env
 .env.*
 .env.local
+*.pem
 
 # IDE / OS
 .vscode/
