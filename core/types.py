@@ -176,6 +176,10 @@ class EventRSVPType(DjangoObjectType):
 class EventType(DjangoObjectType):
     trustScore = graphene.Int()
     imageUrl = graphene.String()
+    locationName = graphene.String()
+    # Override visibility as plain String to bypass Graphene's auto-enum
+    # that rejects the raw CharField values from the DB (e.g. 'friends_only').
+    visibility = graphene.String()
     hobbies = graphene.List(HobbyType)
 
     class Meta:
@@ -183,11 +187,17 @@ class EventType(DjangoObjectType):
         fields = (
             "id", "community", "creator", "title", "description",
             "latitude", "longitude", "points_reward", "visibility",
-            "image_url", "scheduled_date", "created_at",
+            "image_url", "location_name", "scheduled_date", "created_at",
         )
+
+    def resolve_visibility(self, info):
+        return self.visibility
 
     def resolve_imageUrl(self, info):
         return self.image_url
+
+    def resolve_locationName(self, info):
+        return self.location_name
 
     def resolve_hobbies(self, info):
         return self.hobbies.all()

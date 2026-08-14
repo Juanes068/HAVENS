@@ -120,6 +120,7 @@ class Event(models.Model):
     points_reward = models.IntegerField(default=10)
     visibility = models.CharField(max_length=20, choices=VISIBILITY_CHOICES, default='public')
     image_url = models.URLField(max_length=500, null=True, blank=True)
+    location_name = models.CharField(max_length=300, blank=True, default='')
     scheduled_date = models.DateTimeField(default=timezone.now)
     created_at = models.DateTimeField(default=timezone.now)
     hobbies = models.ManyToManyField(Hobby, blank=True, related_name='events')

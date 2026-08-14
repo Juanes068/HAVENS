@@ -79,8 +79,8 @@ export const DiscoveryMapView: React.FC<DiscoveryMapViewProps> = ({ events }) =>
                       <h4 className="text-xs font-serif font-bold line-clamp-1">
                         {evt.title}
                       </h4>
-                      <p className={`text-[10px] font-mono mt-0.5 ${isSelected ? 'text-white/80' : 'text-[#8a8278]'}`}>
-                        📍 {evt.latitude.toFixed(2)}, {evt.longitude.toFixed(2)}
+                      <p className={`text-[10px] mt-0.5 ${isSelected ? 'text-white/80' : 'text-[#8a8278]'}`}>
+                        📍 {evt.locationName || 'Nearby'}
                       </p>
                     </div>
 

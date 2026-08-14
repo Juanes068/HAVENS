@@ -715,7 +715,7 @@ export const OnboardingView: React.FC = () => {
                 onClick={handleStep4UploadAndFinish}
                 className="w-full sm:w-auto px-8 py-2.5 rounded-xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white text-xs font-semibold transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
               >
-                {isUploadingPhoto ? 'Uploading to Cloudinary...' : selectedImageFile ? 'Upload Photo & Finish' : 'Finish Onboarding'}
+                {isUploadingPhoto ? 'Saving photo...' : selectedImageFile ? 'Upload Photo & Finish' : 'Finish Onboarding'}
               </button>
             </div>
           </div>

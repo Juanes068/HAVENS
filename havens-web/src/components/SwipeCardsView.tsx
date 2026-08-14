@@ -12,6 +12,7 @@ export interface EventItem {
   visibility?: string;
   trustScore?: number;
   imageUrl?: string;
+  locationName?: string;
   creator?: {
     id: string;
     username: string;
@@ -384,8 +385,8 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
                 <h2 className="text-2xl font-serif font-bold text-white leading-tight drop-shadow-sm">
                   {currentEvent.title}
                 </h2>
-                <p className="text-xs text-white/80 mt-1 font-mono">
-                  📍 Coordinates: {currentEvent.latitude.toFixed(2)}, {currentEvent.longitude.toFixed(2)}
+                <p className="text-xs text-white/80 mt-1">
+                  📍 {currentEvent.locationName || 'Nearby'}
                 </p>
               </div>
 

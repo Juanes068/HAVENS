@@ -450,16 +450,33 @@ class CreateEvent(graphene.Mutation):
         pointsReward = graphene.Int(default_value=10)
         visibility = graphene.String(default_value='public')
         imageUrl = graphene.String()
+        locationName = graphene.String()
+        scheduledDate = graphene.DateTime()
 
     event = graphene.Field(EventType)
     success = graphene.Boolean()
     message = graphene.String()
 
+    # Allowed visibility values from the Django Event model
+    VALID_VISIBILITY = {v[0] for v in Event.VISIBILITY_CHOICES}
+
     @classmethod
     @login_required
     def mutate(cls, root, info, title, description, latitude, longitude,
-               communityId=None, pointsReward=10, visibility='public', imageUrl=None):
+               communityId=None, pointsReward=10, visibility='public',
+               imageUrl=None, locationName=None, scheduledDate=None):
         try:
+            # Validate visibility value
+            if visibility not in cls.VALID_VISIBILITY:
+                return cls(event=None, success=False,
+                           message=f"Invalid visibility '{visibility}'. Must be one of: {', '.join(sorted(cls.VALID_VISIBILITY))}")
+
+            # Validate scheduled date is not in the past
+            event_date = scheduledDate or timezone.now()
+            if scheduledDate and scheduledDate < timezone.now():
+                return cls(event=None, success=False,
+                           message="Cannot create an event with a date in the past.")
+
             user = info.context.user
             community = Community.objects.get(id=communityId) if communityId else None
             event = Event.objects.create(
@@ -472,7 +489,8 @@ class CreateEvent(graphene.Mutation):
                 points_reward=pointsReward,
                 visibility=visibility,
                 image_url=imageUrl,
-                scheduled_date=timezone.now(),
+                location_name=locationName or '',
+                scheduled_date=event_date,
             )
             return cls(event=event, success=True, message="Event created successfully")
         except Community.DoesNotExist:

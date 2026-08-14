@@ -5,7 +5,7 @@ import { SectionHeading } from '../components/SectionHeading'
 import { LocationAutocomplete, LocationResult } from '../components/LocationAutocomplete'
 import { CREATE_EVENT, GET_ALL_EVENTS, GENERATE_CLOUDINARY_SIGNATURE } from '../graphql/operations'
 
-type Visibility = 'friends' | 'mutuals' | 'public'
+type Visibility = 'friends_only' | 'community_only' | 'public'
 
 const CATEGORIES = ['Outdoors', 'Food & Drink', 'Arts', 'Social', 'Wellness']
 const CLOUDINARY_CLOUD_NAME = 'g8jffrmx'
@@ -45,8 +45,8 @@ export const PostAPlanView: React.FC = () => {
   })
 
   const visOptions: { value: Visibility; label: string; desc: string }[] = [
-    { value: 'friends', label: 'Friends', desc: 'Only your confirmed friends see this' },
-    { value: 'mutuals', label: 'Mutuals', desc: 'Friends of friends can discover it' },
+    { value: 'friends_only', label: 'Friends Only', desc: 'Only your confirmed friends see this' },
+    { value: 'community_only', label: 'Community', desc: 'Members of the same community can discover it' },
     { value: 'public', label: 'Public', desc: 'Anyone on havens can find this plan' },
   ]
 
@@ -127,7 +127,14 @@ export const PostAPlanView: React.FC = () => {
       }
     }
 
-    // Step D: ONLY THEN, call createEvent GraphQL mutation with String imageUrl & coordinates
+    // Build scheduled date from date + time inputs
+    let scheduledDate: string | undefined
+    if (date) {
+      const timeStr = time || '12:00'
+      scheduledDate = new Date(`${date}T${timeStr}:00`).toISOString()
+    }
+
+    // Step D: ONLY THEN, call createEvent GraphQL mutation with all fields
     createEventMutation({
       variables: {
         title: title.trim(),
@@ -137,6 +144,8 @@ export const PostAPlanView: React.FC = () => {
         pointsReward: 10,
         visibility,
         imageUrl: finalImageUrl || undefined,
+        locationName: selectedLocation.formattedAddress || selectedLocation.cityName || '',
+        scheduledDate: scheduledDate || undefined,
       },
     })
   }
@@ -245,6 +254,7 @@ export const PostAPlanView: React.FC = () => {
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
+                min={new Date().toISOString().split('T')[0]}
                 className="w-full px-4 py-3 rounded-xl border border-border bg-white text-charcoal text-sm focus:outline-none focus:border-forest focus:ring-1 focus:ring-forest/20 transition-colors"
               />
             </div>
@@ -302,9 +312,9 @@ export const PostAPlanView: React.FC = () => {
               }`}
             >
               {isUploading
-                ? 'Uploading photo to Cloudinary...'
+                ? 'Saving...'
                 : isSubmitting
-                ? 'Posting plan to backend...'
+                ? 'Creating event...'
                 : 'Post this plan'}
             </button>
           </div>

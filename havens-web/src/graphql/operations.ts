@@ -291,6 +291,7 @@ export const GET_ALL_EVENTS = gql`
       visibility
       trustScore
       imageUrl
+      locationName
       creator {
         id
         username
@@ -318,6 +319,8 @@ export const CREATE_EVENT = gql`
     $pointsReward: Int
     $visibility: String
     $imageUrl: String
+    $locationName: String
+    $scheduledDate: DateTime
   ) {
     createEvent(
       title: $title
@@ -328,6 +331,8 @@ export const CREATE_EVENT = gql`
       pointsReward: $pointsReward
       visibility: $visibility
       imageUrl: $imageUrl
+      locationName: $locationName
+      scheduledDate: $scheduledDate
     ) {
       success
       message
@@ -340,6 +345,7 @@ export const CREATE_EVENT = gql`
         pointsReward
         visibility
         imageUrl
+        locationName
         trustScore
         creator {
           id
@@ -365,6 +371,7 @@ export const MY_RSVPS = gql`
         latitude
         longitude
         visibility
+        locationName
         creator {
           id
           username
