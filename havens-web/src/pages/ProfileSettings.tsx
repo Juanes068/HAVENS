@@ -8,6 +8,7 @@ import {
   GENERATE_INVITE,
 } from '../graphql/operations';
 import { useAuth } from '../context/AuthContext';
+import { LocationInput } from '../components/LocationInput';
 
 interface Hobby {
   id: string;
@@ -340,12 +341,14 @@ export const ProfileSettingsView: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-[#8a8278] mb-1">Neighbourhood / Location</label>
-              <input
-                type="text"
-                value={neighbourhood}
-                onChange={(e) => setNeighbourhood(e.target.value)}
-                placeholder="e.g. Kitsilano, Vancouver"
-                className="w-full px-4 py-2.5 rounded-xl bg-white border border-[#E2DBD0] text-[#2C2C2C] text-sm focus:outline-none focus:border-[#2D5A3D]"
+              <LocationInput
+                initialValue={neighbourhood}
+                onSelectLocation={(loc) => {
+                  if (loc) {
+                    setNeighbourhood(loc.formatted_address || loc.neighbourhood || loc.cityName || '');
+                  }
+                }}
+                placeholder="Search neighbourhood or city (e.g. Kitsilano, Vancouver)"
               />
             </div>
 

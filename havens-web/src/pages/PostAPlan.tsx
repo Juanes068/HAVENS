@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { useMutation } from '@apollo/client'
 import { useNavigate } from 'react-router-dom'
 import { SectionHeading } from '../components/SectionHeading'
-import { LocationAutocomplete, LocationResult } from '../components/LocationAutocomplete'
+import { LocationInput, LocationData } from '../components/LocationInput'
 import { CREATE_EVENT, GET_ALL_EVENTS, GENERATE_CLOUDINARY_SIGNATURE } from '../graphql/operations'
 
 type Visibility = 'friends_only' | 'community_only' | 'public'
@@ -16,7 +16,7 @@ export const PostAPlanView: React.FC = () => {
   const [description, setDesc] = useState('')
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
-  const [selectedLocation, setSelectedLocation] = useState<LocationResult | null>(null)
+  const [selectedLocation, setSelectedLocation] = useState<LocationData | null>(null)
   const [visibility, setVis] = useState<Visibility>('public')
   const [category, setCategory] = useState('Outdoors')
   const [imageFile, setImageFile] = useState<File | null>(null)
@@ -225,7 +225,7 @@ export const PostAPlanView: React.FC = () => {
             <label className="block text-sm font-medium text-charcoal mb-1.5">
               Location / Neighbourhood <span className="text-terracotta">*</span>
             </label>
-            <LocationAutocomplete
+            <LocationInput
               onSelectLocation={(loc) => {
                 setSelectedLocation(loc)
                 if (loc) setErrorMsg('')
@@ -339,7 +339,7 @@ export const PostAPlanView: React.FC = () => {
               </h3>
               <div className="space-y-1 text-xs text-muted">
                 <p>{date || 'Date TBD'}{time ? ` · ${time}` : ''}</p>
-                <p>📍 {selectedLocation ? selectedLocation.cityName : 'Select a location'}</p>
+                <p>📍 {selectedLocation ? (selectedLocation.formatted_address || selectedLocation.cityName) : 'Select a location'}</p>
               </div>
               {description && (
                 <p className="text-xs text-[#5a5450] mt-2 leading-relaxed line-clamp-3">

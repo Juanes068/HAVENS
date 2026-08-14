@@ -10,7 +10,7 @@ import {
   UPDATE_USER_PROFILE,
 } from '../graphql/operations';
 import { useAuth } from '../context/AuthContext';
-import { LocationAutocomplete, LocationResult } from '../components/LocationAutocomplete';
+import { LocationInput, LocationData } from '../components/LocationInput';
 
 interface Hobby {
   id: string | number;
@@ -54,7 +54,7 @@ export const OnboardingView: React.FC = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [invitationCode, setInvitationCode] = useState('');
-  const [selectedLocation, setSelectedLocation] = useState<LocationResult | null>(null);
+  const [selectedLocation, setSelectedLocation] = useState<LocationData | null>(null);
 
   // Step 2 & 3: Hobbies Selection State
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
@@ -120,10 +120,10 @@ export const OnboardingView: React.FC = () => {
           email,
           password,
           invitationCode,
-          neighbourhood: selectedLocation.neighbourhood,
-          cityName: selectedLocation.cityName,
-          latitude: selectedLocation.latitude,
-          longitude: selectedLocation.longitude,
+          neighbourhood: selectedLocation.neighbourhood || selectedLocation.formatted_address,
+          cityName: selectedLocation.cityName || selectedLocation.formatted_address,
+          latitude: selectedLocation.lat ?? selectedLocation.latitude,
+          longitude: selectedLocation.lng ?? selectedLocation.longitude,
         },
       });
 
@@ -465,12 +465,12 @@ export const OnboardingView: React.FC = () => {
                 <label className="block text-xs font-medium text-[#8a8278] mb-1">
                   Location / Neighbourhood <span className="text-[#C47B5A]">*</span>
                 </label>
-                <LocationAutocomplete
+                <LocationInput
                   onSelectLocation={(loc) => {
                     setSelectedLocation(loc);
                     if (loc) setErrorMsg('');
                   }}
-                  placeholder="Type location (e.g. Milenta, Bogotá)"
+                  placeholder="Search address or neighbourhood (e.g. Kitsilano, Vancouver)"
                 />
               </div>
 

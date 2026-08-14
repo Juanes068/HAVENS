@@ -3,7 +3,7 @@ import { useMutation } from '@apollo/client'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { TOKEN_AUTH, CREATE_USER } from '../graphql/operations'
-import { LocationAutocomplete, LocationResult } from '../components/LocationAutocomplete'
+import { LocationInput, LocationData } from '../components/LocationInput'
 
 export const AuthPage: React.FC = () => {
   const navigate = useNavigate()
@@ -16,7 +16,7 @@ export const AuthPage: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [invitationCode, setInvitationCode] = useState('')
   const [bio, setBio] = useState('')
-  const [selectedLocation, setSelectedLocation] = useState<LocationResult | null>(null)
+  const [selectedLocation, setSelectedLocation] = useState<LocationData | null>(null)
 
   // Derived: real-time password mismatch indicator (only active once confirmPassword is non-empty)
   const passwordMismatch = confirmPassword.length > 0 && password !== confirmPassword
@@ -109,10 +109,10 @@ export const AuthPage: React.FC = () => {
           password,
           invitationCode,
           bio,
-          neighbourhood: selectedLocation.neighbourhood,
-          cityName: selectedLocation.cityName,
-          latitude: selectedLocation.latitude,
-          longitude: selectedLocation.longitude,
+          neighbourhood: selectedLocation.neighbourhood || selectedLocation.formatted_address,
+          cityName: selectedLocation.cityName || selectedLocation.formatted_address,
+          latitude: selectedLocation.lat ?? selectedLocation.latitude,
+          longitude: selectedLocation.lng ?? selectedLocation.longitude,
         },
       })
 
@@ -294,12 +294,12 @@ export const AuthPage: React.FC = () => {
                 <label className="block text-xs font-medium text-[#8a8278] mb-1">
                   Location / Neighbourhood <span className="text-[#C47B5A]">*</span>
                 </label>
-                <LocationAutocomplete
+                <LocationInput
                   onSelectLocation={(loc) => {
                     setSelectedLocation(loc)
                     if (loc) setErrorMsg('')
                   }}
-                  placeholder="Type location (e.g. Milenta, Bogotá)"
+                  placeholder="Search address or neighbourhood (e.g. Kitsilano, Vancouver)"
                 />
               </div>
             </>

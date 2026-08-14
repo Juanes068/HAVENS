@@ -111,7 +111,7 @@ export const CalendarView: React.FC = () => {
     title: evt.title || 'Community Activity',
     type: idx % 3 === 0 ? 'friend' : idx % 3 === 1 ? 'mutual' : 'conflict',
     time: '6:00 PM',
-    location: evt.latitude && evt.longitude ? `${evt.latitude.toFixed(2)}, ${evt.longitude.toFixed(2)}` : 'Vancouver',
+    location: evt.locationName || 'Vancouver',
     attendees: [evt.creator?.username || 'Member'],
     avatarColor: idx % 2 === 0 ? '#2D5A3D' : '#7aaa8a',
   }))

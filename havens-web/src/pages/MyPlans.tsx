@@ -26,7 +26,7 @@ export const MyPlansView: React.FC = () => {
     title: r.event?.title || 'Community Gathering',
     date: 'Fri Jul 24',
     time: '6:00 PM',
-    location: r.event?.latitude && r.event?.longitude ? `${r.event.latitude.toFixed(2)}, ${r.event.longitude.toFixed(2)}` : 'Vancouver, BC',
+    location: r.event?.locationName || 'Vancouver, BC',
     role: r.response === 'going' ? 'attending' : 'hosting',
     status: activeTab,
     attendees: [{ name: r.event?.creator?.username || 'Host', color: '#2D5A3D' }],
