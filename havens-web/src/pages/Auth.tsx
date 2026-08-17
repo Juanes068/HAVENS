@@ -7,7 +7,7 @@ import { LocationInput, LocationData } from '../components/LocationInput'
 
 export const AuthPage: React.FC = () => {
   const navigate = useNavigate()
-  const { token, user, isOnboarded, login } = useAuth()
+  const { token, user, isOnboarded, networkError, login } = useAuth()
 
   // Redirect already authenticated users
   React.useEffect(() => {
@@ -194,9 +194,9 @@ export const AuthPage: React.FC = () => {
         </div>
 
         {/* Alert Messages */}
-        {errorMsg && (
+        {(errorMsg || networkError) && (
           <div className="p-3 text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl mb-4">
-            {errorMsg}
+            {errorMsg || networkError}
           </div>
         )}
         {successMsg && (

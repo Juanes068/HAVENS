@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -45,7 +45,11 @@ export const OnboardingView: React.FC = () => {
   const { token, user: currentUser, login, refetchUser } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 4-Step Wizard State (Step 1: Account, Step 2: Primary Hobbies, Step 3: Secondary Hobbies, Step 4: Photo)
+  // 4-Step Wizard State:
+  // Step 1: Account Info (only for unauthenticated users)
+  // Step 2: Main Categories (Broad Focus Areas)
+  // Step 3: Specific Sub-hobbies (Fine-grained pills)
+  // Step 4: Profile Photo (Optional)
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(() => (token ? 2 : 1));
 
   // Step 1: Account Creation State
@@ -56,7 +60,7 @@ export const OnboardingView: React.FC = () => {
   const [invitationCode, setInvitationCode] = useState('');
   const [selectedLocation, setSelectedLocation] = useState<LocationData | null>(null);
 
-  // Step 2 & 3: Hobbies Selection State
+  // Step 2 & 3: Unified Hobbies Taxonomy State
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [selectedHobbyIds, setSelectedHobbyIds] = useState<string[]>([]);
 
@@ -66,7 +70,7 @@ export const OnboardingView: React.FC = () => {
   const [isUploadingPhoto, setIsUploadingPhoto] = useState<boolean>(false);
   const [photoSuccessMsg, setPhotoSuccessMsg] = useState<string>('');
 
-  // General Status & Alert Messages
+  // Status & Feedback Alerts
   const [isProcessingStep1, setIsProcessingStep1] = useState(false);
   const [step1StatusText, setStep1StatusText] = useState('');
   const [warningMsg, setWarningMsg] = useState<string>('');
@@ -83,11 +87,40 @@ export const OnboardingView: React.FC = () => {
   const [updateUserProfileMutation] = useMutation(UPDATE_USER_PROFILE);
   const [updateHobbies, { loading: isSavingHobbies }] = useMutation(UPDATE_USER_HOBBIES);
 
-  const categories = data?.allHobbyCategories || [];
-  const activeCategories = categories.filter((c) => selectedCategoryIds.includes(String(c.id)));
+  const categories = useMemo(() => data?.allHobbyCategories || [], [data]);
+  const activeCategories = useMemo(
+    () => categories.filter((c) => selectedCategoryIds.includes(String(c.id))),
+    [categories, selectedCategoryIds]
+  );
+
+  // 1. Sync Wizard Step when token becomes available (avoid repeating Step 1)
+  useEffect(() => {
+    if (token && wizardStep === 1) {
+      setWizardStep(2);
+    }
+  }, [token, wizardStep]);
+
+  // 2. Pre-populate existing hobbies if user already has profile selections
+  useEffect(() => {
+    if (currentUser?.hobbies && currentUser.hobbies.length > 0 && selectedHobbyIds.length === 0) {
+      const existingHobbyIds = currentUser.hobbies.map((h) => String(h.id));
+      const existingCategoryIds = Array.from(
+        new Set(
+          currentUser.hobbies
+            .map((h) => (h.category?.id ? String(h.category.id) : null))
+            .filter(Boolean) as string[]
+        )
+      );
+
+      setSelectedHobbyIds(existingHobbyIds);
+      if (existingCategoryIds.length > 0 && selectedCategoryIds.length === 0) {
+        setSelectedCategoryIds(existingCategoryIds);
+      }
+    }
+  }, [currentUser, selectedHobbyIds.length, selectedCategoryIds.length]);
 
   // ─────────────────────────────────────────────────────────────
-  // STEP 1: ACCOUNT CREATION & PASSWORD MATCHING VALIDATION
+  // STEP 1: ACCOUNT CREATION & AUTHENTICATION
   // ─────────────────────────────────────────────────────────────
   const handleStep1Submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,7 +131,6 @@ export const OnboardingView: React.FC = () => {
       return;
     }
 
-    // Client-side Password Confirmation Validation
     if (password !== confirmPassword) {
       setErrorMsg('⚠️ Password and Password Confirmation do not match.');
       return;
@@ -112,8 +144,7 @@ export const OnboardingView: React.FC = () => {
     setIsProcessingStep1(true);
 
     try {
-      // 1. Execute createUser mutation
-      setStep1StatusText('Step 1/4: Registering account...');
+      setStep1StatusText('Creating your account...');
       const regRes = await createUserMutation({
         variables: {
           username,
@@ -131,8 +162,7 @@ export const OnboardingView: React.FC = () => {
         throw new Error(regRes?.data?.createUser?.message || 'Registration failed.');
       }
 
-      // 2. Execute tokenAuth mutation & save token
-      setStep1StatusText('Authenticating session & injecting JWT headers...');
+      setStep1StatusText('Authenticating session...');
       const loginRes = await tokenAuthMutation({
         variables: { username, password },
       });
@@ -144,19 +174,17 @@ export const OnboardingView: React.FC = () => {
 
       await login(newToken);
       setErrorMsg('');
-
-      // Advance to Step 2
       setWizardStep(2);
     } catch (err: any) {
       console.error('[Step 1 Account Error]', err);
       setErrorMsg(err.message || 'Registration failed.');
-    }  finally {
+    } finally {
       setIsProcessingStep1(false);
     }
   };
 
   // ─────────────────────────────────────────────────────────────
-  // STEP 2: PRIMARY HOBBIES CATEGORY TOGGLE (MAX 3)
+  // STEP 2: MAIN CATEGORIES SELECTION (MAX 3)
   // ─────────────────────────────────────────────────────────────
   const toggleCategory = (catIdRaw: string | number) => {
     const catId = String(catIdRaw);
@@ -164,6 +192,7 @@ export const OnboardingView: React.FC = () => {
     setErrorMsg('');
 
     if (selectedCategoryIds.includes(catId)) {
+      // Remove category and its associated sub-hobbies
       const targetCategory = categories.find((c) => String(c.id) === catId);
       const catHobbyIds = targetCategory ? targetCategory.hobbies.map((h) => String(h.id)) : [];
 
@@ -171,7 +200,7 @@ export const OnboardingView: React.FC = () => {
       setSelectedHobbyIds((prev) => prev.filter((id) => !catHobbyIds.includes(id)));
     } else {
       if (selectedCategoryIds.length >= MAX_PRIMARY_CATEGORIES) {
-        setWarningMsg(`You can select a maximum of ${MAX_PRIMARY_CATEGORIES} Primary categories.`);
+        setWarningMsg(`You can select a maximum of ${MAX_PRIMARY_CATEGORIES} main categories.`);
         return;
       }
       setSelectedCategoryIds((prev) => [...prev, catId]);
@@ -180,7 +209,7 @@ export const OnboardingView: React.FC = () => {
 
   const handleStep2Next = () => {
     if (selectedCategoryIds.length === 0) {
-      setErrorMsg('Please select at least 1 primary category to personalize your feed.');
+      setErrorMsg('Please select at least 1 main category to personalize your community feed.');
       return;
     }
     setWarningMsg('');
@@ -189,7 +218,7 @@ export const OnboardingView: React.FC = () => {
   };
 
   // ─────────────────────────────────────────────────────────────
-  // STEP 3: SECONDARY HOBBIES SUBCATEGORIES TOGGLE (MAX 5 PER CAT)
+  // STEP 3: SUBCATEGORY PILLS SELECTION (MAX 5 PER CATEGORY)
   // ─────────────────────────────────────────────────────────────
   const toggleHobby = (categoryName: string, categoryHobbyIds: string[], hobbyIdRaw: string | number) => {
     const hobbyId = String(hobbyIdRaw);
@@ -215,7 +244,7 @@ export const OnboardingView: React.FC = () => {
 
   const handleStep3Next = async () => {
     if (selectedHobbyIds.length === 0) {
-      setErrorMsg('Please select at least 1 subcategory so we can personalize your affinity match.');
+      setErrorMsg('Please select at least 1 specific interest pill to personalize your circles.');
       return;
     }
     setWarningMsg('');
@@ -229,7 +258,6 @@ export const OnboardingView: React.FC = () => {
 
       if (res?.data?.updateUserHobbies?.success) {
         await refetchUser();
-        // Advance to Step 4
         setWizardStep(4);
       } else {
         setErrorMsg(res?.data?.updateUserHobbies?.message || 'Failed to save hobbies.');
@@ -240,7 +268,7 @@ export const OnboardingView: React.FC = () => {
   };
 
   // ─────────────────────────────────────────────────────────────
-  // STEP 4: PROFILE PHOTO UPLOAD (OPTIONAL WITH SKIP FOR NOW)
+  // STEP 4: PROFILE PHOTO UPLOAD (OPTIONAL WITH SKIP)
   // ─────────────────────────────────────────────────────────────
   const handleAvatarFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -253,7 +281,6 @@ export const OnboardingView: React.FC = () => {
 
   const handleStep4UploadAndFinish = async () => {
     if (!selectedImageFile) {
-      // If no new photo selected, finish onboarding
       navigate('/discover');
       return;
     }
@@ -263,20 +290,18 @@ export const OnboardingView: React.FC = () => {
     setPhotoSuccessMsg('');
 
     try {
-      // 1. Get Cloudinary signature from backend (folder: "havens_profiles")
       const sigRes = await generateCloudinarySignature({
         variables: { paramsToSign: '{}', folder: 'havens_profiles' },
       });
 
       const sigData = sigRes?.data?.generateCloudinarySignature;
       if (!sigData || !sigData.success) {
-        throw new Error(sigData?.message || 'Failed to obtain Cloudinary upload signature.');
+        throw new Error(sigData?.message || 'Failed to obtain photo upload signature.');
       }
 
       const { signature, timestamp, apiKey } = sigData;
       const cloudName = 'g8jffrmx';
 
-      // 2. Direct POST to Cloudinary API endpoint
       const formData = new FormData();
       formData.append('file', selectedImageFile);
       formData.append('api_key', String(apiKey));
@@ -291,27 +316,25 @@ export const OnboardingView: React.FC = () => {
 
       if (!cloudRes.ok) {
         const errorText = await cloudRes.text();
-        throw new Error(`Cloudinary upload failed (${cloudRes.status}): ${errorText}`);
+        throw new Error(`Upload failed (${cloudRes.status}): ${errorText}`);
       }
 
       const cloudJson = await cloudRes.json();
       const uploadedPhotoUrl = cloudJson?.secure_url ? String(cloudJson.secure_url).trim() : '';
 
       if (!uploadedPhotoUrl || !uploadedPhotoUrl.startsWith('http')) {
-        throw new Error('Cloudinary response missing valid secure_url string.');
+        throw new Error('Upload response missing valid secure URL.');
       }
 
-      // 3. Execute updateUserProfile mutation with string URL
       const updateRes = await updateUserProfileMutation({
         variables: { photoUrl: uploadedPhotoUrl },
       });
 
       if (updateRes?.data?.updateUserProfile?.success) {
-        setPhotoSuccessMsg('✓ Profile picture updated!');
+        setPhotoSuccessMsg('✓ Profile picture saved!');
         await refetchUser();
       }
 
-      // Final Redirect to Dashboard
       navigate('/discover');
     } catch (err: any) {
       console.error('[Step 4 Upload Error]', err);
@@ -322,7 +345,6 @@ export const OnboardingView: React.FC = () => {
   };
 
   const handleSkipPhotoStep = () => {
-    // Finish Onboarding and redirect to Dashboard without photo upload
     navigate('/discover');
   };
 
@@ -330,7 +352,7 @@ export const OnboardingView: React.FC = () => {
     <div className="min-h-screen bg-[#F4EEE2] text-[#2C2C2C] flex flex-col items-center justify-between p-6 antialiased">
       <div className="max-w-4xl w-full my-auto space-y-8">
         
-        {/* Wizard Header & Progress Bar */}
+        {/* Wizard Progress Bar */}
         <div className="text-center">
           <div className="flex items-center justify-center gap-2 mb-3">
             {[1, 2, 3, 4].map((stepNum) => (
@@ -348,30 +370,29 @@ export const OnboardingView: React.FC = () => {
           </div>
 
           <span className="text-xs font-semibold tracking-wider text-[#C47B5A] uppercase">
-            Step {wizardStep} of 4 • Havens Onboarding Wizard
+            Step {wizardStep} of 4 • Havens Onboarding
           </span>
           <h1 className="text-3xl md:text-4xl font-serif font-semibold tracking-tight text-[#2D5A3D] mt-1 lowercase">
             {wizardStep === 1 && 'create your account'}
-            {wizardStep === 2 && 'choose primary categories'}
-            {wizardStep === 3 && 'choose subcategory pills'}
+            {wizardStep === 2 && 'choose main categories'}
+            {wizardStep === 3 && 'select specific interests'}
             {wizardStep === 4 && 'upload profile photo'}
           </h1>
           <p className="text-sm text-[#8a8278] font-normal mt-1.5 max-w-lg mx-auto">
             {wizardStep === 1 && 'Enter your details, 6-character invitation code, and location.'}
-            {wizardStep === 2 && `Select up to ${MAX_PRIMARY_CATEGORIES} Spotify-inspired interest categories.`}
-            {wizardStep === 3 && `Select up to ${MAX_SUB_HOBBIES_PER_CATEGORY} subcategories per primary category.`}
-            {wizardStep === 4 && 'Add an optional profile picture or skip to enter your dashboard.'}
+            {wizardStep === 2 && `Pick up to ${MAX_PRIMARY_CATEGORIES} broad focus areas for your profile.`}
+            {wizardStep === 3 && `Select specific subcategory pills for your chosen categories.`}
+            {wizardStep === 4 && 'Add an optional profile picture or skip to start exploring.'}
           </p>
         </div>
 
-        {/* Global Warning Alert */}
+        {/* Feedback Alerts */}
         {warningMsg && (
-          <div className="p-3 text-xs bg-amber-50 border border-amber-300 text-amber-900 rounded-xl text-center max-w-lg mx-auto shadow-xs animate-bounce font-medium">
+          <div className="p-3 text-xs bg-amber-50 border border-amber-300 text-amber-900 rounded-xl text-center max-w-lg mx-auto shadow-xs font-medium">
             ⚠️ {warningMsg}
           </div>
         )}
 
-        {/* Global Error Alert */}
         {errorMsg && (
           <div className="p-3 text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-center max-w-lg mx-auto font-medium">
             {errorMsg}
@@ -379,14 +400,14 @@ export const OnboardingView: React.FC = () => {
         )}
 
         {/* ───────────────────────────────────────────────────────────── */}
-        {/* STEP 1: ACCOUNT CREATION & PASSWORD MATCHING VALIDATION */}
+        {/* STEP 1: ACCOUNT CREATION (Only if unauthenticated) */}
         {/* ───────────────────────────────────────────────────────────── */}
         {wizardStep === 1 && (
           <div className="bg-[#F0EAE0]/80 border border-[#E2DBD0] rounded-3xl p-8 max-w-md mx-auto shadow-xs relative">
             {isProcessingStep1 && (
               <div className="absolute inset-0 z-50 bg-[#F0EAE0]/95 backdrop-blur-xs rounded-3xl flex flex-col items-center justify-center p-6 text-center">
                 <div className="w-10 h-10 border-4 border-[#2D5A3D] border-t-transparent rounded-full animate-spin mb-4" />
-                <h3 className="text-sm font-semibold text-[#2D5A3D]">Creating your Havens account...</h3>
+                <h3 className="text-sm font-semibold text-[#2D5A3D]">Setting up your account...</h3>
                 <p className="text-xs text-[#8a8278] mt-1 font-mono">{step1StatusText}</p>
               </div>
             )}
@@ -479,25 +500,25 @@ export const OnboardingView: React.FC = () => {
                 disabled={isProcessingStep1 || (confirmPassword !== '' && password !== confirmPassword)}
                 className="w-full py-3 px-4 rounded-xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white font-medium text-sm transition-colors shadow-xs disabled:opacity-50 mt-4 cursor-pointer"
               >
-                Create Account & Continue (Step 1 of 4) →
+                Create Account & Continue →
               </button>
             </form>
           </div>
         )}
 
         {/* ───────────────────────────────────────────────────────────── */}
-        {/* STEP 2: SPOTIFY-STYLE PRIMARY CATEGORY CARDS ONLY */}
+        {/* STEP 2: CHOOSE MAIN CATEGORIES (Cards Grid) */}
         {/* ───────────────────────────────────────────────────────────── */}
         {wizardStep === 2 && (
           <div>
             <div className="flex justify-between items-center mb-4 text-xs text-[#8a8278] font-medium px-1">
-              <span>Primary Interest Categories</span>
+              <span>Primary Categories</span>
               <span>{selectedCategoryIds.length} of {MAX_PRIMARY_CATEGORIES} selected</span>
             </div>
 
             {loadingTaxonomy ? (
               <div className="text-center py-12 text-[#2D5A3D] animate-pulse text-sm">
-                Loading Spotify taxonomy cards...
+                Loading categories...
               </div>
             ) : taxonomyError ? (
               <div className="p-4 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs text-center">
@@ -536,7 +557,7 @@ export const OnboardingView: React.FC = () => {
                           {cat.name}
                         </h3>
                         <p className="text-[11px] text-white/80 mt-1 font-light">
-                          {isSelected ? 'Selected Category' : 'Tap to select'}
+                          {isSelected ? 'Selected' : 'Tap to select'}
                         </p>
                       </div>
                     </div>
@@ -546,33 +567,37 @@ export const OnboardingView: React.FC = () => {
             )}
 
             <div className="flex items-center justify-between pt-4 border-t border-[#E2DBD0]">
-              <button
-                type="button"
-                onClick={() => setWizardStep(1)}
-                className="px-5 py-2.5 rounded-xl border border-[#E2DBD0] text-[#2C2C2C] text-xs font-medium hover:bg-white transition-colors cursor-pointer"
-              >
-                ← Back to Account
-              </button>
+              {!token && (
+                <button
+                  type="button"
+                  onClick={() => setWizardStep(1)}
+                  className="px-5 py-2.5 rounded-xl border border-[#E2DBD0] text-[#2C2C2C] text-xs font-medium hover:bg-white transition-colors cursor-pointer"
+                >
+                  ← Back to Account
+                </button>
+              )}
 
-              <button
-                type="button"
-                onClick={handleStep2Next}
-                className="px-8 py-3 rounded-xl bg-[#2D5A3D] text-white text-xs font-semibold shadow-sm hover:bg-[#3d7a55] transition-colors cursor-pointer"
-              >
-                Continue to Secondary Hobbies ({selectedCategoryIds.length}/{MAX_PRIMARY_CATEGORIES}) →
-              </button>
+              <div className="ml-auto">
+                <button
+                  type="button"
+                  onClick={handleStep2Next}
+                  className="px-8 py-3 rounded-xl bg-[#2D5A3D] text-white text-xs font-semibold shadow-sm hover:bg-[#3d7a55] transition-colors cursor-pointer"
+                >
+                  Continue to Specific Interests ({selectedCategoryIds.length}/{MAX_PRIMARY_CATEGORIES}) →
+                </button>
+              </div>
             </div>
           </div>
         )}
 
         {/* ───────────────────────────────────────────────────────────── */}
-        {/* STEP 3: NETFLIX-STYLE SECONDARY SUBCATEGORY PILLS ONLY */}
+        {/* STEP 3: SPECIFIC SUBCATEGORY PILLS */}
         {/* ───────────────────────────────────────────────────────────── */}
         {wizardStep === 3 && (
           <div>
             <div className="flex justify-between items-center mb-4 text-xs text-[#8a8278] font-medium px-1">
-              <span>Subcategories (Max {MAX_SUB_HOBBIES_PER_CATEGORY} per category)</span>
-              <span>{selectedHobbyIds.length} total selected</span>
+              <span>Select Your Specific Interests (Max {MAX_SUB_HOBBIES_PER_CATEGORY} per category)</span>
+              <span>{selectedHobbyIds.length} selected</span>
             </div>
 
             <div className="space-y-6 mb-8">
@@ -628,7 +653,7 @@ export const OnboardingView: React.FC = () => {
                 onClick={() => setWizardStep(2)}
                 className="px-5 py-2.5 rounded-xl border border-[#E2DBD0] text-[#2C2C2C] text-xs font-medium hover:bg-white transition-colors cursor-pointer"
               >
-                ← Back to Primary Categories
+                ← Back to Main Categories
               </button>
 
               <button
@@ -637,14 +662,14 @@ export const OnboardingView: React.FC = () => {
                 onClick={handleStep3Next}
                 className="px-8 py-3 rounded-xl bg-[#2D5A3D] text-white text-xs font-semibold shadow-sm hover:bg-[#3d7a55] transition-colors disabled:opacity-50 cursor-pointer"
               >
-                {isSavingHobbies ? 'Saving Preferences...' : 'Save & Continue to Profile Photo (Step 3 of 4) →'}
+                {isSavingHobbies ? 'Saving Interests...' : 'Save Interests & Continue →'}
               </button>
             </div>
           </div>
         )}
 
         {/* ───────────────────────────────────────────────────────────── */}
-        {/* STEP 4: ISOLATED PROFILE PHOTO UPLOAD (OPTIONAL WITH SKIP) */}
+        {/* STEP 4: PROFILE PHOTO UPLOAD (OPTIONAL) */}
         {/* ───────────────────────────────────────────────────────────── */}
         {wizardStep === 4 && (
           <div className="bg-white border border-[#E2DBD0] rounded-3xl p-8 max-w-lg mx-auto shadow-xs text-center space-y-6">
@@ -656,11 +681,10 @@ export const OnboardingView: React.FC = () => {
                 Add a Face to Your Profile
               </h3>
               <p className="text-xs text-[#8a8278] mt-1">
-                Helps trusted members recognize you in local circles. You can also skip this step!
+                Helps trusted members recognize you in local events. You can also skip this step!
               </p>
             </div>
 
-            {/* Avatar Preview & File Input */}
             <div className="flex flex-col items-center justify-center">
               <div
                 onClick={() => fileInputRef.current?.click()}
@@ -699,7 +723,6 @@ export const OnboardingView: React.FC = () => {
               )}
             </div>
 
-            {/* Step 4 Action Buttons (Upload vs Skip for Now) */}
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4 border-t border-[#E2DBD0]">
               <button
                 type="button"
@@ -715,7 +738,7 @@ export const OnboardingView: React.FC = () => {
                 onClick={handleStep4UploadAndFinish}
                 className="w-full sm:w-auto px-8 py-2.5 rounded-xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white text-xs font-semibold transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
               >
-                {isUploadingPhoto ? 'Saving photo...' : selectedImageFile ? 'Upload Photo & Finish' : 'Finish Onboarding'}
+                {isUploadingPhoto ? 'Saving photo...' : selectedImageFile ? 'Upload Photo & Finish' : 'Finish & Go to Havens'}
               </button>
             </div>
           </div>

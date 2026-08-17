@@ -26,7 +26,7 @@ export const ProtectedRoute: React.FC = () => {
       : null);
 
   // 1. Session verification & Profile loading state
-  if (isLoading || (storedToken && !user)) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-[#F4EEE2] text-[#2C2C2C] flex items-center justify-center font-serif">
         <div className="text-center animate-pulse text-[#2D5A3D]">Checking havens session...</div>
@@ -34,9 +34,9 @@ export const ProtectedRoute: React.FC = () => {
     );
   }
 
-  // 2. Unauthenticated: Redirect to login/registration
-  if (!storedToken) {
-    console.warn('[ProtectedRoute] No valid token found in context or storage. Redirecting to /auth.');
+  // 2. Unauthenticated or unreachable session: Redirect to login/registration
+  if (!storedToken || !user) {
+    console.warn('[ProtectedRoute] No valid authenticated user found. Redirecting to /auth.');
     return <Navigate to="/auth" replace />;
   }
 
