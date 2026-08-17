@@ -8,8 +8,8 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def send_welcome_email_task(self, user_email, username, app_url=None):
+@shared_task(name='core.tasks.send_welcome_email_task')
+def send_welcome_email_task(user_email, username, app_url=None):
     """
     Asynchronous Celery task to send a rich HTML welcome email to newly registered users.
     Executes in background without blocking GraphQL HTTP mutations.
@@ -20,8 +20,6 @@ def send_welcome_email_task(self, user_email, username, app_url=None):
 
     subject = "Welcome to Havens! 🌿"
     from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'Havens <welcome@havens.app>')
-    
-    # Default app URL for CTA
     app_link = app_url or getattr(settings, 'FRONTEND_URL', 'http://localhost:5173/discover')
 
     context = {
@@ -45,15 +43,19 @@ def send_welcome_email_task(self, user_email, username, app_url=None):
         return f"Welcome email sent to {user_email}"
     except Exception as exc:
         logger.error(f"[Celery Email] Error sending welcome email to {user_email}: {exc}")
-        # Retry with exponential backoff on transient SMTP failures
-        try:
-            raise self.retry(exc=exc)
-        except Exception:
-            return f"Failed to send welcome email: {exc}"
+        return f"Failed to send welcome email: {exc}"
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def send_system_alert_task(self, user_email, alert_subject, alert_message, username=None, action_url=None, action_text=None):
+@shared_task(name='core.tasks.send_welcome_email')
+def send_welcome_email(user_email, username, app_url=None):
+    """
+    Direct alias for send_welcome_email_task to support both naming conventions.
+    """
+    return send_welcome_email_task(user_email, username, app_url)
+
+
+@shared_task(name='core.tasks.send_system_alert_task')
+def send_system_alert_task(user_email, alert_subject, alert_message, username=None, action_url=None, action_text=None):
     """
     Asynchronous Celery task to send critical notifications, security notices, or updates.
     """
@@ -88,11 +90,4 @@ def send_system_alert_task(self, user_email, alert_subject, alert_message, usern
         return f"System alert sent to {user_email}"
     except Exception as exc:
         logger.error(f"[Celery Email] Error sending system alert to {user_email}: {exc}")
-        try:
-            raise self.retry(exc=exc)
-        except Exception:
-            return f"Failed to send system alert: {exc}"
-
-
-# Backward-compatibility alias
-send_welcome_email = send_welcome_email_task
+        return f"Failed to send system alert: {exc}"
