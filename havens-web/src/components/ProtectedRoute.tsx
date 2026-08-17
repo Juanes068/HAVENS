@@ -1,18 +1,19 @@
 import React from 'react';
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Navigation } from './Navigation';
 import { HAVENS_JWT_TOKEN_KEY } from '../services/apollo';
 import { secureStorage } from '../services/secureStore';
 
 /**
- * ProtectedRoute component ensuring that only authenticated users with a valid JWT token
- * can access private application routes.
- * 
- * Immediately redirects unauthenticated users to `/auth` before dashboard components can render.
+ * ProtectedRoute component ensuring that:
+ * 1. Only authenticated users with a valid JWT token can access private routes (unauthenticated users -> /auth).
+ * 2. Authenticated users MUST have completed onboarding (hobbies array populated) before accessing main app (/discover, /social, etc.).
+ * 3. Incomplete onboarding automatically force-redirects to `/onboarding` and isolates the wizard without main navigation.
  */
 export const ProtectedRoute: React.FC = () => {
-  const { token, isLoading } = useAuth();
+  const { token, user, isLoading, isOnboarded } = useAuth();
+  const location = useLocation();
 
   // Read raw stored token directly from storage to guarantee immediate sync
   const storedToken =
@@ -24,7 +25,8 @@ export const ProtectedRoute: React.FC = () => {
         localStorage.getItem(HAVENS_JWT_TOKEN_KEY)
       : null);
 
-  if (isLoading) {
+  // 1. Session verification & Profile loading state
+  if (isLoading || (storedToken && !user)) {
     return (
       <div className="min-h-screen bg-[#F4EEE2] text-[#2C2C2C] flex items-center justify-center font-serif">
         <div className="text-center animate-pulse text-[#2D5A3D]">Checking havens session...</div>
@@ -32,11 +34,32 @@ export const ProtectedRoute: React.FC = () => {
     );
   }
 
+  // 2. Unauthenticated: Redirect to login/registration
   if (!storedToken) {
     console.warn('[ProtectedRoute] No valid token found in context or storage. Redirecting to /auth.');
     return <Navigate to="/auth" replace />;
   }
 
+  const isOnboardingRoute = location.pathname === '/onboarding';
+
+  // 3. Authenticated but Incomplete Onboarding: Lock user to /onboarding
+  if (!isOnboarded) {
+    if (!isOnboardingRoute) {
+      console.warn('[ProtectedRoute] User has not completed onboarding. Locking access to /onboarding.');
+      return <Navigate to="/onboarding" replace />;
+    }
+
+    // Isolate Onboarding Wizard without top navigation to prevent bypassing
+    return (
+      <div className="min-h-screen bg-[#F4EEE2] text-[#2C2C2C] font-sans antialiased overflow-x-hidden flex flex-col">
+        <main className="flex-1 w-full max-w-[100vw] overflow-x-hidden">
+          <Outlet />
+        </main>
+      </div>
+    );
+  }
+
+  // 4. Authenticated & Fully Onboarded: Full access with Navigation
   return (
     <div className="min-h-screen bg-[#F4EEE2] text-[#2C2C2C] font-sans antialiased overflow-x-hidden flex flex-col">
       <Navigation />

@@ -7,7 +7,18 @@ import { LocationInput, LocationData } from '../components/LocationInput'
 
 export const AuthPage: React.FC = () => {
   const navigate = useNavigate()
-  const { login } = useAuth()
+  const { token, user, isOnboarded, login } = useAuth()
+
+  // Redirect already authenticated users
+  React.useEffect(() => {
+    if (token && user) {
+      if (isOnboarded) {
+        navigate('/discover', { replace: true })
+      } else {
+        navigate('/onboarding', { replace: true })
+      }
+    }
+  }, [token, user, isOnboarded, navigate])
 
   const [isRegisterMode, setIsRegisterMode] = useState(false)
   const [username, setUsername] = useState('')

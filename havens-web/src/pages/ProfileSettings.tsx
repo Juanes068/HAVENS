@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -66,7 +66,9 @@ export const ProfileSettingsView: React.FC = () => {
       setEmail(profile.email || '');
       setBio(profile.bio || '');
       setNeighbourhood(profile.neighbourhood || '');
-      setInviteCode(profile.inviteCode || '');
+      if (!inviteCode && profile.inviteCode) {
+        setInviteCode(profile.inviteCode);
+      }
     }
   }, [profile]);
 
@@ -75,23 +77,55 @@ export const ProfileSettingsView: React.FC = () => {
   const [deleteAccountMutation, { loading: isDeleting }] = useMutation(DELETE_ACCOUNT);
   const [generateInviteMutation, { loading: isGeneratingInvite }] = useMutation(GENERATE_INVITE);
 
-  const handleGenerateInvite = async () => {
-    setSuccessMsg('');
-    setErrorMsg('');
+  /**
+   * Generates a fresh invitation code from the backend.
+   */
+  const handleGenerateInvite = useCallback(async (isManualClick: boolean = false) => {
+    if (isManualClick) {
+      setSuccessMsg('');
+      setErrorMsg('');
+    }
     try {
       const res = await generateInviteMutation();
       if (res?.data?.generateInvite?.success && res?.data?.generateInvite?.invitation?.code) {
         const newCode = res.data.generateInvite.invitation.code;
         setInviteCode(newCode);
-        setSuccessMsg(`✓ Generated new invitation code: ${newCode}`);
+        if (isManualClick) {
+          setSuccessMsg(`✓ Generated new invitation code: ${newCode}`);
+        }
         await refetch();
-      } else {
+      } else if (isManualClick) {
         setErrorMsg(res?.data?.generateInvite?.message || 'Failed to generate invitation code.');
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Error generating invitation code.');
+      if (isManualClick) {
+        setErrorMsg(err.message || 'Error generating invitation code.');
+      } else {
+        console.warn('[ProfileSettings] Dynamic invite refresh error:', err);
+      }
     }
-  };
+  }, [generateInviteMutation, refetch]);
+
+  /**
+   * Dynamic Invitation Code:
+   * 1. Generates a new code immediately upon mounting (every time user enters the Profile page).
+   * 2. Automatically refreshes the code every 2 minutes (120,000 milliseconds).
+   * 3. Cleans up the interval on unmount to prevent memory leaks.
+   */
+  useEffect(() => {
+    // 1. Immediate trigger on component mount
+    handleGenerateInvite(false);
+
+    // 2. 2-minute recurring interval
+    const intervalId = setInterval(() => {
+      handleGenerateInvite(false);
+    }, 120000);
+
+    // 3. Clear interval on unmount
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [handleGenerateInvite]);
 
   // General Info & Security Form Submit Handler
   const handleUpdateSecurity = async (e: React.FormEvent) => {
@@ -248,8 +282,8 @@ export const ProfileSettingsView: React.FC = () => {
                   <button
                     type="button"
                     disabled={isGeneratingInvite}
-                    onClick={handleGenerateInvite}
-                    title="Generate new invitation code"
+                    onClick={() => handleGenerateInvite(true)}
+                    title="Generate new invitation code (auto-refreshes every 2 min)"
                     className="ml-1 p-1 rounded-md hover:bg-[#E2DBD0] text-xs transition-colors cursor-pointer disabled:opacity-50"
                   >
                     {isGeneratingInvite ? '⏳' : '🔄'}

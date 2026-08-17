@@ -4,6 +4,15 @@ import { MY_PROFILE } from '../graphql/operations';
 import { HAVENS_JWT_TOKEN_KEY } from '../services/apollo';
 import { secureStorage } from '../services/secureStore';
 
+export interface HobbyItem {
+  id: string;
+  name: string;
+  category?: {
+    id: string;
+    name: string;
+  };
+}
+
 export interface UserProfile {
   id: string;
   username: string;
@@ -12,12 +21,15 @@ export interface UserProfile {
   bio?: string;
   neighbourhood?: string;
   photoUrl?: string;
+  inviteCode?: string;
+  hobbies?: HobbyItem[];
 }
 
 interface AuthContextType {
   token: string | null;
   user: UserProfile | null;
   isLoading: boolean;
+  isOnboarded: boolean;
   login: (token: string) => Promise<void>;
   logout: () => void;
   refetchUser: () => Promise<void>;
@@ -112,8 +124,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  const isOnboarded = Boolean(user && user.hobbies && user.hobbies.length > 0);
+
   return (
-    <AuthContext.Provider value={{ token, user, isLoading, login, logout, refetchUser }}>
+    <AuthContext.Provider value={{ token, user, isLoading, isOnboarded, login, logout, refetchUser }}>
       {children}
     </AuthContext.Provider>
   );
