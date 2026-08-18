@@ -37,14 +37,16 @@ class Query(graphene.ObjectType):
     community_by_subdomain = graphene.Field(CommunityType, subdomain=graphene.String(required=True))
     my_communities = graphene.List(CommunityMembershipType)
 
-    # Events (filterable by coordinates & upcoming status)
+    # Events (filterable by coordinates, upcoming status, and creator)
     all_events = graphene.List(
         EventType,
         latitude=graphene.Float(),
         longitude=graphene.Float(),
         radius_km=graphene.Float(default_value=10.0),
         upcoming_only=graphene.Boolean(default_value=True),
+        creator_id=graphene.Int(),
     )
+    my_created_events = graphene.List(EventType, upcoming_only=graphene.Boolean(default_value=False))
     event_by_id = graphene.Field(EventType, id=graphene.Int(required=True))
     events_by_community = graphene.List(EventType, community_id=graphene.Int(required=True))
 
@@ -150,9 +152,12 @@ class Query(graphene.ObjectType):
         user = info.context.user
         return CommunityMembership.objects.filter(user=user).select_related('community')
 
-    def resolve_all_events(self, info, latitude=None, longitude=None, radius_km=10.0, upcoming_only=True):
+    def resolve_all_events(self, info, latitude=None, longitude=None, radius_km=10.0, upcoming_only=True, creator_id=None):
         user = info.context.user
         queryset = Event.objects.select_related('community', 'creator').all()
+
+        if creator_id is not None:
+            queryset = queryset.filter(creator_id=creator_id)
 
         if upcoming_only:
             queryset = queryset.filter(scheduled_date__gte=timezone.now())
@@ -178,6 +183,14 @@ class Query(graphene.ObjectType):
             except UserProfile.DoesNotExist:
                 pass
 
+        return queryset
+
+    @login_required
+    def resolve_my_created_events(self, info, upcoming_only=False):
+        user = info.context.user
+        queryset = Event.objects.filter(creator=user).select_related('community', 'creator').order_by('-scheduled_date')
+        if upcoming_only:
+            queryset = queryset.filter(scheduled_date__gte=timezone.now())
         return queryset
 
     def resolve_event_by_id(self, info, id):
