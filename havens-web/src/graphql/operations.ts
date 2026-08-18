@@ -298,8 +298,39 @@ export const UPDATE_USER_HOBBIES = gql`
  * Query to fetch all public and community events from the Django backend.
  */
 export const GET_ALL_EVENTS = gql`
-  query GetAllEvents($latitude: Float, $longitude: Float, $radiusKm: Float) {
-    allEvents(latitude: $latitude, longitude: $longitude, radiusKm: $radiusKm) {
+  query GetAllEvents($latitude: Float, $longitude: Float, $radiusKm: Float, $upcomingOnly: Boolean, $creatorId: Int) {
+    allEvents(latitude: $latitude, longitude: $longitude, radiusKm: $radiusKm, upcomingOnly: $upcomingOnly, creatorId: $creatorId) {
+      id
+      title
+      description
+      latitude
+      longitude
+      pointsReward
+      visibility
+      trustScore
+      imageUrl
+      locationName
+      scheduledDate
+      createdAt
+      creator {
+        id
+        username
+        photoUrl
+      }
+      hobbies {
+        id
+        name
+      }
+    }
+  }
+`;
+
+/**
+ * Query to fetch events created strictly by the authenticated user.
+ */
+export const GET_MY_CREATED_EVENTS = gql`
+  query GetMyCreatedEvents($upcomingOnly: Boolean) {
+    myCreatedEvents(upcomingOnly: $upcomingOnly) {
       id
       title
       description

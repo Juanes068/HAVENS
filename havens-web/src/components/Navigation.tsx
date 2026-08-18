@@ -10,10 +10,9 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { label: 'Discover', path: '/discover' },
   { label: 'Social', path: '/social' },
-  { label: 'My Plans', path: '/my-plans' },
   { label: 'Calendar', path: '/calendar' },
   { label: 'Saved', path: '/saved' },
-  { label: 'Post a Plan', path: '/post-a-plan' },
+  { label: 'plans', path: '/plans' },
 ]
 
 export const Navigation: React.FC = () => {

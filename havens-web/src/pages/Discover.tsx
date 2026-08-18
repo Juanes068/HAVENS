@@ -17,6 +17,16 @@ export const DiscoverView: React.FC = () => {
 
   const rawEvents = data?.allEvents || [];
 
+  // Strict Date Filtering: Only keep upcoming events (scheduledDate >= start of today)
+  const upcomingEvents = React.useMemo(() => {
+    const startOfToday = new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()).getTime();
+    return rawEvents.filter(event => {
+      if (!event.scheduledDate) return true;
+      const eventTime = new Date(event.scheduledDate).getTime();
+      return !isNaN(eventTime) && eventTime >= startOfToday;
+    });
+  }, [rawEvents]);
+
   return (
     <div className="max-w-[1400px] mx-auto px-6 py-8 space-y-6 antialiased pb-20">
       
@@ -75,9 +85,9 @@ export const DiscoverView: React.FC = () => {
       {!loading && !error && (
         <>
           {viewMode === 'swipe' ? (
-            <SwipeCardsView events={rawEvents} onRefetch={() => refetch()} />
+            <SwipeCardsView events={upcomingEvents} onRefetch={() => refetch()} />
           ) : (
-            <DiscoveryMapView events={rawEvents} onRefetch={() => refetch()} />
+            <DiscoveryMapView events={upcomingEvents} onRefetch={() => refetch()} />
           )}
         </>
       )}

@@ -1,8 +1,8 @@
 import React from 'react'
-import { CalendarTab } from '../components/CalendarTab'
+import { PlansView } from './Plans'
 
 export const MyPlansView: React.FC = () => {
-  return <CalendarTab />
+  return <PlansView />
 }
 
 export default MyPlansView

@@ -350,16 +350,16 @@ export const CalendarTab: React.FC = () => {
       {/* Top Header Bar & Action */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
         <div>
-          <SectionHeading>Calendar & My Plans</SectionHeading>
+          <SectionHeading>Calendar</SectionHeading>
           <p className="text-sm text-stone-500 mt-1">
-            Real-time schedule of your hosted and attending gatherings
+            Real-time schedule of upcoming gatherings across your community
           </p>
         </div>
 
         {/* Primary Action Button: Post plan */}
         <button
           type="button"
-          onClick={() => navigate('/post-a-plan')}
+          onClick={() => navigate('/plans')}
           className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white text-xs font-semibold transition-colors shadow-xs cursor-pointer self-start sm:self-auto"
         >
           <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none">

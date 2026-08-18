@@ -5,10 +5,9 @@ import { AuthPage } from './pages/Auth'
 import { OnboardingView } from './pages/Onboarding'
 import { DiscoverView } from './pages/Discover'
 import { SocialView } from './pages/Social'
-import { MyPlansView } from './pages/MyPlans'
+import { PlansView } from './pages/Plans'
 import { CalendarView } from './pages/Calendar'
 import { SavedView } from './pages/Saved'
-import { PostAPlanView } from './pages/PostAPlan'
 import { ProfileSettingsView } from './pages/ProfileSettings'
 import { ChatHubView } from './pages/ChatHub'
 
@@ -26,10 +25,11 @@ export default function App() {
           <Route path="/discover" element={<DiscoverView />} />
           <Route path="/social" element={<SocialView />} />
           <Route path="/chat" element={<ChatHubView />} />
-          <Route path="/my-plans" element={<MyPlansView />} />
+          <Route path="/plans" element={<PlansView />} />
+          <Route path="/my-plans" element={<Navigate to="/plans" replace />} />
+          <Route path="/post-a-plan" element={<Navigate to="/plans" replace />} />
           <Route path="/calendar" element={<CalendarView />} />
           <Route path="/saved" element={<SavedView />} />
-          <Route path="/post-a-plan" element={<PostAPlanView />} />
           <Route path="/profile" element={<ProfileSettingsView />} />
         </Route>
 
