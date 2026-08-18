@@ -3,6 +3,7 @@ from django.contrib.auth.models import User
 from django.db import models as django_models
 from django.db.models import F, Value
 from django.db.models.functions import ACos, Cos, Sin, Radians
+from django.utils import timezone
 from .types import (
     UserType, UserProfileType, CommunityType, CommunityMembershipType,
     EventType, TicketType, ParticipationType, InvitationCodeType,
@@ -36,12 +37,13 @@ class Query(graphene.ObjectType):
     community_by_subdomain = graphene.Field(CommunityType, subdomain=graphene.String(required=True))
     my_communities = graphene.List(CommunityMembershipType)
 
-    # Events (filterable by coordinates)
+    # Events (filterable by coordinates & upcoming status)
     all_events = graphene.List(
         EventType,
         latitude=graphene.Float(),
         longitude=graphene.Float(),
         radius_km=graphene.Float(default_value=10.0),
+        upcoming_only=graphene.Boolean(default_value=True),
     )
     event_by_id = graphene.Field(EventType, id=graphene.Int(required=True))
     events_by_community = graphene.List(EventType, community_id=graphene.Int(required=True))
@@ -148,9 +150,13 @@ class Query(graphene.ObjectType):
         user = info.context.user
         return CommunityMembership.objects.filter(user=user).select_related('community')
 
-    def resolve_all_events(self, info, latitude=None, longitude=None, radius_km=10.0):
+    def resolve_all_events(self, info, latitude=None, longitude=None, radius_km=10.0, upcoming_only=True):
         user = info.context.user
         queryset = Event.objects.select_related('community', 'creator').all()
+
+        if upcoming_only:
+            queryset = queryset.filter(scheduled_date__gte=timezone.now())
+
         if latitude is not None and longitude is not None:
             distance_expr = 6371 * ACos(
                 Cos(Radians(Value(latitude))) * Cos(Radians(F('latitude'))) *
@@ -168,7 +174,7 @@ class Query(graphene.ObjectType):
                             'hobbies',
                             filter=django_models.Q(hobbies__in=user_hobbies)
                         )
-                    ).order_by('-affinity_score', '-scheduled_date')
+                    ).order_by('-affinity_score', 'scheduled_date')
             except UserProfile.DoesNotExist:
                 pass
 
