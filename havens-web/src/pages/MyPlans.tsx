@@ -1,160 +1,300 @@
-import React, { useState } from 'react'
-import { useQuery } from '@apollo/client'
+import React, { useState, useMemo } from 'react'
+import { useQuery, useMutation } from '@apollo/client'
 import { useNavigate } from 'react-router-dom'
 import { SectionHeading } from '../components/SectionHeading'
-import { Avatar } from '../components/Avatar'
-import { MY_RSVPS, GET_ALL_EVENTS } from '../graphql/operations'
+import { ScheduledEventCard, ScheduledEvent } from '../components/ScheduledEventCard'
+import { MY_RSVPS, GET_ALL_EVENTS, SWIPE_EVENT } from '../graphql/operations'
+import { useAuth } from '../context/AuthContext'
 
 export const MyPlansView: React.FC = () => {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming')
 
-  const { data: rsvpData, loading: rsvpLoading, error: rsvpError, refetch: refetchRsvps } = useQuery(MY_RSVPS, {
+  const now = useMemo(() => new Date(), [])
+  const todayMidnight = useMemo(() => {
+    const t = new Date(now)
+    t.setHours(0, 0, 0, 0)
+    return t
+  }, [now])
+
+  const {
+    data: rsvpData,
+    loading: rsvpLoading,
+    error: rsvpError,
+    refetch: refetchRsvps,
+  } = useQuery(MY_RSVPS, {
     fetchPolicy: 'cache-and-network',
   })
 
-  const { data: eventsData, loading: eventsLoading } = useQuery(GET_ALL_EVENTS, {
+  const {
+    data: eventsData,
+    loading: eventsLoading,
+    refetch: refetchEvents,
+  } = useQuery(GET_ALL_EVENTS, {
     fetchPolicy: 'cache-and-network',
   })
 
-  const rsvps = rsvpData?.myRsvps || []
-  const allEvents = eventsData?.allEvents || []
+  const [swipeEventMutation] = useMutation(SWIPE_EVENT, {
+    onCompleted: () => {
+      refetchRsvps()
+      refetchEvents()
+    },
+  })
+
+  const handleRsvpChange = async (eventId: number, response: 'going' | 'maybe' | 'pass') => {
+    try {
+      await swipeEventMutation({
+        variables: {
+          eventId,
+          response,
+        },
+      })
+    } catch (err) {
+      console.error('[MyPlans RSVP Mutation Error]', err)
+    }
+  }
+
+  const rawRsvps = rsvpData?.myRsvps || []
+  const rawAllEvents = eventsData?.allEvents || []
 
   // Adapt GraphQL backend RSVPs and events into unified MyPlans shape
-  const plans = rsvps.map((r: any, idx: number) => ({
-    id: parseInt(r.event?.id || idx + 1, 10),
-    title: r.event?.title || 'Community Gathering',
-    date: 'Fri Jul 24',
-    time: '6:00 PM',
-    location: r.event?.locationName || 'Vancouver, BC',
-    role: r.response === 'going' ? 'attending' : 'hosting',
-    status: activeTab,
-    attendees: [{ name: r.event?.creator?.username || 'Host', color: '#2D5A3D' }],
-    confirmed: 4,
-    pending: 1,
-  }))
+  const unifiedPlans: ScheduledEvent[] = useMemo(() => {
+    const planMap = new Map<string, ScheduledEvent>()
 
+    // 1. Add user's explicit RSVPs
+    rawRsvps.forEach((r: any) => {
+      if (r.event && r.event.id) {
+        const idStr = String(r.event.id)
+        planMap.set(idStr, {
+          id: r.event.id,
+          title: r.event.title || 'Community Gathering',
+          description: r.event.description,
+          locationName: r.event.locationName,
+          scheduledDate: r.event.scheduledDate || r.event.createdAt || now.toISOString(),
+          createdAt: r.event.createdAt,
+          imageUrl: r.event.imageUrl,
+          pointsReward: r.event.pointsReward,
+          visibility: r.event.visibility,
+          trustScore: r.event.trustScore,
+          creator: r.event.creator,
+          hobbies: r.event.hobbies,
+          response: r.response,
+          role:
+            r.event.creator?.username?.toLowerCase() === user?.username?.toLowerCase()
+              ? 'hosting'
+              : 'attending',
+        })
+      }
+    })
+
+    // 2. Add plans hosted by the user
+    rawAllEvents.forEach((ev: any) => {
+      const isHost = ev.creator?.username?.toLowerCase() === user?.username?.toLowerCase()
+      if (isHost && !planMap.has(String(ev.id))) {
+        planMap.set(String(ev.id), {
+          id: ev.id,
+          title: ev.title || 'Hosted Plan',
+          description: ev.description,
+          locationName: ev.locationName,
+          scheduledDate: ev.scheduledDate || ev.createdAt || now.toISOString(),
+          createdAt: ev.createdAt,
+          imageUrl: ev.imageUrl,
+          pointsReward: ev.pointsReward,
+          visibility: ev.visibility,
+          trustScore: ev.trustScore,
+          creator: ev.creator,
+          hobbies: ev.hobbies,
+          role: 'hosting',
+          response: 'going',
+        })
+      }
+    })
+
+    return Array.from(planMap.values())
+  }, [rawRsvps, rawAllEvents, user, now])
+
+  // Strict dynamic filtering for upcoming vs past plans
+  const { upcomingPlans, pastPlans } = useMemo(() => {
+    const upcoming: ScheduledEvent[] = []
+    const past: ScheduledEvent[] = []
+
+    unifiedPlans.forEach((plan) => {
+      const pDate = plan.scheduledDate ? new Date(plan.scheduledDate) : new Date(now)
+      const pTime = isNaN(pDate.getTime()) ? now.getTime() : pDate.getTime()
+
+      if (pTime >= todayMidnight.getTime()) {
+        upcoming.push(plan)
+      } else {
+        past.push(plan)
+      }
+    })
+
+    // Sort upcoming ascending (soonest first)
+    upcoming.sort((a, b) => {
+      const dateA = new Date(a.scheduledDate || 0).getTime()
+      const dateB = new Date(b.scheduledDate || 0).getTime()
+      return dateA - dateB
+    })
+
+    // Sort past descending (most recent past first)
+    past.sort((a, b) => {
+      const dateA = new Date(a.scheduledDate || 0).getTime()
+      const dateB = new Date(b.scheduledDate || 0).getTime()
+      return dateB - dateA
+    })
+
+    return { upcomingPlans: upcoming, pastPlans: past }
+  }, [unifiedPlans, todayMidnight, now])
+
+  const displayedPlans = activeTab === 'upcoming' ? upcomingPlans : pastPlans
   const isLoading = rsvpLoading || eventsLoading
 
   return (
-    <div className="max-w-[1400px] mx-auto px-6 py-8">
-      <div className="flex items-end justify-between mb-8">
+    <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-8 antialiased">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
         <div>
           <SectionHeading>My Plans</SectionHeading>
-          <p className="text-sm text-muted mt-1">Plans you're hosting or attending</p>
+          <p className="text-sm text-muted mt-1">
+            Real-time schedule of plans you are hosting or attending
+          </p>
         </div>
-        <button
-          onClick={() => navigate('/post-a-plan')}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#2D5A3D] hover:bg-[#3d7a55] text-white text-sm font-medium transition-colors shadow-xs"
-        >
-          <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none">
-            <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
-          Post a plan
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => navigate('/calendar')}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-border text-xs font-semibold text-charcoal hover:bg-sand transition-colors cursor-pointer"
+          >
+            <span>📅</span>
+            <span>Calendar View</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/post-a-plan')}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white text-xs font-semibold transition-colors shadow-xs cursor-pointer"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none">
+              <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+            Post a plan
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 p-1 bg-sand rounded-xl w-fit mb-8">
-        {(['upcoming', 'past'] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-5 py-2 rounded-lg text-sm font-medium transition-all duration-150 capitalize ${
-              activeTab === tab ? 'bg-white text-charcoal shadow-sm' : 'text-muted hover:text-charcoal'
+      <div className="flex items-center gap-1 p-1 bg-sand rounded-xl w-fit mb-8 shadow-2xs border border-border/60">
+        <button
+          type="button"
+          onClick={() => setActiveTab('upcoming')}
+          className={`px-5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-2 ${
+            activeTab === 'upcoming'
+              ? 'bg-white text-charcoal shadow-xs'
+              : 'text-muted hover:text-charcoal'
+          }`}
+        >
+          <span>Upcoming</span>
+          <span
+            className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+              activeTab === 'upcoming'
+                ? 'bg-[#eaf3ed] text-[#2D5A3D]'
+                : 'bg-sand text-muted'
             }`}
           >
-            {tab}
-          </button>
-        ))}
+            {upcomingPlans.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('past')}
+          className={`px-5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-2 ${
+            activeTab === 'past'
+              ? 'bg-white text-charcoal shadow-xs'
+              : 'text-muted hover:text-charcoal'
+          }`}
+        >
+          <span>Past Plans</span>
+          <span
+            className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+              activeTab === 'past'
+                ? 'bg-[#fdf0eb] text-[#C47B5A]'
+                : 'bg-sand text-muted'
+            }`}
+          >
+            {pastPlans.length}
+          </span>
+        </button>
       </div>
 
       {/* Loading State */}
       {isLoading && (
-        <div className="text-center py-20 text-muted font-normal animate-pulse text-sm font-serif">
-          Loading your plans from havens...
+        <div className="text-center py-20 text-muted font-serif animate-pulse text-sm">
+          Loading your real-time plans from havens...
         </div>
       )}
 
       {/* Error State */}
       {rsvpError && !isLoading && (
-        <div className="p-4 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-sm mb-6 flex justify-between items-center">
+        <div className="p-4 bg-rose-50 border border-rose-200 text-rose-700 rounded-2xl text-xs mb-6 flex justify-between items-center">
           <span>Failed to load RSVPs: {rsvpError.message}</span>
-          <button onClick={() => refetchRsvps()} className="text-xs font-semibold underline">
+          <button
+            onClick={() => {
+              refetchRsvps()
+              refetchEvents()
+            }}
+            className="text-xs font-semibold underline cursor-pointer"
+          >
             Retry
           </button>
         </div>
       )}
 
       {/* Plans list */}
-      {!isLoading && (
-        <div className="flex flex-col gap-3">
-          {plans.map((plan: any) => (
-            <div
-              key={plan.id}
-              className="p-5 rounded-xl border border-border bg-white hover:shadow-sm transition-shadow duration-150 cursor-pointer"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-start gap-4 flex-1 min-w-0">
-                  <div className="shrink-0 w-14 flex flex-col items-center bg-cream rounded-xl border border-border py-2">
-                    <span className="text-[10px] font-medium text-muted uppercase tracking-wider">
-                      {plan.date.split(' ')[1]}
-                    </span>
-                    <span className="text-2xl font-semibold text-charcoal leading-tight font-serif">
-                      {plan.date.split(' ')[2]}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-base font-semibold text-charcoal font-serif">
-                        {plan.title}
-                      </h3>
-                      <span
-                        className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
-                          plan.role === 'hosting'
-                            ? 'bg-[#eaf3ed] text-[#2D5A3D]'
-                            : 'bg-sand text-[#5a5450]'
-                        }`}
-                      >
-                        {plan.role === 'hosting' ? 'Hosting' : 'Attending'}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-4 text-xs text-muted mb-3">
-                      <span>{plan.time}</span>
-                      <span>·</span>
-                      <span>{plan.location}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="flex -space-x-1">
-                        {plan.attendees.map((a: any) => (
-                          <Avatar key={a.name} name={a.name} color={a.color} />
-                        ))}
-                      </div>
-                      <span className="text-xs text-muted">{plan.confirmed} confirmed</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <button className="px-3 py-1.5 rounded-lg border border-border text-xs font-medium text-[#5a5450] hover:border-[#b5cebe] hover:text-charcoal transition-colors">
-                    Share
-                  </button>
-                  <button className="px-3 py-1.5 rounded-lg bg-[#2D5A3D] hover:bg-[#3d7a55] text-white text-xs font-medium transition-colors">
-                    Manage
-                  </button>
-                </div>
-              </div>
-            </div>
+      {!isLoading && displayedPlans.length > 0 && (
+        <div className="flex flex-col gap-4 max-w-4xl">
+          {displayedPlans.map((plan) => (
+            <ScheduledEventCard
+              key={String(plan.id)}
+              event={plan}
+              isPast={activeTab === 'past'}
+              onRsvpChange={handleRsvpChange}
+              currentUsername={user?.username}
+            />
           ))}
         </div>
       )}
 
-      {!isLoading && plans.length === 0 && (
-        <div className="text-center py-20 text-muted">
-          <p className="text-lg mb-1 font-serif">No active plans found</p>
-          <p className="text-sm">Explore Discover or post a plan to get started.</p>
+      {/* Empty State */}
+      {!isLoading && displayedPlans.length === 0 && (
+        <div className="text-center py-16 px-6 max-w-md mx-auto rounded-3xl bg-white border border-border shadow-2xs space-y-4">
+          <div className="w-14 h-14 rounded-full bg-[#eaf3ed] text-[#2D5A3D] flex items-center justify-center text-2xl mx-auto font-bold">
+            🌿
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-charcoal font-serif">
+              {activeTab === 'upcoming'
+                ? 'Your calendar is clear. Go discover some Havens!'
+                : 'No past plans on record'}
+            </h3>
+            <p className="text-xs text-muted mt-1.5 leading-relaxed">
+              {activeTab === 'upcoming'
+                ? 'Join your community by swiping on plans or creating your own event.'
+                : 'Past attended events will be archived here for your memories.'}
+            </p>
+          </div>
+          {activeTab === 'upcoming' && (
+            <button
+              type="button"
+              onClick={() => navigate('/discover')}
+              className="px-6 py-2.5 rounded-xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+            >
+              🔍 Explore Havens Feed
+            </button>
+          )}
         </div>
       )}
     </div>
   )
 }
+
+export default MyPlansView

@@ -165,6 +165,24 @@ export const MY_FRIEND_REQUESTS = gql`
 `;
 
 /**
+ * Query to fetch accepted friends (mutual connections).
+ */
+export const MY_FRIENDS = gql`
+  query MyFriends {
+    myFriends {
+      id
+      username
+      photoUrl
+      neighbourhood
+      hobbies {
+        id
+        name
+      }
+    }
+  }
+`;
+
+/**
  * Mutation to respond to a friend request ('accepted' or 'rejected').
  */
 export const RESPOND_FRIEND_REQUEST = gql`
@@ -292,6 +310,8 @@ export const GET_ALL_EVENTS = gql`
       trustScore
       imageUrl
       locationName
+      scheduledDate
+      createdAt
       creator {
         id
         username
@@ -346,6 +366,7 @@ export const CREATE_EVENT = gql`
         visibility
         imageUrl
         locationName
+        scheduledDate
         trustScore
         creator {
           id
@@ -364,17 +385,28 @@ export const MY_RSVPS = gql`
     myRsvps {
       id
       response
+      createdAt
       event {
         id
         title
         description
         latitude
         longitude
+        pointsReward
         visibility
+        trustScore
+        imageUrl
         locationName
+        scheduledDate
+        createdAt
         creator {
           id
           username
+          photoUrl
+        }
+        hobbies {
+          id
+          name
         }
       }
     }
