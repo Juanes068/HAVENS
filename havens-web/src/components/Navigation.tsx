@@ -67,9 +67,37 @@ export const Navigation: React.FC = () => {
           </nav>
         </div>
 
-        {/* Right Section: Persistent Profile Avatar + Sign Out + Mobile Hamburger Button */}
+        {/* Right Section: Chat Icon + Profile Avatar + Sign Out + Mobile Hamburger */}
         <div className="flex items-center gap-2.5 shrink-0">
           
+          {/* CHAT ICON: Navigate to /chat — Always visible on desktop & mobile */}
+          <NavLink
+            to="/chat"
+            onClick={handleNavClick}
+            title="Messages — End-to-end encrypted"
+            className={({ isActive }) =>
+              `relative p-2 rounded-xl transition-all duration-150 cursor-pointer ${
+                isActive
+                  ? 'bg-[#2D5A3D] text-white shadow-xs'
+                  : 'text-[#5a5450] hover:text-[#2D5A3D] hover:bg-[#E2DBD0]/60'
+              }`
+            }
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={1.8}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+              />
+            </svg>
+          </NavLink>
+
           {/* PROFILE AVATAR: ALWAYS VISIBLE ON MOBILE & DESKTOP */}
           {user && (
             <div
@@ -130,6 +158,24 @@ export const Navigation: React.FC = () => {
               {item.label}
             </NavLink>
           ))}
+
+          {/* Chat Link in Mobile Menu */}
+          <NavLink
+            to="/chat"
+            onClick={handleNavClick}
+            className={({ isActive }) =>
+              `block px-4 py-3 rounded-xl text-sm font-semibold transition-colors flex items-center gap-2 ${
+                isActive
+                  ? 'bg-[#2D5A3D] text-white'
+                  : 'text-[#5a5450] hover:bg-[#E2DBD0] hover:text-charcoal'
+              }`
+            }
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+            Messages
+          </NavLink>
 
           <div className="pt-3 border-t border-border/60">
             <button

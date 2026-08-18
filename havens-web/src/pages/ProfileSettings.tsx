@@ -51,6 +51,16 @@ export const ProfileSettingsView: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [inviteCode, setInviteCode] = useState('');
+  const [timeLeft, setTimeLeft] = useState<number>(120);
+  const [isCodeFlashing, setIsCodeFlashing] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
+
+  // Formats seconds into MM:SS format (e.g. 01:59)
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
 
   // UI Feedback States
   const [successMsg, setSuccessMsg] = useState('');
@@ -78,7 +88,8 @@ export const ProfileSettingsView: React.FC = () => {
   const [generateInviteMutation, { loading: isGeneratingInvite }] = useMutation(GENERATE_INVITE);
 
   /**
-   * Generates a fresh invitation code from the backend.
+   * Generates a fresh dynamic invitation code from the backend.
+   * Updates state, resets timer to 120s, and triggers a subtle visual pulse animation.
    */
   const handleGenerateInvite = useCallback(async (isManualClick: boolean = false) => {
     if (isManualClick) {
@@ -90,8 +101,14 @@ export const ProfileSettingsView: React.FC = () => {
       if (res?.data?.generateInvite?.success && res?.data?.generateInvite?.invitation?.code) {
         const newCode = res.data.generateInvite.invitation.code;
         setInviteCode(newCode);
+        setTimeLeft(120);
+
+        // Trigger subtle visual flash animation
+        setIsCodeFlashing(true);
+        setTimeout(() => setIsCodeFlashing(false), 1500);
+
         if (isManualClick) {
-          setSuccessMsg(`✓ Generated new invitation code: ${newCode}`);
+          setSuccessMsg(`✓ Generated new dynamic invitation code: ${newCode}`);
         }
         await refetch();
       } else if (isManualClick) {
@@ -101,31 +118,51 @@ export const ProfileSettingsView: React.FC = () => {
       if (isManualClick) {
         setErrorMsg(err.message || 'Error generating invitation code.');
       } else {
-        console.warn('[ProfileSettings] Dynamic invite refresh error:', err);
+        console.warn('[ProfileSettings] Dynamic invite auto-refresh notice:', err);
       }
     }
   }, [generateInviteMutation, refetch]);
 
   /**
-   * Dynamic Invitation Code:
-   * 1. Generates a new code immediately upon mounting (every time user enters the Profile page).
-   * 2. Automatically refreshes the code every 2 minutes (120,000 milliseconds).
-   * 3. Cleans up the interval on unmount to prevent memory leaks.
+   * Visual Countdown Timer & GraphQL Auto-Refresh Synchronization:
+   * 1. Fetches code immediately upon component mount.
+   * 2. Decrements timeLeft by 1 every second (1,000 ms).
+   * 3. When timeLeft reaches 0, triggers handleGenerateInvite() and resets to 120 seconds.
+   * 4. Cleans up clearInterval on unmount to prevent memory leaks.
    */
   useEffect(() => {
-    // 1. Immediate trigger on component mount
+    // 1. Initial trigger on component mount
     handleGenerateInvite(false);
 
-    // 2. 2-minute recurring interval
+    // 2. 1-second countdown interval
     const intervalId = setInterval(() => {
-      handleGenerateInvite(false);
-    }, 120000);
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          handleGenerateInvite(false);
+          return 120;
+        }
+        return prev - 1;
+      });
+    }, 1000);
 
     // 3. Clear interval on unmount
     return () => {
       clearInterval(intervalId);
     };
   }, [handleGenerateInvite]);
+
+  const handleCopyCode = async () => {
+    const codeToCopy = inviteCode || profile?.inviteCode;
+    if (codeToCopy) {
+      try {
+        await navigator.clipboard.writeText(codeToCopy);
+        setCopySuccess(true);
+        setTimeout(() => setCopySuccess(false), 2000);
+      } catch (err) {
+        console.warn('Failed to copy code to clipboard', err);
+      }
+    }
+  };
 
   // General Info & Security Form Submit Handler
   const handleUpdateSecurity = async (e: React.FormEvent) => {
@@ -274,17 +311,45 @@ export const ProfileSettingsView: React.FC = () => {
                   📍 {profile.neighbourhood || 'No location set'}
                 </span>
                 <span className="text-[#8a8278]">•</span>
-                <div className="inline-flex items-center gap-1.5 bg-[#F4EEE2] px-2.5 py-1 rounded-lg border border-[#E2DBD0]">
-                  <span className="text-xs font-medium text-[#8a8278]">Invite Code:</span>
-                  <span className="text-xs font-mono font-bold text-[#C47B5A]">
+                <div
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl border transition-all duration-500 ${
+                    isCodeFlashing
+                      ? 'bg-[#eaf3ed] border-[#7aaa8a] ring-2 ring-[#2D5A3D]/40 scale-105'
+                      : 'bg-[#F4EEE2] border-[#E2DBD0]'
+                  }`}
+                  title="Dynamic Invite Code (Rotates automatically every 2 minutes for security)"
+                >
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Live dynamic code" />
+                  <span className="text-xs font-medium text-[#8a8278]">Invite:</span>
+                  <span className="text-xs font-mono font-bold text-[#C47B5A] tracking-wider">
                     {inviteCode || profile.inviteCode || 'N/A'}
                   </span>
+
+                  {/* Visual Countdown Timer */}
+                  <span
+                    className="text-[11px] font-mono font-medium text-[#7a7268] bg-[#E2DBD0]/60 px-1.5 py-0.5 rounded-md flex items-center gap-1"
+                    title={`Code rotates automatically in ${formatTime(timeLeft)}`}
+                  >
+                    ⏱️ {formatTime(timeLeft)}
+                  </span>
+
+                  {/* Copy Button */}
+                  <button
+                    type="button"
+                    onClick={handleCopyCode}
+                    title="Copy invite code to clipboard"
+                    className="p-1 rounded-md hover:bg-[#E2DBD0] text-xs transition-colors cursor-pointer text-[#5a5450]"
+                  >
+                    {copySuccess ? '✓' : '📋'}
+                  </button>
+
+                  {/* Manual Refresh Button */}
                   <button
                     type="button"
                     disabled={isGeneratingInvite}
                     onClick={() => handleGenerateInvite(true)}
                     title="Generate new invitation code (auto-refreshes every 2 min)"
-                    className="ml-1 p-1 rounded-md hover:bg-[#E2DBD0] text-xs transition-colors cursor-pointer disabled:opacity-50"
+                    className="p-1 rounded-md hover:bg-[#E2DBD0] text-xs transition-colors cursor-pointer disabled:opacity-50 text-[#5a5450]"
                   >
                     {isGeneratingInvite ? '⏳' : '🔄'}
                   </button>

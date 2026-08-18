@@ -7,7 +7,7 @@ from django.db.models import Count
 from django.db.models.functions import TruncDay
 from django.utils import timezone
 from .models import (
-    Community, UserProfile, Event, Ticket, Participation,
+    Community, CommunityMembership, UserProfile, Event, Ticket, Participation,
     Hobby, HobbyCategory, EventRSVP, InvitationCode,
     Friendship, Match, Message,
 )
@@ -93,8 +93,20 @@ admin_site.register(Group, GroupAdmin)
 # Register core application models
 @admin.register(Community, site=admin_site)
 class CommunityAdmin(admin.ModelAdmin):
-    list_display = ('name', 'subdomain', 'created_at')
+    list_display = ('id', 'name', 'subdomain', 'member_count', 'created_at')
     search_fields = ('name', 'subdomain')
+    list_filter = ('created_at',)
+
+    @admin.display(description='Members')
+    def member_count(self, obj):
+        return obj.memberships.count()
+
+
+@admin.register(CommunityMembership, site=admin_site)
+class CommunityMembershipAdmin(admin.ModelAdmin):
+    list_display = ('user', 'community', 'joined_at')
+    search_fields = ('user__username', 'community__name')
+    list_filter = ('joined_at', 'community')
 
 
 @admin.register(UserProfile, site=admin_site)
@@ -154,9 +166,29 @@ class FriendshipAdmin(admin.ModelAdmin):
 
 @admin.register(Match, site=admin_site)
 class MatchAdmin(admin.ModelAdmin):
-    list_display = ('user1', 'user2', 'created_at')
+    list_display = ('id', 'user1', 'user2', 'message_count', 'created_at')
+    search_fields = ('user1__username', 'user2__username')
+    list_filter = ('created_at',)
+    readonly_fields = ('created_at',)
+
+    @admin.display(description='Messages')
+    def message_count(self, obj):
+        return obj.messages.count()
 
 
 @admin.register(Message, site=admin_site)
 class MessageAdmin(admin.ModelAdmin):
-    list_display = ('sender', 'match', 'content', 'created_at', 'is_read')
+    list_display = ('id', 'sender', 'match', 'content_preview', 'created_at', 'is_read')
+    search_fields = ('sender__username', 'match__user1__username', 'match__user2__username')
+    list_filter = ('is_read', 'created_at')
+    readonly_fields = ('content_preview', 'match', 'sender', 'created_at', 'is_read')
+    exclude = ('content',)
+
+    @admin.display(description='Content Preview')
+    def content_preview(self, obj):
+        """Shows truncated preview or [Encrypted] tag to protect message privacy."""
+        if not obj.content:
+            return '[Empty]'
+        if obj.content.startswith('U2F'):
+            return '[Encrypted]'
+        return obj.content[:30] + ('...' if len(obj.content) > 30 else '')

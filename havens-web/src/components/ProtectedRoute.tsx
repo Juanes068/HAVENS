@@ -9,7 +9,8 @@ import { secureStorage } from '../services/secureStore';
  * ProtectedRoute component ensuring that:
  * 1. Only authenticated users with a valid JWT token can access private routes (unauthenticated users -> /auth).
  * 2. Authenticated users MUST have completed onboarding (hobbies array populated) before accessing main app (/discover, /social, etc.).
- * 3. Incomplete onboarding automatically force-redirects to `/onboarding` and isolates the wizard without main navigation.
+ * 3. Incomplete onboarding automatically force-redirects to `/onboarding`.
+ * 4. Maintains a stable DOM tree hierarchy so child routes (like OnboardingView) are never unmounted during session updates.
  */
 export const ProtectedRoute: React.FC = () => {
   const { token, user, isLoading, isOnboarded } = useAuth();
@@ -43,26 +44,15 @@ export const ProtectedRoute: React.FC = () => {
   const isOnboardingRoute = location.pathname === '/onboarding';
 
   // 3. Authenticated but Incomplete Onboarding: Lock user to /onboarding
-  if (!isOnboarded) {
-    if (!isOnboardingRoute) {
-      console.warn('[ProtectedRoute] User has not completed onboarding. Locking access to /onboarding.');
-      return <Navigate to="/onboarding" replace />;
-    }
-
-    // Isolate Onboarding Wizard without top navigation to prevent bypassing
-    return (
-      <div className="min-h-screen bg-[#F4EEE2] text-[#2C2C2C] font-sans antialiased overflow-x-hidden flex flex-col">
-        <main className="flex-1 w-full max-w-[100vw] overflow-x-hidden">
-          <Outlet />
-        </main>
-      </div>
-    );
+  if (!isOnboarded && !isOnboardingRoute) {
+    console.warn('[ProtectedRoute] User has not completed onboarding. Locking access to /onboarding.');
+    return <Navigate to="/onboarding" replace />;
   }
 
-  // 4. Authenticated & Fully Onboarded: Full access with Navigation
+  // 4. Stable DOM structure: Keep navigation conditional without changing tree layout
   return (
     <div className="min-h-screen bg-[#F4EEE2] text-[#2C2C2C] font-sans antialiased overflow-x-hidden flex flex-col">
-      <Navigation />
+      {isOnboarded && !isOnboardingRoute && <Navigation />}
       <main className="flex-1 w-full max-w-[100vw] overflow-x-hidden">
         <Outlet />
       </main>

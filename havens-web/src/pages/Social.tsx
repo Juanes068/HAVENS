@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { SectionHeading } from '../components/SectionHeading';
 import {
@@ -10,11 +11,9 @@ import {
   RESPOND_FRIEND_REQUEST,
   GET_ALL_COMMUNITIES,
   JOIN_COMMUNITY,
-  MESSAGES_BY_MATCH,
-  SEND_MESSAGE,
 } from '../graphql/operations';
 
-type TabType = 'circles_matches' | 'requests' | 'chats';
+type TabType = 'circles_matches' | 'requests';
 
 interface CircleMatch {
   id: number;
@@ -73,10 +72,9 @@ const RECOMMENDED_CIRCLE_MATCHES: CircleMatch[] = [
 
 export const SocialView: React.FC = () => {
   const { user: currentUser } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabType>('circles_matches');
-  const [selectedMatchForChat, setSelectedMatchForChat] = useState<any | null>(null);
   const [exploringCircle, setExploringCircle] = useState<CircleMatch | null>(null);
-  const [messageInput, setMessageInput] = useState<string>('');
   const [actionStatus, setActionStatus] = useState<string>('');
   const [joinedCircleIds, setJoinedCircleIds] = useState<number[]>([]);
   const [matchedUserIds, setMatchedUserIds] = useState<number[]>([]);
@@ -93,13 +91,6 @@ export const SocialView: React.FC = () => {
   });
   const { data: communitiesData } = useQuery(GET_ALL_COMMUNITIES, {
     fetchPolicy: 'cache-and-network',
-  });
-
-  // Chat Messages Query
-  const { data: chatData, refetch: refetchChat } = useQuery(MESSAGES_BY_MATCH, {
-    variables: { matchId: selectedMatchForChat ? parseInt(selectedMatchForChat.id, 10) : 0 },
-    skip: !selectedMatchForChat,
-    fetchPolicy: 'network-only',
   });
 
   // CreateMatch Mutation
@@ -128,13 +119,6 @@ export const SocialView: React.FC = () => {
   const [joinCommunity] = useMutation(JOIN_COMMUNITY, {
     onCompleted: (res) => {
       setActionStatus(res?.joinCommunity?.message || 'Joined circle!');
-    },
-  });
-
-  const [sendMessageMutation, { loading: isSendingMsg }] = useMutation(SEND_MESSAGE, {
-    onCompleted: () => {
-      setMessageInput('');
-      refetchChat();
     },
   });
 
@@ -171,18 +155,6 @@ export const SocialView: React.FC = () => {
     setJoinedCircleIds((prev) => [...prev, circleId]);
     joinCommunity({
       variables: { communityId: circleId },
-    });
-  };
-
-  const handleSendMessage = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!messageInput.trim() || !selectedMatchForChat) return;
-
-    sendMessageMutation({
-      variables: {
-        matchId: parseInt(selectedMatchForChat.id, 10),
-        content: messageInput.trim(),
-      },
     });
   };
 
@@ -225,17 +197,6 @@ export const SocialView: React.FC = () => {
                 {pendingRequests.length}
               </span>
             )}
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('chats')}
-            className={`flex-1 md:flex-initial px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-              activeTab === 'chats'
-                ? 'bg-white text-[#2D5A3D] shadow-xs'
-                : 'text-[#8a8278] hover:text-[#2C2C2C]'
-            }`}
-          >
-            Chats ({activeMatches.length})
           </button>
         </div>
       </div>
@@ -439,10 +400,7 @@ export const SocialView: React.FC = () => {
 
                         <button
                           type="button"
-                          onClick={() => {
-                            setSelectedMatchForChat({ ...m, partner });
-                            setActiveTab('chats');
-                          }}
+                          onClick={() => navigate('/chat')}
                           className="px-3 py-1.5 rounded-xl bg-[#eaf3ed] text-[#2D5A3D] hover:bg-[#2D5A3D] hover:text-white text-xs font-semibold transition-all cursor-pointer"
                         >
                           💬 Chat
@@ -513,128 +471,6 @@ export const SocialView: React.FC = () => {
         </div>
       )}
 
-      {/* ───────────────────────────────────────────────────────────── */}
-      {/* TAB 3: CHATS & CONVERSATIONS */}
-      {/* ───────────────────────────────────────────────────────────── */}
-      {activeTab === 'chats' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-[500px]">
-          {/* Conversations Thread Sidebar */}
-          <div className="bg-white border border-[#E2DBD0] rounded-2xl p-4 space-y-3">
-            <h3 className="text-sm font-semibold text-[#2D5A3D] px-2">Active Conversations</h3>
-
-            {activeMatches.length === 0 ? (
-              <div className="text-xs text-[#8a8278] px-2 py-4">No active conversations. Connect with members to unlock chat threads!</div>
-            ) : (
-              <div className="space-y-2">
-                {activeMatches.map((m: any) => {
-                  const partner = m.user1?.id === currentUser?.id ? m.user2 : m.user1;
-                  const isSelected = selectedMatchForChat?.id === m.id;
-                  return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => setSelectedMatchForChat({ ...m, partner })}
-                      className={`w-full p-3 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
-                        isSelected
-                          ? 'bg-[#F4EEE2] border-[#2D5A3D]'
-                          : 'bg-white border-[#E2DBD0]/60 hover:bg-[#F4EEE2]/50'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-[#2D5A3D] text-white flex items-center justify-center font-bold text-xs">
-                          {partner?.username ? partner.username.charAt(0).toUpperCase() : 'U'}
-                        </div>
-                        <div>
-                          <p className="text-xs font-semibold text-charcoal">@{partner?.username}</p>
-                          <p className="text-[10px] text-[#8a8278]">Tap to view messages</p>
-                        </div>
-                      </div>
-                      <span className="w-2 h-2 rounded-full bg-[#2D5A3D]" />
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Individual Chat Detail Thread */}
-          <div className="lg:col-span-2 bg-white border border-[#E2DBD0] rounded-2xl flex flex-col justify-between overflow-hidden">
-            {selectedMatchForChat ? (
-              <>
-                {/* Chat Header */}
-                <div className="p-4 border-b border-[#E2DBD0] bg-[#F0EAE0]/50 flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-[#2D5A3D] text-white flex items-center justify-center font-bold text-xs">
-                    {selectedMatchForChat.partner?.username
-                      ? selectedMatchForChat.partner.username.charAt(0).toUpperCase()
-                      : 'U'}
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-semibold text-charcoal">
-                      @{selectedMatchForChat.partner?.username}
-                    </h4>
-                    <p className="text-[10px] text-[#2D5A3D] font-medium">● Connected Member</p>
-                  </div>
-                </div>
-
-                {/* Messages Box */}
-                <div className="p-4 flex-1 overflow-y-auto space-y-3 max-h-[360px] min-h-[250px] bg-[#F4EEE2]/20">
-                  {chatData?.messagesByMatch && chatData.messagesByMatch.length > 0 ? (
-                    chatData.messagesByMatch.map((msg: any) => {
-                      const isMe = msg.sender?.id === currentUser?.id;
-                      return (
-                        <div
-                          key={msg.id}
-                          className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
-                        >
-                          <div
-                            className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-xs ${
-                              isMe
-                                ? 'bg-[#2D5A3D] text-white rounded-br-none'
-                                : 'bg-white border border-[#E2DBD0] text-[#2C2C2C] rounded-bl-none shadow-xs'
-                            }`}
-                          >
-                            {msg.content}
-                          </div>
-                          <span className="text-[9px] text-[#8a8278] mt-1 px-1">
-                            {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div className="text-center text-xs text-[#8a8278] py-10 font-normal">
-                      No messages yet in this thread. Say hi to @{selectedMatchForChat.partner?.username}!
-                    </div>
-                  )}
-                </div>
-
-                {/* Send Input Bar */}
-                <form onSubmit={handleSendMessage} className="p-3 border-t border-[#E2DBD0] bg-white flex gap-2">
-                  <input
-                    type="text"
-                    value={messageInput}
-                    onChange={(e) => setMessageInput(e.target.value)}
-                    placeholder={`Message @${selectedMatchForChat.partner?.username}...`}
-                    className="flex-1 px-4 py-2 rounded-xl bg-[#F4EEE2] border border-[#E2DBD0] text-xs text-[#2C2C2C] focus:outline-none focus:border-[#2D5A3D]"
-                  />
-                  <button
-                    type="submit"
-                    disabled={isSendingMsg || !messageInput.trim()}
-                    className="px-4 py-2 rounded-xl bg-[#2D5A3D] text-white text-xs font-semibold hover:bg-[#3d7a55] transition-colors disabled:opacity-50 cursor-pointer"
-                  >
-                    Send
-                  </button>
-                </form>
-              </>
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full p-10 text-center text-[#8a8278]">
-                <span className="text-3xl mb-2">💬</span>
-                <p className="text-sm font-medium">Select a conversation thread on the left to start chatting</p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* ───────────────────────────────────────────────────────────── */}
       {/* CIRCLE EXPLORE MODAL */}

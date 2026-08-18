@@ -10,6 +10,7 @@ import { CalendarView } from './pages/Calendar'
 import { SavedView } from './pages/Saved'
 import { PostAPlanView } from './pages/PostAPlan'
 import { ProfileSettingsView } from './pages/ProfileSettings'
+import { ChatHubView } from './pages/ChatHub'
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
           <Route path="/onboarding" element={<OnboardingView />} />
           <Route path="/discover" element={<DiscoverView />} />
           <Route path="/social" element={<SocialView />} />
+          <Route path="/chat" element={<ChatHubView />} />
           <Route path="/my-plans" element={<MyPlansView />} />
           <Route path="/calendar" element={<CalendarView />} />
           <Route path="/saved" element={<SavedView />} />

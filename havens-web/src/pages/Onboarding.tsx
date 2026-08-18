@@ -46,10 +46,10 @@ export const OnboardingView: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 4-Step Wizard State:
-  // Step 1: Account Info (only for unauthenticated users)
-  // Step 2: Main Categories (Broad Focus Areas)
-  // Step 3: Specific Sub-hobbies (Fine-grained pills)
-  // Step 4: Profile Photo (Optional)
+  // Step 1: Account Info (only if unauthenticated)
+  // Step 2 (Step A): Main Categories (max 3)
+  // Step 3 (Step B): Sub-categories (max 5 per category)
+  // Step 4: Profile Photo (Optional with Skip)
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(() => (token ? 2 : 1));
 
   // Step 1: Account Creation State
@@ -60,7 +60,7 @@ export const OnboardingView: React.FC = () => {
   const [invitationCode, setInvitationCode] = useState('');
   const [selectedLocation, setSelectedLocation] = useState<LocationData | null>(null);
 
-  // Step 2 & 3: Unified Hobbies Taxonomy State
+  // Step 2 & 3: Hobbies State
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [selectedHobbyIds, setSelectedHobbyIds] = useState<string[]>([]);
 
@@ -70,7 +70,7 @@ export const OnboardingView: React.FC = () => {
   const [isUploadingPhoto, setIsUploadingPhoto] = useState<boolean>(false);
   const [photoSuccessMsg, setPhotoSuccessMsg] = useState<string>('');
 
-  // Status & Feedback Alerts
+  // Status & Alerts
   const [isProcessingStep1, setIsProcessingStep1] = useState(false);
   const [step1StatusText, setStep1StatusText] = useState('');
   const [warningMsg, setWarningMsg] = useState<string>('');
@@ -93,7 +93,7 @@ export const OnboardingView: React.FC = () => {
     [categories, selectedCategoryIds]
   );
 
-  // 1. Sync Wizard Step when token becomes available (avoid repeating Step 1)
+  // 1. Sync Wizard Step when token becomes available (bypass Step 1)
   useEffect(() => {
     if (token && wizardStep === 1) {
       setWizardStep(2);
@@ -184,7 +184,7 @@ export const OnboardingView: React.FC = () => {
   };
 
   // ─────────────────────────────────────────────────────────────
-  // STEP 2: MAIN CATEGORIES SELECTION (MAX 3)
+  // STEP 2 (STEP A): MAIN CATEGORIES SELECTION (MAX 3)
   // ─────────────────────────────────────────────────────────────
   const toggleCategory = (catIdRaw: string | number) => {
     const catId = String(catIdRaw);
@@ -192,7 +192,7 @@ export const OnboardingView: React.FC = () => {
     setErrorMsg('');
 
     if (selectedCategoryIds.includes(catId)) {
-      // Remove category and its associated sub-hobbies
+      // Remove category and prune its sub-hobbies
       const targetCategory = categories.find((c) => String(c.id) === catId);
       const catHobbyIds = targetCategory ? targetCategory.hobbies.map((h) => String(h.id)) : [];
 
@@ -207,20 +207,25 @@ export const OnboardingView: React.FC = () => {
     }
   };
 
-  const handleStep2Next = () => {
+  const handleStep2Next = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
     if (selectedCategoryIds.length === 0) {
-      setErrorMsg('Please select at least 1 main category to personalize your community feed.');
+      setErrorMsg('Please select at least 1 main category to continue.');
       return;
     }
+
     setWarningMsg('');
     setErrorMsg('');
+    // Strictly advance to Step 3 (Sub-categories)
     setWizardStep(3);
   };
 
   // ─────────────────────────────────────────────────────────────
-  // STEP 3: SUBCATEGORY PILLS SELECTION (MAX 5 PER CATEGORY)
+  // STEP 3 (STEP B): SUB-CATEGORIES SELECTION (MAX 5 PER CATEGORY)
   // ─────────────────────────────────────────────────────────────
-  const toggleHobby = (categoryName: string, categoryHobbyIds: string[], hobbyIdRaw: string | number) => {
+  const toggleHobby = (category: HobbyCategory, hobbyIdRaw: string | number) => {
     const hobbyId = String(hobbyIdRaw);
     setWarningMsg('');
     setErrorMsg('');
@@ -228,25 +233,32 @@ export const OnboardingView: React.FC = () => {
     if (selectedHobbyIds.includes(hobbyId)) {
       setSelectedHobbyIds((prev) => prev.filter((id) => id !== hobbyId));
     } else {
-      const currentCategoryHobbiesCount = selectedHobbyIds.filter((id) =>
+      // Count items belonging to this specific parent category
+      const categoryHobbyIds = category.hobbies.map((h) => String(h.id));
+      const countInThisCategory = selectedHobbyIds.filter((id) =>
         categoryHobbyIds.includes(id)
       ).length;
 
-      if (currentCategoryHobbiesCount >= MAX_SUB_HOBBIES_PER_CATEGORY) {
+      if (countInThisCategory >= MAX_SUB_HOBBIES_PER_CATEGORY) {
         setWarningMsg(
-          `You can select a maximum of ${MAX_SUB_HOBBIES_PER_CATEGORY} subcategories for "${categoryName}".`
+          `You can select a maximum of ${MAX_SUB_HOBBIES_PER_CATEGORY} sub-hobbies for "${category.name}".`
         );
         return;
       }
+
       setSelectedHobbyIds((prev) => [...prev, hobbyId]);
     }
   };
 
-  const handleStep3Next = async () => {
+  const handleStep3Next = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
     if (selectedHobbyIds.length === 0) {
-      setErrorMsg('Please select at least 1 specific interest pill to personalize your circles.');
+      setErrorMsg('Please select at least 1 sub-category tag to personalize your circles.');
       return;
     }
+
     setWarningMsg('');
     setErrorMsg('');
 
@@ -257,18 +269,19 @@ export const OnboardingView: React.FC = () => {
       });
 
       if (res?.data?.updateUserHobbies?.success) {
-        await refetchUser();
+        // Strictly advance to Step 4 (Profile Photo)
         setWizardStep(4);
+        refetchUser().catch((err) => console.warn('refetchUser background notice:', err));
       } else {
-        setErrorMsg(res?.data?.updateUserHobbies?.message || 'Failed to save hobbies.');
+        setErrorMsg(res?.data?.updateUserHobbies?.message || 'Failed to save sub-categories.');
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Error saving hobbies.');
+      setErrorMsg(err.message || 'Error saving sub-categories.');
     }
   };
 
   // ─────────────────────────────────────────────────────────────
-  // STEP 4: PROFILE PHOTO UPLOAD (OPTIONAL WITH SKIP)
+  // STEP 4: PROFILE PHOTO UPLOAD (OPTIONAL)
   // ─────────────────────────────────────────────────────────────
   const handleAvatarFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -279,7 +292,10 @@ export const OnboardingView: React.FC = () => {
     }
   };
 
-  const handleStep4UploadAndFinish = async () => {
+  const handleStep4UploadAndFinish = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
     if (!selectedImageFile) {
       navigate('/discover');
       return;
@@ -344,7 +360,9 @@ export const OnboardingView: React.FC = () => {
     }
   };
 
-  const handleSkipPhotoStep = () => {
+  const handleSkipPhotoStep = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     navigate('/discover');
   };
 
@@ -352,7 +370,7 @@ export const OnboardingView: React.FC = () => {
     <div className="min-h-screen bg-[#F4EEE2] text-[#2C2C2C] flex flex-col items-center justify-between p-6 antialiased">
       <div className="max-w-4xl w-full my-auto space-y-8">
         
-        {/* Wizard Progress Bar */}
+        {/* Wizard Progress Header */}
         <div className="text-center">
           <div className="flex items-center justify-center gap-2 mb-3">
             {[1, 2, 3, 4].map((stepNum) => (
@@ -370,29 +388,33 @@ export const OnboardingView: React.FC = () => {
           </div>
 
           <span className="text-xs font-semibold tracking-wider text-[#C47B5A] uppercase">
-            Step {wizardStep} of 4 • Havens Onboarding
+            {token
+              ? `Step ${wizardStep - 1} of 3 • Profile Setup`
+              : `Step ${wizardStep} of 4 • Havens Onboarding`}
           </span>
+
           <h1 className="text-3xl md:text-4xl font-serif font-semibold tracking-tight text-[#2D5A3D] mt-1 lowercase">
             {wizardStep === 1 && 'create your account'}
             {wizardStep === 2 && 'choose main categories'}
-            {wizardStep === 3 && 'select specific interests'}
+            {wizardStep === 3 && 'select sub-categories'}
             {wizardStep === 4 && 'upload profile photo'}
           </h1>
           <p className="text-sm text-[#8a8278] font-normal mt-1.5 max-w-lg mx-auto">
             {wizardStep === 1 && 'Enter your details, 6-character invitation code, and location.'}
-            {wizardStep === 2 && `Pick up to ${MAX_PRIMARY_CATEGORIES} broad focus areas for your profile.`}
-            {wizardStep === 3 && `Select specific subcategory pills for your chosen categories.`}
-            {wizardStep === 4 && 'Add an optional profile picture or skip to start exploring.'}
+            {wizardStep === 2 && `Select up to ${MAX_PRIMARY_CATEGORIES} main categories that interest you.`}
+            {wizardStep === 3 && `Select up to ${MAX_SUB_HOBBIES_PER_CATEGORY} sub-hobbies per category.`}
+            {wizardStep === 4 && 'Add an optional profile picture or skip to enter your dashboard.'}
           </p>
         </div>
 
-        {/* Feedback Alerts */}
+        {/* Global Warning Alert */}
         {warningMsg && (
           <div className="p-3 text-xs bg-amber-50 border border-amber-300 text-amber-900 rounded-xl text-center max-w-lg mx-auto shadow-xs font-medium">
             ⚠️ {warningMsg}
           </div>
         )}
 
+        {/* Global Error Alert */}
         {errorMsg && (
           <div className="p-3 text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-center max-w-lg mx-auto font-medium">
             {errorMsg}
@@ -507,13 +529,15 @@ export const OnboardingView: React.FC = () => {
         )}
 
         {/* ───────────────────────────────────────────────────────────── */}
-        {/* STEP 2: CHOOSE MAIN CATEGORIES (Cards Grid) */}
+        {/* STEP 2 (STEP A): MAIN CATEGORIES SELECTION ONLY */}
         {/* ───────────────────────────────────────────────────────────── */}
         {wizardStep === 2 && (
           <div>
             <div className="flex justify-between items-center mb-4 text-xs text-[#8a8278] font-medium px-1">
-              <span>Primary Categories</span>
-              <span>{selectedCategoryIds.length} of {MAX_PRIMARY_CATEGORIES} selected</span>
+              <span className="font-semibold uppercase tracking-wider text-charcoal">
+                Main Categories ({selectedCategoryIds.length}/{MAX_PRIMARY_CATEGORIES} selected)
+              </span>
+              <span>Select up to {MAX_PRIMARY_CATEGORIES}</span>
             </div>
 
             {loadingTaxonomy ? (
@@ -535,10 +559,10 @@ export const OnboardingView: React.FC = () => {
                     <div
                       key={catIdStr}
                       onClick={() => toggleCategory(catIdStr)}
-                      className={`relative rounded-3xl p-5 cursor-pointer transition-all duration-300 transform flex flex-col justify-between h-36 overflow-hidden shadow-sm hover:scale-[1.03] active:scale-95 ${
+                      className={`relative rounded-3xl p-5 cursor-pointer transition-all duration-200 transform flex flex-col justify-between h-36 overflow-hidden shadow-xs hover:scale-[1.02] active:scale-95 ${
                         isSelected
                           ? 'bg-gradient-to-br from-[#2D5A3D] to-slate-900 text-white ring-4 ring-[#2D5A3D]/40 shadow-lg'
-                          : `bg-gradient-to-br ${gradientClass} text-white/90 opacity-90 hover:opacity-100`
+                          : `bg-gradient-to-br ${gradientClass} text-white/90 opacity-85 hover:opacity-100`
                       }`}
                     >
                       <div className="flex justify-between items-start">
@@ -557,7 +581,7 @@ export const OnboardingView: React.FC = () => {
                           {cat.name}
                         </h3>
                         <p className="text-[11px] text-white/80 mt-1 font-light">
-                          {isSelected ? 'Selected' : 'Tap to select'}
+                          {isSelected ? 'Selected Category' : 'Tap to select'}
                         </p>
                       </div>
                     </div>
@@ -583,7 +607,7 @@ export const OnboardingView: React.FC = () => {
                   onClick={handleStep2Next}
                   className="px-8 py-3 rounded-xl bg-[#2D5A3D] text-white text-xs font-semibold shadow-sm hover:bg-[#3d7a55] transition-colors cursor-pointer"
                 >
-                  Continue to Specific Interests ({selectedCategoryIds.length}/{MAX_PRIMARY_CATEGORIES}) →
+                  Continue to Sub-categories ({selectedCategoryIds.length}/{MAX_PRIMARY_CATEGORIES}) →
                 </button>
               </div>
             </div>
@@ -591,61 +615,76 @@ export const OnboardingView: React.FC = () => {
         )}
 
         {/* ───────────────────────────────────────────────────────────── */}
-        {/* STEP 3: SPECIFIC SUBCATEGORY PILLS */}
+        {/* STEP 3 (STEP B): SUB-CATEGORIES SELECTION ONLY */}
         {/* ───────────────────────────────────────────────────────────── */}
         {wizardStep === 3 && (
           <div>
             <div className="flex justify-between items-center mb-4 text-xs text-[#8a8278] font-medium px-1">
-              <span>Select Your Specific Interests (Max {MAX_SUB_HOBBIES_PER_CATEGORY} per category)</span>
+              <span className="font-semibold uppercase tracking-wider text-charcoal">
+                Sub-categories (Max {MAX_SUB_HOBBIES_PER_CATEGORY} per category)
+              </span>
               <span>{selectedHobbyIds.length} selected</span>
             </div>
 
-            <div className="space-y-6 mb-8">
-              {activeCategories.map((cat) => {
-                const categoryHobbyIdStrs = cat.hobbies.map((h) => String(h.id));
-                const selectedInThisCategoryCount = selectedHobbyIds.filter((id) =>
-                  categoryHobbyIdStrs.includes(id)
-                ).length;
+            {activeCategories.length === 0 ? (
+              <div className="bg-white border border-dashed border-[#E2DBD0] rounded-2xl p-8 text-center text-xs text-[#8a8278] mb-8">
+                No categories selected.{' '}
+                <button
+                  type="button"
+                  onClick={() => setWizardStep(2)}
+                  className="text-[#2D5A3D] font-bold underline cursor-pointer"
+                >
+                  Go back and pick main categories
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-6 mb-8">
+                {activeCategories.map((cat) => {
+                  const categoryHobbyIds = cat.hobbies.map((h) => String(h.id));
+                  const selectedInThisCategory = selectedHobbyIds.filter((id) =>
+                    categoryHobbyIds.includes(id)
+                  ).length;
 
-                return (
-                  <div
-                    key={String(cat.id)}
-                    className="bg-white border border-[#E2DBD0] rounded-3xl p-6 shadow-xs"
-                  >
-                    <div className="flex justify-between items-center mb-4 border-b border-[#E2DBD0]/60 pb-3">
-                      <h3 className="text-base font-serif font-semibold text-[#2D5A3D]">
-                        {cat.name}
-                      </h3>
-                      <span className="text-xs font-semibold bg-[#eaf3ed] text-[#2D5A3D] px-3 py-1 rounded-full border border-[#7aaa8a]/30">
-                        {selectedInThisCategoryCount} / {MAX_SUB_HOBBIES_PER_CATEGORY} selected
-                      </span>
+                  return (
+                    <div
+                      key={String(cat.id)}
+                      className="bg-white border border-[#E2DBD0] rounded-3xl p-6 shadow-xs"
+                    >
+                      <div className="flex justify-between items-center mb-4 border-b border-[#E2DBD0]/60 pb-3">
+                        <h3 className="text-base font-serif font-semibold text-[#2D5A3D]">
+                          {cat.name}
+                        </h3>
+                        <span className="text-xs font-semibold bg-[#eaf3ed] text-[#2D5A3D] px-3 py-1 rounded-full border border-[#7aaa8a]/30">
+                          {selectedInThisCategory} / {MAX_SUB_HOBBIES_PER_CATEGORY} selected
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2.5">
+                        {cat.hobbies.map((hb) => {
+                          const hbIdStr = String(hb.id);
+                          const isSelected = selectedHobbyIds.includes(hbIdStr);
+
+                          return (
+                            <button
+                              key={hbIdStr}
+                              type="button"
+                              onClick={() => toggleHobby(cat, hbIdStr)}
+                              className={`px-4 py-2 rounded-full text-xs font-semibold transition-all duration-150 transform cursor-pointer active:scale-95 ${
+                                isSelected
+                                  ? 'bg-[#2D5A3D] text-white shadow-xs ring-2 ring-[#2D5A3D]/40'
+                                  : 'bg-[#F4EEE2] text-[#2C2C2C] border border-[#E2DBD0] hover:border-[#2D5A3D] hover:bg-white'
+                              }`}
+                            >
+                              {isSelected ? '✓ ' : '+ '}{hb.name}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-
-                    <div className="flex flex-wrap gap-2.5">
-                      {cat.hobbies.map((hb) => {
-                        const hbIdStr = String(hb.id);
-                        const isSelected = selectedHobbyIds.includes(hbIdStr);
-
-                        return (
-                          <button
-                            key={hbIdStr}
-                            type="button"
-                            onClick={() => toggleHobby(cat.name, categoryHobbyIdStrs, hbIdStr)}
-                            className={`px-4 py-2 rounded-full text-xs font-semibold transition-all duration-200 transform cursor-pointer hover:scale-[1.04] active:scale-95 ${
-                              isSelected
-                                ? 'bg-[#2D5A3D] text-white shadow-sm ring-2 ring-[#2D5A3D]/40'
-                                : 'bg-[#F4EEE2] text-[#2C2C2C] border border-[#E2DBD0] hover:border-[#2D5A3D] hover:bg-white'
-                            }`}
-                          >
-                            {isSelected ? '✓ ' : '+ '}{hb.name}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
 
             <div className="flex items-center justify-between pt-4 border-t border-[#E2DBD0]">
               <button
@@ -658,11 +697,13 @@ export const OnboardingView: React.FC = () => {
 
               <button
                 type="button"
-                disabled={isSavingHobbies}
+                disabled={isSavingHobbies || selectedHobbyIds.length === 0}
                 onClick={handleStep3Next}
                 className="px-8 py-3 rounded-xl bg-[#2D5A3D] text-white text-xs font-semibold shadow-sm hover:bg-[#3d7a55] transition-colors disabled:opacity-50 cursor-pointer"
               >
-                {isSavingHobbies ? 'Saving Interests...' : 'Save Interests & Continue →'}
+                {isSavingHobbies
+                  ? 'Saving Sub-categories...'
+                  : `Save & Continue to Profile Photo (${selectedHobbyIds.length} selected) →`}
               </button>
             </div>
           </div>
@@ -675,7 +716,7 @@ export const OnboardingView: React.FC = () => {
           <div className="bg-white border border-[#E2DBD0] rounded-3xl p-8 max-w-lg mx-auto shadow-xs text-center space-y-6">
             <div>
               <span className="text-[10px] font-bold text-[#C47B5A] uppercase tracking-wider">
-                Step 4 of 4 • Optional Profile Picture
+                Optional Profile Picture
               </span>
               <h3 className="text-2xl font-serif font-semibold text-[#2D5A3D] mt-1">
                 Add a Face to Your Profile
@@ -724,6 +765,14 @@ export const OnboardingView: React.FC = () => {
             </div>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4 border-t border-[#E2DBD0]">
+              <button
+                type="button"
+                onClick={() => setWizardStep(3)}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-[#E2DBD0] text-[#5a5450] hover:bg-[#F4EEE2] text-xs font-semibold transition-colors cursor-pointer"
+              >
+                ← Back to Sub-categories
+              </button>
+
               <button
                 type="button"
                 onClick={handleSkipPhotoStep}
