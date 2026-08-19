@@ -501,6 +501,27 @@ class CreateEvent(graphene.Mutation):
             return cls(event=None, success=False, message=str(e))
 
 
+class DeleteEvent(graphene.Mutation):
+    class Arguments:
+        id = graphene.Int(required=True)
+
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @classmethod
+    @login_required
+    def mutate(cls, root, info, id):
+        try:
+            user = info.context.user
+            event = Event.objects.get(id=id, creator=user)
+            event.delete()
+            return cls(success=True, message="Event deleted successfully")
+        except Event.DoesNotExist:
+            return cls(success=False, message="Event not found or permission denied")
+        except Exception as e:
+            return cls(success=False, message=str(e))
+
+
 class ConfirmAttendance(graphene.Mutation):
     """Confirm event attendance: creates Ticket + Participation and awards points."""
 
@@ -736,6 +757,7 @@ class Mutation(graphene.ObjectType):
 
     # Events
     create_event = CreateEvent.Field()
+    delete_event = DeleteEvent.Field()
     confirm_attendance = ConfirmAttendance.Field()
     swipe_event = SwipeEvent.Field()
 
