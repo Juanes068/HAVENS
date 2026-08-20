@@ -11,12 +11,16 @@ export interface LocationData {
   formattedAddress?: string;
   latitude?: number;
   longitude?: number;
+  address?: string;
+  name?: string;
 }
 
 export interface LocationInputProps {
-  onSelectLocation: (location: LocationData | null) => void;
+  onSelectLocation?: (location: LocationData | null) => void;
+  onLocationSelect?: (location: LocationData | null) => void;
   placeholder?: string;
   initialValue?: string;
+  initialLocation?: LocationData | string | null;
   className?: string;
   required?: boolean;
 }
@@ -32,31 +36,62 @@ interface PlacePrediction {
 
 export const LocationInput: React.FC<LocationInputProps> = ({
   onSelectLocation,
+  onLocationSelect,
   placeholder = 'Search address, neighbourhood or city (e.g. Kitsilano Beach, Vancouver)',
   initialValue = '',
+  initialLocation = null,
   className = '',
   required = false,
 }) => {
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
-  const { isLoaded, loadError } = useLoadScript({
+  const { isLoaded } = useLoadScript({
     googleMapsApiKey: apiKey,
   });
 
-  const [inputValue, setInputValue] = useState(initialValue);
-  const [selectedLocation, setSelectedLocation] = useState<LocationData | null>(
-    initialValue
-      ? {
-          formatted_address: initialValue,
-          formattedAddress: initialValue,
-          lat: 0,
-          lng: 0,
-          latitude: 0,
-          longitude: 0,
-        }
-      : null
-  );
+  const getInitialString = () => {
+    if (initialValue) return initialValue;
+    if (typeof initialLocation === 'string') return initialLocation;
+    if (initialLocation && typeof initialLocation === 'object') {
+      return initialLocation.formatted_address || initialLocation.address || initialLocation.name || '';
+    }
+    return '';
+  };
 
+  const getInitialData = (): LocationData | null => {
+    const initStr = getInitialString();
+    if (!initStr) return null;
+
+    if (initialLocation && typeof initialLocation === 'object') {
+      const lat = initialLocation.lat ?? initialLocation.latitude ?? 0;
+      const lng = initialLocation.lng ?? initialLocation.longitude ?? 0;
+      return {
+        formatted_address: initStr,
+        formattedAddress: initStr,
+        address: initStr,
+        name: initialLocation.name || initStr,
+        lat,
+        lng,
+        latitude: lat,
+        longitude: lng,
+        cityName: initialLocation.cityName,
+        neighbourhood: initialLocation.neighbourhood,
+      };
+    }
+
+    return {
+      formatted_address: initStr,
+      formattedAddress: initStr,
+      address: initStr,
+      lat: 0,
+      lng: 0,
+      latitude: 0,
+      longitude: 0,
+    };
+  };
+
+  const [inputValue, setInputValue] = useState(getInitialString());
+  const [selectedLocation, setSelectedLocation] = useState<LocationData | null>(getInitialData());
   const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
   const [isLoadingPredictions, setIsLoadingPredictions] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -66,12 +101,26 @@ export const LocationInput: React.FC<LocationInputProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const geocoderRef = useRef<google.maps.Geocoder | null>(null);
 
-  // Sync initialValue changes
+  const notifySelectLocation = useCallback(
+    (loc: LocationData | null) => {
+      if (typeof onSelectLocation === 'function') {
+        onSelectLocation(loc);
+      }
+      if (typeof onLocationSelect === 'function') {
+        onLocationSelect(loc);
+      }
+    },
+    [onSelectLocation, onLocationSelect]
+  );
+
+  // Sync initialValue / initialLocation changes
   useEffect(() => {
-    if (initialValue && initialValue !== inputValue) {
-      setInputValue(initialValue);
+    const initStr = getInitialString();
+    if (initStr && initStr !== inputValue) {
+      setInputValue(initStr);
+      setSelectedLocation(getInitialData());
     }
-  }, [initialValue]);
+  }, [initialValue, initialLocation]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -103,7 +152,6 @@ export const LocationInput: React.FC<LocationInputProps> = ({
     setIsLoadingPredictions(true);
 
     try {
-      // Query modern global places search endpoint
       const res = await fetch(
         `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=6`
       );
@@ -206,12 +254,30 @@ export const LocationInput: React.FC<LocationInputProps> = ({
     return () => clearTimeout(timer);
   }, [inputValue, selectedLocation, fetchPredictions]);
 
+  const resolveWithPredictionCoords = useCallback((prediction: PlacePrediction) => {
+    setIsLoadingPredictions(false);
+    const locData: LocationData = {
+      formatted_address: prediction.description,
+      formattedAddress: prediction.description,
+      address: prediction.description,
+      name: prediction.main_text,
+      lat: prediction.lat ?? 0,
+      lng: prediction.lng ?? 0,
+      latitude: prediction.lat ?? 0,
+      longitude: prediction.lng ?? 0,
+      cityName: prediction.secondary_text || prediction.main_text,
+      neighbourhood: prediction.main_text,
+    };
+    setSelectedLocation(locData);
+    setInputValue(prediction.description);
+    notifySelectLocation(locData);
+  }, [notifySelectLocation]);
+
   // Handle place selection and extract exact location metrics
   const handleSelectPrediction = (prediction: PlacePrediction) => {
     setIsLoadingPredictions(true);
     setIsDropdownOpen(false);
 
-    // If Google Geocoder is available, get verified address components and coordinates
     if (geocoderRef.current) {
       const geocodeReq = prediction.place_id && !prediction.place_id.includes('.')
         ? { placeId: prediction.place_id }
@@ -258,44 +324,28 @@ export const LocationInput: React.FC<LocationInputProps> = ({
 
           const locData: LocationData = {
             formatted_address,
+            formattedAddress: formatted_address,
+            address: formatted_address,
+            name: prediction.main_text || formatted_address,
             lat,
             lng,
-            cityName,
-            neighbourhood,
-            formattedAddress: formatted_address,
             latitude: lat,
             longitude: lng,
+            cityName,
+            neighbourhood,
           };
 
           setSelectedLocation(locData);
           setInputValue(formatted_address);
-          onSelectLocation(locData);
+          notifySelectLocation(locData);
           return;
         }
 
-        // Fallback using prediction coordinates
         resolveWithPredictionCoords(prediction);
       });
     } else {
       resolveWithPredictionCoords(prediction);
     }
-  };
-
-  const resolveWithPredictionCoords = (prediction: PlacePrediction) => {
-    setIsLoadingPredictions(false);
-    const locData: LocationData = {
-      formatted_address: prediction.description,
-      lat: prediction.lat ?? 0,
-      lng: prediction.lng ?? 0,
-      cityName: prediction.secondary_text || prediction.main_text,
-      neighbourhood: prediction.main_text,
-      formattedAddress: prediction.description,
-      latitude: prediction.lat ?? 0,
-      longitude: prediction.lng ?? 0,
-    };
-    setSelectedLocation(locData);
-    setInputValue(prediction.description);
-    onSelectLocation(locData);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -304,7 +354,7 @@ export const LocationInput: React.FC<LocationInputProps> = ({
 
     if (selectedLocation && val !== selectedLocation.formatted_address) {
       setSelectedLocation(null);
-      onSelectLocation(null);
+      notifySelectLocation(null);
     }
   };
 
@@ -313,7 +363,7 @@ export const LocationInput: React.FC<LocationInputProps> = ({
     setSelectedLocation(null);
     setPredictions([]);
     setIsDropdownOpen(false);
-    onSelectLocation(null);
+    notifySelectLocation(null);
     if (inputRef.current) {
       inputRef.current.focus();
     }
@@ -324,7 +374,6 @@ export const LocationInput: React.FC<LocationInputProps> = ({
     if (!isDropdownOpen || predictions.length === 0) {
       if (e.key === 'Enter' && inputValue.trim().length >= 2 && !selectedLocation) {
         e.preventDefault();
-        // Geocode whatever is currently typed
         handleSelectPrediction({
           description: inputValue.trim(),
           main_text: inputValue.trim(),

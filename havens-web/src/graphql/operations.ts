@@ -556,3 +556,16 @@ export const GENERATE_INVITE = gql`
   }
 `;
 
+/**
+ * Mutation to delete an event created by the user.
+ */
+export const DELETE_EVENT = gql`
+  mutation DeleteEvent($id: Int!) {
+    deleteEvent(id: $id) {
+      success
+      message
+    }
+  }
+`;
+
+
