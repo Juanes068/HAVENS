@@ -22,8 +22,13 @@ class JWTAuthenticationMiddleware:
 
     def __call__(self, request):
         auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+        token = None
         if auth_header.startswith('JWT '):
             token = auth_header[4:].strip()
+        elif auth_header.startswith('Bearer '):
+            token = auth_header[7:].strip()
+
+        if token:
             try:
                 payload = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
                 username = payload.get('username')

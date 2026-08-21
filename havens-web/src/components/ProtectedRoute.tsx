@@ -16,29 +16,22 @@ export const ProtectedRoute: React.FC = () => {
   const { token, user, isLoading, isOnboarded } = useAuth();
   const location = useLocation();
 
-  // Read raw stored token directly from storage to guarantee immediate sync
-  const storedToken =
-    token ||
-    secureStorage.getItemSync(HAVENS_JWT_TOKEN_KEY) ||
-    (typeof window !== 'undefined'
-      ? localStorage.getItem('token') ||
-        localStorage.getItem('havens_jwt_token') ||
-        localStorage.getItem(HAVENS_JWT_TOKEN_KEY)
-      : null);
-
-  // 1. Session verification & Profile loading state
-  if (isLoading) {
+  // 1. Session verification & Profile loading state: Render loading spinner during checks
+  if (isLoading || (token && !user)) {
     return (
       <div className="min-h-screen bg-[#F4EEE2] text-[#2C2C2C] flex items-center justify-center font-serif">
-        <div className="text-center animate-pulse text-[#2D5A3D]">Checking havens session...</div>
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-3 border-[#2D5A3D] border-t-transparent rounded-full animate-spin" />
+          <div className="text-sm font-medium text-[#2D5A3D]">Checking havens session...</div>
+        </div>
       </div>
     );
   }
 
-  // 2. Unauthenticated or unreachable session: Redirect to login/registration
-  if (!storedToken || !user) {
+  // 2. Unauthenticated: No token or user after loading finished -> redirect to /auth
+  if (!token || !user) {
     console.warn('[ProtectedRoute] No valid authenticated user found. Redirecting to /auth.');
-    return <Navigate to="/auth" replace />;
+    return <Navigate to="/auth" state={{ from: location }} replace />;
   }
 
   const isOnboardingRoute = location.pathname === '/onboarding';
@@ -49,10 +42,17 @@ export const ProtectedRoute: React.FC = () => {
     return <Navigate to="/onboarding" replace />;
   }
 
-  // 4. Stable DOM structure: Keep navigation conditional without changing tree layout
+  // 4. Already Onboarded but navigating directly to /onboarding -> redirect to /discover
+  if (isOnboarded && isOnboardingRoute) {
+    return <Navigate to="/discover" replace />;
+  }
+
+  // 5. Stable DOM structure: Render navigation and private route outlet
+  const showNav = isOnboarded && !isOnboardingRoute;
+
   return (
     <div className="min-h-screen bg-[#F4EEE2] text-[#2C2C2C] font-sans antialiased overflow-x-hidden flex flex-col">
-      {isOnboarded && !isOnboardingRoute && <Navigation />}
+      {showNav && <Navigation />}
       <main className="flex-1 w-full max-w-[100vw] overflow-x-hidden">
         <Outlet />
       </main>

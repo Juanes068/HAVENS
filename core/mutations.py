@@ -1,3 +1,18 @@
+"""Havens GraphQL Mutation Definitions.
+
+This module encapsulates all write operations (mutations) for the Havens platform,
+including user registration with invite codes, community onboarding, event creation
+and RSVP workflows, friend requests, match making, 1-on-1 messaging, direct cloud
+media uploads (Cloudinary & S3), and account security management.
+
+Design Conventions:
+    - Each mutation inherits from `graphene.Mutation` with a nested `Arguments` class.
+    - Resolvers are implemented via `@classmethod def mutate(...)`.
+    - Protected mutations apply the `@login_required` decorator.
+    - Operations modifying multiple interrelated models use `@transaction.atomic`.
+    - Asynchronous workflows (such as welcome emails) are offloaded to Celery tasks.
+"""
+
 import graphene
 import graphql_jwt
 from django.contrib.auth.models import User
@@ -21,50 +36,74 @@ logger = logging.getLogger(__name__)
 
 from .tasks import send_welcome_email_task, send_welcome_email
 
-# ───────────────────────────────────────────────
-# Feature 7 + 1: Create User (requires invitation code)
-# ───────────────────────────────────────────────
-class CreateUser(graphene.Mutation):
-    class Arguments:
-        username = graphene.String(required=True)
-        email = graphene.String(required=True)
-        password = graphene.String(required=True)
-        invitation_code = graphene.String(required=True)
-        bio = graphene.String(default_value='')
-        neighbourhood = graphene.String(default_value='')
-        city_name = graphene.String(default_value='')
-        latitude = graphene.Float()
-        longitude = graphene.Float()
-        photo_url = graphene.String(default_value='')
 
-    user = graphene.Field(UserType)
-    success = graphene.Boolean()
-    message = graphene.String()
+# ─────────────────────────────────────────────────────────────────────────────
+# Feature 7 + 1: Create User (requires invitation code)
+# ─────────────────────────────────────────────────────────────────────────────
+class CreateUser(graphene.Mutation):
+    """Register a new user account with an active invitation code and initialize profile."""
+
+    class Arguments:
+        username = graphene.String(required=True, description="Unique username for the new account.")
+        email = graphene.String(required=True, description="Valid unique email address.")
+        password = graphene.String(required=True, description="Raw password to be hashed by Django.")
+        invitation_code = graphene.String(required=True, description="Unused 12-character invitation code.")
+        bio = graphene.String(default_value='', description="Short introductory bio.")
+        neighbourhood = graphene.String(default_value='', description="Local neighborhood or district.")
+        city_name = graphene.String(default_value='', description="City name for geolocation tagging.")
+        latitude = graphene.Float(description="User latitude coordinate.")
+        longitude = graphene.Float(description="User longitude coordinate.")
+        photo_url = graphene.String(default_value='', description="Profile image URL (Cloudinary/S3).")
+
+    user = graphene.Field(UserType, description="The newly created User entity.")
+    success = graphene.Boolean(description="Indicates if account creation succeeded.")
+    message = graphene.String(description="Status or error message.")
 
     @classmethod
     def mutate(cls, root, info, username, email, password, invitation_code,
                bio='', neighbourhood='', city_name='', latitude=None, longitude=None, photo_url=''):
+        """Execute user creation, link profile, mark invite as used, and queue welcome email.
+
+        Args:
+            root: Root GraphQL object.
+            info (graphene.ResolveInfo): Execution context.
+            username (str): Target username.
+            email (str): Target email.
+            password (str): Account password.
+            invitation_code (str): Invitation code to validate and consume.
+            bio (str, optional): User biography.
+            neighbourhood (str, optional): Neighborhood description.
+            city_name (str, optional): City name.
+            latitude (float, optional): Latitude coordinate.
+            longitude (float, optional): Longitude coordinate.
+            photo_url (str, optional): Avatar image URL.
+
+        Returns:
+            CreateUser: Mutation payload containing `user`, `success`, and `message`.
+        """
         try:
-            # Check invitation code
+            # 1. Validate invitation code existence and ensure it has not been redeemed yet
             try:
                 invite = InvitationCode.objects.get(code=invitation_code, is_used=False)
             except InvitationCode.DoesNotExist:
                 return cls(user=None, success=False, message="Invalid or already used invitation code")
 
+            # 2. Check for unique credential collisions
             if User.objects.filter(username=username).exists():
                 return cls(user=None, success=False, message="Username already exists")
             if User.objects.filter(email=email).exists():
                 return cls(user=None, success=False, message="Email already exists")
 
+            # 3. Create core Django auth User with securely hashed password
             user = User.objects.create_user(username=username, email=email, password=password)
 
-            # Mark invitation as used
+            # 4. Mark invitation code as redeemed and bind to the new user
             invite.is_used = True
             invite.used_by = user
             invite.used_at = timezone.now()
             invite.save()
 
-            # Create extended profile (auto-generates short invite_code)
+            # 5. Create extended profile with location and avatar metadata
             UserProfile.objects.create(
                 user=user,
                 bio=bio,
@@ -75,7 +114,7 @@ class CreateUser(graphene.Mutation):
                 photo_url=photo_url,
             )
 
-            # Trigger asynchronous Celery welcome email task (non-blocking)
+            # 6. Dispatch non-blocking welcome email via Celery worker
             try:
                 send_welcome_email_task.delay(user.email, user.username)
                 logger.info(f"[CreateUser] Queued welcome email task for {user.email}")
@@ -87,17 +126,28 @@ class CreateUser(graphene.Mutation):
             return cls(user=None, success=False, message=str(e))
 
 
-# ───────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 # Feature 1: Generate Invitation Code
-# ───────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 class GenerateInvite(graphene.Mutation):
-    invitation = graphene.Field(InvitationCodeType)
-    success = graphene.Boolean()
-    message = graphene.String()
+    """Generate a unique 12-character invitation code for onboarding other users."""
+
+    invitation = graphene.Field(InvitationCodeType, description="The generated InvitationCode record.")
+    success = graphene.Boolean(description="Indicates if generation succeeded.")
+    message = graphene.String(description="Status description.")
 
     @classmethod
     @login_required
     def mutate(cls, root, info):
+        """Create a new unredeemed InvitationCode linked to the authenticated user.
+
+        Args:
+            root: Root GraphQL object.
+            info (graphene.ResolveInfo): Execution context with authenticated user.
+
+        Returns:
+            GenerateInvite: Mutation payload with `invitation`, `success`, and `message`.
+        """
         try:
             user = info.context.user
             invite = InvitationCode.objects.create(created_by=user)
@@ -106,24 +156,37 @@ class GenerateInvite(graphene.Mutation):
             return cls(invitation=None, success=False, message=str(e))
 
 
-# ───────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 # Feature 2: Join Community
-# ───────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 class JoinCommunity(graphene.Mutation):
-    class Arguments:
-        community_id = graphene.Int(required=True)
+    """Add the authenticated user as an active member of a specified community."""
 
-    membership = graphene.Field(CommunityMembershipType)
-    success = graphene.Boolean()
-    message = graphene.String()
+    class Arguments:
+        community_id = graphene.Int(required=True, description="Primary key ID of the target community.")
+
+    membership = graphene.Field(CommunityMembershipType, description="Created CommunityMembership record.")
+    success = graphene.Boolean(description="Indicates if join operation succeeded.")
+    message = graphene.String(description="Status message.")
 
     @classmethod
     @login_required
     def mutate(cls, root, info, community_id):
+        """Create membership link between the user and target community.
+
+        Args:
+            root: Root GraphQL object.
+            info (graphene.ResolveInfo): Execution context.
+            community_id (int): ID of community to join.
+
+        Returns:
+            JoinCommunity: Mutation payload.
+        """
         try:
             user = info.context.user
             community = Community.objects.get(id=community_id)
 
+            # Prevent duplicate memberships
             if CommunityMembership.objects.filter(user=user, community=community).exists():
                 return cls(membership=None, success=False, message="Already a member of this community")
 
@@ -135,27 +198,41 @@ class JoinCommunity(graphene.Mutation):
             return cls(membership=None, success=False, message=str(e))
 
 
-# ───────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 # Feature 3: Send Friend Request
-# ───────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 class SendFriendRequest(graphene.Mutation):
-    class Arguments:
-        to_user_id = graphene.Int(required=True)
+    """Send an initial pending friend request to another user."""
 
-    friendship = graphene.Field(FriendshipType)
-    success = graphene.Boolean()
-    message = graphene.String()
+    class Arguments:
+        to_user_id = graphene.Int(required=True, description="Target user ID to invite as a friend.")
+
+    friendship = graphene.Field(FriendshipType, description="The created Friendship record in pending state.")
+    success = graphene.Boolean(description="Indicates success.")
+    message = graphene.String(description="Status or error message.")
 
     @classmethod
     @login_required
     def mutate(cls, root, info, to_user_id):
+        """Create a pending Friendship record after verifying relationship constraints.
+
+        Args:
+            root: Root GraphQL object.
+            info (graphene.ResolveInfo): Execution context.
+            to_user_id (int): Primary key of the recipient user.
+
+        Returns:
+            SendFriendRequest: Mutation payload.
+        """
         try:
             from_user = info.context.user
             to_user = User.objects.get(id=to_user_id)
 
+            # Prevent self-friending
             if from_user.id == to_user.id:
                 return cls(friendship=None, success=False, message="Cannot send friend request to yourself")
 
+            # Check for existing friendship in either direction (from -> to OR to -> from)
             existing = Friendship.objects.filter(
                 from_user=from_user, to_user=to_user
             ).first() or Friendship.objects.filter(
@@ -173,23 +250,37 @@ class SendFriendRequest(graphene.Mutation):
             return cls(friendship=None, success=False, message=str(e))
 
 
-# ───────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 # Feature 3: Respond to Friend Request
-# ───────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 class RespondFriendRequest(graphene.Mutation):
-    class Arguments:
-        friendship_id = graphene.Int(required=True)
-        action = graphene.String(required=True)  # 'accept' or 'reject'
+    """Accept or reject an incoming pending friend request."""
 
-    friendship = graphene.Field(FriendshipType)
-    success = graphene.Boolean()
-    message = graphene.String()
+    class Arguments:
+        friendship_id = graphene.Int(required=True, description="Primary key of the Friendship record.")
+        action = graphene.String(required=True, description="'accept' or 'reject'")
+
+    friendship = graphene.Field(FriendshipType, description="Updated Friendship entity.")
+    success = graphene.Boolean(description="Indicates success.")
+    message = graphene.String(description="Status message.")
 
     @classmethod
     @login_required
     def mutate(cls, root, info, friendship_id, action):
+        """Transition friendship status to accepted or rejected.
+
+        Args:
+            root: Root GraphQL object.
+            info (graphene.ResolveInfo): Execution context.
+            friendship_id (int): ID of pending friendship.
+            action (str): Action verb ('accept' or 'reject').
+
+        Returns:
+            RespondFriendRequest: Mutation payload.
+        """
         try:
             user = info.context.user
+            # Ensure the caller is the recipient (to_user) of the pending request
             friendship = Friendship.objects.get(id=friendship_id, to_user=user, status='pending')
 
             if action.lower() == 'accept':
@@ -208,21 +299,34 @@ class RespondFriendRequest(graphene.Mutation):
             return cls(friendship=None, success=False, message=str(e))
 
 
-# ───────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 # Feature 4: Swipe Event (RSVP)
-# ───────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 class SwipeEvent(graphene.Mutation):
-    class Arguments:
-        event_id = graphene.Int(required=True)
-        response = graphene.String(required=True)  # 'going', 'maybe', 'pass'
+    """Record or update a user's swipe RSVP response for an event ('going', 'maybe', 'pass')."""
 
-    rsvp = graphene.Field(EventRSVPType)
-    success = graphene.Boolean()
-    message = graphene.String()
+    class Arguments:
+        event_id = graphene.Int(required=True, description="Primary key of the event.")
+        response = graphene.String(required=True, description="Response choice: 'going', 'maybe', or 'pass'.")
+
+    rsvp = graphene.Field(EventRSVPType, description="Created or updated EventRSVP record.")
+    success = graphene.Boolean(description="Indicates success.")
+    message = graphene.String(description="Status message.")
 
     @classmethod
     @login_required
     def mutate(cls, root, info, event_id, response):
+        """Create or update RSVP response for the target event.
+
+        Args:
+            root: Root GraphQL object.
+            info (graphene.ResolveInfo): Execution context.
+            event_id (int): ID of target event.
+            response (str): One of 'going', 'maybe', 'pass'.
+
+        Returns:
+            SwipeEvent: Mutation payload.
+        """
         try:
             user = info.context.user
             event = Event.objects.get(id=event_id)
@@ -230,6 +334,7 @@ class SwipeEvent(graphene.Mutation):
             if response not in ('going', 'maybe', 'pass'):
                 return cls(rsvp=None, success=False, message="Invalid response. Use 'going', 'maybe', or 'pass'")
 
+            # Upsert RSVP status
             rsvp, created = EventRSVP.objects.update_or_create(
                 user=user, event=event,
                 defaults={'response': response},
@@ -243,20 +348,32 @@ class SwipeEvent(graphene.Mutation):
             return cls(rsvp=None, success=False, message=str(e))
 
 
-# ───────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 # Feature 5: Create Match
-# ───────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 class CreateMatch(graphene.Mutation):
-    class Arguments:
-        user2_id = graphene.Int(required=True)
+    """Establish a direct mutual match pair between two users."""
 
-    match = graphene.Field(MatchType)
-    success = graphene.Boolean()
-    message = graphene.String()
+    class Arguments:
+        user2_id = graphene.Int(required=True, description="Target user ID to match with.")
+
+    match = graphene.Field(MatchType, description="Created Match entity.")
+    success = graphene.Boolean(description="Indicates success.")
+    message = graphene.String(description="Status message.")
 
     @classmethod
     @login_required
     def mutate(cls, root, info, user2_id):
+        """Instantiate a Match record with canonical ordering to prevent duplicate pairs.
+
+        Args:
+            root: Root GraphQL object.
+            info (graphene.ResolveInfo): Execution context.
+            user2_id (int): Target user ID.
+
+        Returns:
+            CreateMatch: Mutation payload.
+        """
         try:
             user1 = info.context.user
             user2 = User.objects.get(id=user2_id)
@@ -264,7 +381,7 @@ class CreateMatch(graphene.Mutation):
             if user1.id == user2.id:
                 return cls(match=None, success=False, message="Cannot match with yourself")
 
-            # Ensure consistent ordering (lower id first)
+            # Enforce canonical ordering (lower user ID as user1) to ensure uniqueness
             u1, u2 = (user1, user2) if user1.id < user2.id else (user2, user1)
 
             if Match.objects.filter(user1=u1, user2=u2).exists():
@@ -278,27 +395,41 @@ class CreateMatch(graphene.Mutation):
             return cls(match=None, success=False, message=str(e))
 
 
-# ───────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 # Feature 5: Send Message
-# ───────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 class SendMessage(graphene.Mutation):
-    class Arguments:
-        match_id = graphene.Int(required=True)
-        content = graphene.String(required=True)
+    """Send a chat message within an established 1-on-1 match thread."""
 
-    message = graphene.Field(MessageType)
-    success = graphene.Boolean()
-    message_field = graphene.String()  # 'message' is reserved in GraphQL
+    class Arguments:
+        match_id = graphene.Int(required=True, description="Primary key ID of the active Match.")
+        content = graphene.String(required=True, description="Message text content.")
+
+    message = graphene.Field(MessageType, description="Created Message object.")
+    success = graphene.Boolean(description="Indicates success.")
+    message_field = graphene.String(description="Status message description (aliased to avoid GraphQL conflict).")
 
     @classmethod
     @login_required
     def mutate(cls, root, info, match_id, content):
+        """Validate match membership and append message to thread.
+
+        Args:
+            root: Root GraphQL object.
+            info (graphene.ResolveInfo): Execution context.
+            match_id (int): ID of target match.
+            content (str): Message text.
+
+        Returns:
+            SendMessage: Mutation payload.
+        """
         sender = info.context.user
         try:
             match = Match.objects.get(id=match_id)
         except Match.DoesNotExist:
             return cls(message=None, success=False, message_field="Match not found")
 
+        # Security check: ensure caller is one of the match participants
         if sender != match.user1 and sender != match.user2:
             raise GraphQLError("You are not part of this match")
 
@@ -309,27 +440,34 @@ class SendMessage(graphene.Mutation):
             return cls(message=None, success=False, message_field=str(e))
 
 
-# ───────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 # Feature 6: Presigned URL for AWS S3
-# ───────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 class PresignedURL(graphene.Mutation):
-    class Arguments:
-        filename = graphene.String(required=True)
-        content_type = graphene.String(default_value='image/jpeg')
+    """Generate a presigned POST upload URL for direct AWS S3 client uploads."""
 
-    url = graphene.String()
-    fields = graphene.JSONString()
-    success = graphene.Boolean()
-    message = graphene.String()
+    class Arguments:
+        filename = graphene.String(required=True, description="Target file name with extension.")
+        content_type = graphene.String(default_value='image/jpeg', description="MIME type.")
+
+    url = graphene.String(description="S3 Presigned POST URL.")
+    fields = graphene.JSONString(description="Form fields and authentication payload for S3 POST.")
+    success = graphene.Boolean(description="Indicates success.")
+    message = graphene.String(description="Status message.")
 
     @classmethod
     @login_required
     def mutate(cls, root, info, filename, content_type='image/jpeg'):
-        """
-        Returns a presigned POST URL for direct upload to AWS S3.
-        The frontend uses this URL+fields to POST the file directly to S3,
-        bypassing our Django server entirely. This is the most scalable
-        approach for mobile image uploads (React Native).
+        """Construct AWS S3 presigned credentials for direct multipart uploads.
+
+        Args:
+            root: Root GraphQL object.
+            info (graphene.ResolveInfo): Execution context.
+            filename (str): Name of file to upload.
+            content_type (str, optional): MIME content type.
+
+        Returns:
+            PresignedURL: Mutation payload with S3 endpoint and fields.
         """
         import uuid
         import os
@@ -362,7 +500,7 @@ class PresignedURL(graphene.Mutation):
                 aws_secret_access_key=secret_key,
             )
 
-            # Generate unique key in S3
+            # Generate unique key in S3 with UUID prefix
             key = f"uploads/{uuid.uuid4()}/{filename}"
 
             presigned = s3_client.generate_presigned_post(
@@ -371,9 +509,9 @@ class PresignedURL(graphene.Mutation):
                 Fields={'Content-Type': content_type},
                 Conditions=[
                     {'Content-Type': content_type},
-                    ['content-length-range', 0, 10485760],  # max 10MB
+                    ['content-length-range', 0, 10485760],  # max 10MB limit
                 ],
-                ExpiresIn=300,  # 5 minutes
+                ExpiresIn=300,  # 5 minutes expiration TTL
             )
 
             return cls(
@@ -386,22 +524,36 @@ class PresignedURL(graphene.Mutation):
             return cls(url=None, fields=None, success=False, message=str(e))
 
 
-# ───────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 # Feature 7: Update User Profile
-# ───────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 class UpdateUserProfile(graphene.Mutation):
-    class Arguments:
-        bio = graphene.String()
-        neighbourhood = graphene.String()
-        photo_url = graphene.String()
+    """Update profile bio, neighbourhood, and avatar URL for the authenticated user."""
 
-    profile = graphene.Field(UserType)
-    success = graphene.Boolean()
-    message = graphene.String()
+    class Arguments:
+        bio = graphene.String(description="User bio text.")
+        neighbourhood = graphene.String(description="Neighborhood name.")
+        photo_url = graphene.String(description="Profile avatar image URL.")
+
+    profile = graphene.Field(UserType, description="Updated User entity.")
+    success = graphene.Boolean(description="Indicates success.")
+    message = graphene.String(description="Status message.")
 
     @classmethod
     @login_required
     def mutate(cls, root, info, bio=None, neighbourhood=None, photo_url=None):
+        """Update UserProfile fields.
+
+        Args:
+            root: Root GraphQL object.
+            info (graphene.ResolveInfo): Execution context.
+            bio (str, optional): Biography text.
+            neighbourhood (str, optional): Neighborhood description.
+            photo_url (str, optional): Avatar image URL.
+
+        Returns:
+            UpdateUserProfile: Mutation payload.
+        """
         try:
             user = info.context.user
             profile, _ = UserProfile.objects.get_or_create(user=user)
@@ -419,20 +571,33 @@ class UpdateUserProfile(graphene.Mutation):
             return cls(profile=None, success=False, message=str(e))
 
 
-# ───────────────────────────────────────────────
-# Existing Mutations (preserved)
-# ───────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# Community & Event Management Mutations
+# ─────────────────────────────────────────────────────────────────────────────
 class CreateCommunity(graphene.Mutation):
-    class Arguments:
-        name = graphene.String(required=True)
-        subdomain = graphene.String(required=True)
+    """Create a new white-label Community entity."""
 
-    community = graphene.Field(CommunityType)
-    success = graphene.Boolean()
-    message = graphene.String()
+    class Arguments:
+        name = graphene.String(required=True, description="Community display title.")
+        subdomain = graphene.String(required=True, description="Unique subdomain slug.")
+
+    community = graphene.Field(CommunityType, description="The created Community record.")
+    success = graphene.Boolean(description="Indicates success.")
+    message = graphene.String(description="Status message.")
 
     @classmethod
     def mutate(cls, root, info, name, subdomain):
+        """Create a new community if subdomain slug is available.
+
+        Args:
+            root: Root GraphQL object.
+            info (graphene.ResolveInfo): Execution context.
+            name (str): Community name.
+            subdomain (str): Unique subdomain slug.
+
+        Returns:
+            CreateCommunity: Mutation payload.
+        """
         try:
             if Community.objects.filter(subdomain=subdomain).exists():
                 return cls(community=None, success=False, message="Subdomain already exists")
@@ -443,23 +608,25 @@ class CreateCommunity(graphene.Mutation):
 
 
 class CreateEvent(graphene.Mutation):
+    """Create a new event/meetup on the Havens platform."""
+
     class Arguments:
-        title = graphene.String(required=True)
-        description = graphene.String(required=True)
-        latitude = graphene.Float(required=True)
-        longitude = graphene.Float(required=True)
-        communityId = graphene.Int()
-        pointsReward = graphene.Int(default_value=10)
-        visibility = graphene.String(default_value='public')
-        imageUrl = graphene.String()
-        locationName = graphene.String()
-        scheduledDate = graphene.DateTime()
+        title = graphene.String(required=True, description="Event title.")
+        description = graphene.String(required=True, description="Event description and details.")
+        latitude = graphene.Float(required=True, description="Location latitude coordinate.")
+        longitude = graphene.Float(required=True, description="Location longitude coordinate.")
+        communityId = graphene.Int(description="Optional community primary key ID.")
+        pointsReward = graphene.Int(default_value=10, description="Gamification points awarded upon attendance.")
+        visibility = graphene.String(default_value='public', description="Visibility ('public', 'private', 'community').")
+        imageUrl = graphene.String(description="Cover image URL.")
+        locationName = graphene.String(description="Human-readable venue name or address.")
+        scheduledDate = graphene.DateTime(description="ISO-8601 scheduled start timestamp.")
 
-    event = graphene.Field(EventType)
-    success = graphene.Boolean()
-    message = graphene.String()
+    event = graphene.Field(EventType, description="The created Event entity.")
+    success = graphene.Boolean(description="Indicates success.")
+    message = graphene.String(description="Status or validation error message.")
 
-    # Allowed visibility values from the Django Event model
+    # Allowed visibility choices from Event model definitions
     VALID_VISIBILITY = {v[0] for v in Event.VISIBILITY_CHOICES}
 
     @classmethod
@@ -467,13 +634,32 @@ class CreateEvent(graphene.Mutation):
     def mutate(cls, root, info, title, description, latitude, longitude,
                communityId=None, pointsReward=10, visibility='public',
                imageUrl=None, locationName=None, scheduledDate=None):
+        """Validate input parameters and create Event record.
+
+        Args:
+            root: Root GraphQL object.
+            info (graphene.ResolveInfo): Execution context.
+            title (str): Event title.
+            description (str): Description text.
+            latitude (float): Latitude coordinate.
+            longitude (float): Longitude coordinate.
+            communityId (int, optional): Associated community ID.
+            pointsReward (int, optional): Points reward value.
+            visibility (str, optional): Visibility level.
+            imageUrl (str, optional): Cover image URL.
+            locationName (str, optional): Venue name.
+            scheduledDate (datetime, optional): Scheduled timestamp.
+
+        Returns:
+            CreateEvent: Mutation payload.
+        """
         try:
-            # Validate visibility value
+            # Validate visibility choice against model constraints
             if visibility not in cls.VALID_VISIBILITY:
                 return cls(event=None, success=False,
                            message=f"Invalid visibility '{visibility}'. Must be one of: {', '.join(sorted(cls.VALID_VISIBILITY))}")
 
-            # Validate scheduled date is not in the past
+            # Validate that scheduled date is not set in the past
             event_date = scheduledDate or timezone.now()
             if scheduledDate and scheduledDate < timezone.now():
                 return cls(event=None, success=False,
@@ -502,17 +688,30 @@ class CreateEvent(graphene.Mutation):
 
 
 class DeleteEvent(graphene.Mutation):
-    class Arguments:
-        id = graphene.Int(required=True)
+    """Delete an event created by the authenticated user."""
 
-    success = graphene.Boolean()
-    message = graphene.String()
+    class Arguments:
+        id = graphene.Int(required=True, description="Primary key ID of the event to delete.")
+
+    success = graphene.Boolean(description="Indicates success.")
+    message = graphene.String(description="Status message.")
 
     @classmethod
     @login_required
     def mutate(cls, root, info, id):
+        """Verify event ownership and delete record.
+
+        Args:
+            root: Root GraphQL object.
+            info (graphene.ResolveInfo): Execution context.
+            id (int): Primary key of event.
+
+        Returns:
+            DeleteEvent: Mutation payload.
+        """
         try:
             user = info.context.user
+            # Ensure only the event creator can delete the event
             event = Event.objects.get(id=id, creator=user)
             event.delete()
             return cls(success=True, message="Event deleted successfully")
@@ -523,22 +722,34 @@ class DeleteEvent(graphene.Mutation):
 
 
 class ConfirmAttendance(graphene.Mutation):
-    """Confirm event attendance: creates Ticket + Participation and awards points."""
+    """Confirm event attendance: atomically creates Ticket and Participation records, and credits reward points."""
 
     class Arguments:
-        user_id = graphene.Int(required=True)
-        event_id = graphene.Int(required=True)
+        user_id = graphene.Int(required=True, description="User ID confirming attendance.")
+        event_id = graphene.Int(required=True, description="Target event primary key ID.")
 
-    ticket = graphene.Field(TicketType)
-    participation = graphene.Field(ParticipationType)
-    total_points = graphene.Int()
-    success = graphene.Boolean()
-    message = graphene.String()
+    ticket = graphene.Field(TicketType, description="The confirmed Ticket record.")
+    participation = graphene.Field(ParticipationType, description="The Participation record.")
+    total_points = graphene.Int(description="Updated cumulative points for user.")
+    success = graphene.Boolean(description="Indicates success.")
+    message = graphene.String(description="Status message.")
 
     @classmethod
     @login_required
     @transaction.atomic
     def mutate(cls, root, info, user_id, event_id):
+        """Execute atomic attendance confirmation and points allocation.
+
+        Args:
+            root: Root GraphQL object.
+            info (graphene.ResolveInfo): Execution context.
+            user_id (int): User ID confirming.
+            event_id (int): Event ID.
+
+        Returns:
+            ConfirmAttendance: Mutation payload with ticket, participation, and total points.
+        """
+        # Security: prevent confirming attendance on behalf of another user
         if info.context.user.id != user_id:
             raise GraphQLError("You cannot confirm attendance for another user.")
 
@@ -546,17 +757,20 @@ class ConfirmAttendance(graphene.Mutation):
             user = User.objects.get(id=user_id)
             event = Event.objects.get(id=event_id)
 
+            # Prevent double-booking
             if Ticket.objects.filter(user=user, event=event).exists():
                 return cls(
                     ticket=None, participation=None, total_points=None,
                     success=False, message="User already confirmed attendance for this event",
                 )
 
+            # Create ticket and participation entries
             ticket = Ticket.objects.create(user=user, event=event, status='confirmed')
             participation = Participation.objects.create(
                 user=user, event=event, points_awarded=event.points_reward,
             )
 
+            # Award gamification reward points to user profile
             profile, _ = UserProfile.objects.get_or_create(user=user)
             profile.total_points += event.points_reward
             profile.save()
@@ -579,29 +793,36 @@ class ConfirmAttendance(graphene.Mutation):
                        success=False, message=str(e))
 
 
-# ───────────────────────────────────────────────
-# Feature 6: Cloudinary Upload Signature (React Native)
-# ───────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# Feature 6: Cloudinary Upload Signature (React Native / Web Client)
+# ─────────────────────────────────────────────────────────────────────────────
 class GenerateCloudinarySignature(graphene.Mutation):
-    """
-    Generates a secure upload signature for Cloudinary.
-    The frontend sends the parameters to sign (e.g., folder, public_id),
-    and this mutation returns the signature, timestamp, and API Key required to upload
-    directly to Cloudinary.
-    """
-    class Arguments:
-        params_to_sign = graphene.JSONString(required=True)
-        folder = graphene.String()
+    """Generate a cryptographic SHA-1 upload signature for direct Cloudinary client-side uploads."""
 
-    signature = graphene.String()
-    timestamp = graphene.Int()
-    api_key = graphene.String()
-    success = graphene.Boolean()
-    message = graphene.String()
+    class Arguments:
+        params_to_sign = graphene.JSONString(required=True, description="JSON dictionary of parameters to sign (e.g. folder, timestamp).")
+        folder = graphene.String(description="Target Cloudinary asset folder.")
+
+    signature = graphene.String(description="Generated SHA-1 signature.")
+    timestamp = graphene.Int(description="UNIX epoch timestamp applied to the signature.")
+    api_key = graphene.String(description="Cloudinary public API Key.")
+    success = graphene.Boolean(description="Indicates success.")
+    message = graphene.String(description="Status message.")
 
     @classmethod
     @login_required
     def mutate(cls, root, info, params_to_sign, folder=None):
+        """Compute HMAC SHA-1 signature using Cloudinary API Secret.
+
+        Args:
+            root: Root GraphQL object.
+            info (graphene.ResolveInfo): Execution context.
+            params_to_sign (str | dict): Parameters payload to sign.
+            folder (str, optional): Target folder path.
+
+        Returns:
+            GenerateCloudinarySignature: Mutation payload.
+        """
         import os
         import time
         import cloudinary.utils
@@ -616,7 +837,7 @@ class GenerateCloudinarySignature(graphene.Mutation):
                     success=False, message="Cloudinary credentials not configured in environment"
                 )
 
-            # Safely parse params_to_sign whether string or dictionary
+            # Safely parse JSON string if passed as string
             if isinstance(params_to_sign, str):
                 import json
                 try:
@@ -634,6 +855,7 @@ class GenerateCloudinarySignature(graphene.Mutation):
             if 'timestamp' not in params:
                 params['timestamp'] = int(time.time())
 
+            # Generate SHA-1 cryptographic signature using Cloudinary SDK utility
             signature = cloudinary.utils.api_sign_request(params, api_secret)
 
             return cls(
@@ -650,17 +872,32 @@ class GenerateCloudinarySignature(graphene.Mutation):
             )
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# User Profile & Account Settings Mutations
+# ─────────────────────────────────────────────────────────────────────────────
 class UpdateUserHobbies(graphene.Mutation):
-    class Arguments:
-        hobby_ids = graphene.List(graphene.Int, required=True)
+    """Synchronize the authenticated user's selected hobby tags."""
 
-    success = graphene.Boolean()
-    message = graphene.String()
-    user = graphene.Field(UserType)
+    class Arguments:
+        hobby_ids = graphene.List(graphene.Int, required=True, description="Array of Hobby primary key IDs.")
+
+    success = graphene.Boolean(description="Indicates success.")
+    message = graphene.String(description="Status message.")
+    user = graphene.Field(UserType, description="Updated User entity.")
 
     @classmethod
     @login_required
     def mutate(cls, root, info, hobby_ids):
+        """Update ManyToMany hobby associations on the user profile.
+
+        Args:
+            root: Root GraphQL object.
+            info (graphene.ResolveInfo): Execution context.
+            hobby_ids (list[int]): List of hobby IDs.
+
+        Returns:
+            UpdateUserHobbies: Mutation payload.
+        """
         user = info.context.user
         try:
             profile, _ = UserProfile.objects.get_or_create(user=user)
@@ -671,44 +908,61 @@ class UpdateUserHobbies(graphene.Mutation):
             return cls(success=False, message=str(e), user=None)
 
 
-# ───────────────────────────────────────────────
-# Profile Settings: Update Account Security & Delete Account
-# ───────────────────────────────────────────────
 class UpdateAccountSecurity(graphene.Mutation):
-    class Arguments:
-        email = graphene.String()
-        new_username = graphene.String()
-        new_password = graphene.String()
-        current_password = graphene.String()
-        bio = graphene.String()
-        neighbourhood = graphene.String()
+    """Update sensitive account credentials (username, email, password) with verification."""
 
-    user = graphene.Field(UserType)
-    success = graphene.Boolean()
-    message = graphene.String()
+    class Arguments:
+        email = graphene.String(description="New email address.")
+        new_username = graphene.String(description="New username.")
+        new_password = graphene.String(description="New password to set.")
+        current_password = graphene.String(description="Current password required for authorization.")
+        bio = graphene.String(description="Updated bio text.")
+        neighbourhood = graphene.String(description="Updated neighborhood.")
+
+    user = graphene.Field(UserType, description="Updated User entity.")
+    success = graphene.Boolean(description="Indicates success.")
+    message = graphene.String(description="Status or validation error message.")
 
     @classmethod
     @login_required
     def mutate(cls, root, info, email=None, new_username=None, new_password=None, current_password=None, bio=None, neighbourhood=None):
+        """Verify current password and apply updates to User and UserProfile.
+
+        Args:
+            root: Root GraphQL object.
+            info (graphene.ResolveInfo): Execution context.
+            email (str, optional): New email.
+            new_username (str, optional): New username.
+            new_password (str, optional): New password.
+            current_password (str, optional): Current password for authentication challenge.
+            bio (str, optional): Bio text.
+            neighbourhood (str, optional): Neighborhood text.
+
+        Returns:
+            UpdateAccountSecurity: Mutation payload.
+        """
         try:
             user = info.context.user
             profile, _ = UserProfile.objects.get_or_create(user=user)
 
-            # Security Check: Require current_password if changing username or password
+            # Security Challenge: Require valid current_password before allowing username or password changes
             if new_username or new_password:
                 if not current_password or not user.check_password(current_password):
                     return cls(user=None, success=False, message="Current password is required and must be correct to authorize username or password changes.")
 
+            # Validate unique username if modified
             if new_username and new_username != user.username:
                 if User.objects.filter(username=new_username).exclude(pk=user.pk).exists():
                     return cls(user=None, success=False, message="Username is already taken.")
                 user.username = new_username
 
+            # Validate unique email if modified
             if email and email != user.email:
                 if User.objects.filter(email=email).exclude(pk=user.pk).exists():
                     return cls(user=None, success=False, message="Email is already taken.")
                 user.email = email
 
+            # Update password with Django password hasher
             if new_password:
                 user.set_password(new_password)
 
@@ -726,12 +980,23 @@ class UpdateAccountSecurity(graphene.Mutation):
 
 
 class DeleteAccount(graphene.Mutation):
-    success = graphene.Boolean()
-    message = graphene.String()
+    """Permanently delete the authenticated user's account and related data."""
+
+    success = graphene.Boolean(description="Indicates success.")
+    message = graphene.String(description="Status message.")
 
     @classmethod
     @login_required
     def mutate(cls, root, info):
+        """Execute user account deletion.
+
+        Args:
+            root: Root GraphQL object.
+            info (graphene.ResolveInfo): Execution context.
+
+        Returns:
+            DeleteAccount: Mutation payload.
+        """
         try:
             user = info.context.user
             user.delete()
@@ -740,39 +1005,43 @@ class DeleteAccount(graphene.Mutation):
             return cls(success=False, message=str(e))
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Root Mutation ObjectType
+# ─────────────────────────────────────────────────────────────────────────────
 class Mutation(graphene.ObjectType):
-    # Auth
-    create_user = CreateUser.Field()
-    token_auth = graphql_jwt.ObtainJSONWebToken.Field()
-    verify_token = graphql_jwt.Verify.Field()
-    refresh_token = graphql_jwt.Refresh.Field()
-    update_user_profile = UpdateUserProfile.Field()
-    update_user_hobbies = UpdateUserHobbies.Field()
-    update_account_security = UpdateAccountSecurity.Field()
-    delete_account = DeleteAccount.Field()
+    """Root GraphQL Mutation object aggregating all platform write operations."""
 
-    # Communities
-    create_community = CreateCommunity.Field()
-    join_community = JoinCommunity.Field()
+    # ── Authentication & Account Management ──────────────────────────────────
+    create_user = CreateUser.Field(description="Register a new member with an invitation code.")
+    token_auth = graphql_jwt.ObtainJSONWebToken.Field(description="Authenticate credentials and obtain JWT token pair.")
+    verify_token = graphql_jwt.Verify.Field(description="Verify validity of an existing JWT token.")
+    refresh_token = graphql_jwt.Refresh.Field(description="Refresh an expired JWT token using refresh token.")
+    update_user_profile = UpdateUserProfile.Field(description="Update user profile metadata.")
+    update_user_hobbies = UpdateUserHobbies.Field(description="Update user selected hobbies.")
+    update_account_security = UpdateAccountSecurity.Field(description="Update email, username, and password.")
+    delete_account = DeleteAccount.Field(description="Delete the authenticated user account.")
 
-    # Events
-    create_event = CreateEvent.Field()
-    delete_event = DeleteEvent.Field()
-    confirm_attendance = ConfirmAttendance.Field()
-    swipe_event = SwipeEvent.Field()
+    # ── Communities ─────────────────────────────────────────────────────────
+    create_community = CreateCommunity.Field(description="Create a new white-label community.")
+    join_community = JoinCommunity.Field(description="Join an existing community as a member.")
 
-    # Invitations (Feature 1)
-    generate_invite = GenerateInvite.Field()
+    # ── Events & RSVP ───────────────────────────────────────────────────────
+    create_event = CreateEvent.Field(description="Create a new event.")
+    delete_event = DeleteEvent.Field(description="Delete an existing event owned by the caller.")
+    confirm_attendance = ConfirmAttendance.Field(description="Confirm attendance, issue ticket, and claim reward points.")
+    swipe_event = SwipeEvent.Field(description="Submit RSVP swipe choice ('going', 'maybe', 'pass').")
 
-    # Friends (Feature 3)
-    send_friend_request = SendFriendRequest.Field()
-    respond_friend_request = RespondFriendRequest.Field()
+    # ── Invitations ─────────────────────────────────────────────────────────
+    generate_invite = GenerateInvite.Field(description="Generate a new invitation code.")
 
-    # Matches & Chat (Feature 5)
-    create_match = CreateMatch.Field()
-    send_message = SendMessage.Field()
+    # ── Friendships ─────────────────────────────────────────────────────────
+    send_friend_request = SendFriendRequest.Field(description="Send a friend request to another user.")
+    respond_friend_request = RespondFriendRequest.Field(description="Accept or reject an incoming friend request.")
 
-    # Images (Feature 6)
-    presigned_url = PresignedURL.Field()
-    generate_cloudinary_signature = GenerateCloudinarySignature.Field()
+    # ── Matches & Chat ───────────────────────────────────────────────────────
+    create_match = CreateMatch.Field(description="Establish a mutual match between two users.")
+    send_message = SendMessage.Field(description="Send a message in an active match thread.")
 
+    # ── Cloud Media Direct Uploads ──────────────────────────────────────────
+    presigned_url = PresignedURL.Field(description="Obtain an AWS S3 presigned POST URL.")
+    generate_cloudinary_signature = GenerateCloudinarySignature.Field(description="Generate a Cloudinary SHA-1 upload signature.")

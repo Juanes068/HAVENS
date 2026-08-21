@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { useLazyQuery, useApolloClient } from '@apollo/client';
+import { useApolloClient } from '@apollo/client';
 import { MY_PROFILE } from '../graphql/operations';
 import { HAVENS_JWT_TOKEN_KEY } from '../services/apollo';
 import { secureStorage } from '../services/secureStore';
@@ -40,109 +40,137 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 /**
+ * Safely retrieve the JWT token from storage on initial startup.
+ */
+const getStoredToken = (): string | null => {
+  try {
+    const direct = secureStorage.getItemSync(HAVENS_JWT_TOKEN_KEY);
+    if (direct) return direct;
+    if (typeof window !== 'undefined' && window.localStorage) {
+      return (
+        localStorage.getItem(HAVENS_JWT_TOKEN_KEY) ||
+        localStorage.getItem('havens_jwt_token') ||
+        localStorage.getItem('token')
+      );
+    }
+  } catch (e) {
+    console.warn('[AuthContext] Error reading initial token from storage:', e);
+  }
+  return null;
+};
+
+/**
  * AuthProvider component managing authentication state for the havens app.
- * Persists session tokens using secureStorage and loads user profile metrics.
- * 
- * Includes robust network error recovery to prevent infinite loading screens
- * when the backend is unreachable (e.g. ERR_CONNECTION_REFUSED) or returns errors.
  */
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [token, setToken] = useState<string | null>(() => {
-    let t = secureStorage.getItemSync(HAVENS_JWT_TOKEN_KEY);
-    if (!t && typeof window !== 'undefined' && window.localStorage) {
-      t =
-        localStorage.getItem('token') ||
-        localStorage.getItem('havens_jwt_token') ||
-        localStorage.getItem(HAVENS_JWT_TOKEN_KEY);
-    }
-    return t;
-  });
-
+  const [token, setToken] = useState<string | null>(getStoredToken);
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(Boolean(token));
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [networkError, setNetworkError] = useState<string | null>(null);
   const apolloClient = useApolloClient();
 
-  const [fetchProfile, { data: profileData, error: profileError }] = useLazyQuery(MY_PROFILE, {
-    fetchPolicy: 'network-only',
-    errorPolicy: 'all',
-  });
-
   /**
-   * Helper to clear all session artifacts safely
+   * Clears all session tokens from storage and resets in-memory auth state.
    */
   const clearSession = useCallback(() => {
     secureStorage.removeItem(HAVENS_JWT_TOKEN_KEY);
     if (typeof window !== 'undefined' && window.localStorage) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('havens_jwt_token');
       localStorage.removeItem(HAVENS_JWT_TOKEN_KEY);
+      localStorage.removeItem('havens_jwt_token');
+      localStorage.removeItem('token');
     }
     setToken(null);
     setUser(null);
   }, []);
 
-  // Handle lazy query result via standard React useEffect (Apollo 3.14+ compliant)
+  /**
+   * Fetches the current user's profile metrics from Django GraphQL.
+   */
+  const loadUserProfile = useCallback(
+    async (jwtToken: string): Promise<UserProfile | null> => {
+      try {
+        const response = await apolloClient.query({
+          query: MY_PROFILE,
+          fetchPolicy: 'network-only',
+          context: {
+            headers: {
+              authorization: jwtToken.startsWith('JWT ') || jwtToken.startsWith('Bearer ')
+                ? jwtToken
+                : `JWT ${jwtToken}`,
+            },
+          },
+        });
+
+        if (response.data && response.data.myProfile) {
+          setUser(response.data.myProfile);
+          setNetworkError(null);
+          return response.data.myProfile;
+        } else {
+          clearSession();
+          return null;
+        }
+      } catch (err: any) {
+        console.warn('[AuthContext] Session fetch error:', err?.message || err);
+        const msg = (err?.message || '').toLowerCase();
+        if (msg.includes('authentication required') || msg.includes('jwt') || msg.includes('signature')) {
+          clearSession();
+        } else {
+          setNetworkError('Cannot connect to server. Please check your connection.');
+        }
+        return null;
+      }
+    },
+    [apolloClient, clearSession]
+  );
+
+  // Automatically validate token and fetch profile on first render / page refresh
   useEffect(() => {
-    if (profileData) {
-      if (profileData.myProfile) {
-        setUser(profileData.myProfile);
-        setNetworkError(null);
+    const initAuth = async () => {
+      const stored = getStoredToken();
+      if (stored) {
+        setToken(stored);
+        setIsLoading(true);
+        await loadUserProfile(stored);
       } else {
-        // Token was invalid or user record not found
-        clearSession();
+        setToken(null);
+        setUser(null);
       }
       setIsLoading(false);
-    } else if (profileError) {
-      console.warn('[AuthContext] Session fetch error / network unreachable:', profileError.message);
-      // Gracefully clear broken session on connection refusal / network error
-      clearSession();
-      setNetworkError('Cannot connect to server. Please check your connection and try again.');
-      setIsLoading(false);
-    }
-  }, [profileData, profileError, clearSession]);
+    };
 
-  // Automatically fetch profile metrics on mount when token is present
-  useEffect(() => {
-    if (token) {
-      setIsLoading(true);
-      fetchProfile().catch((err) => {
-        console.warn('[AuthContext] fetchProfile unhandled catch:', err);
-        clearSession();
-        setNetworkError('Cannot connect to server. Please try again later.');
-        setIsLoading(false);
-      });
-    } else {
-      setUser(null);
-      setIsLoading(false);
-    }
-  }, [token, fetchProfile, clearSession]);
+    initAuth();
+  }, [loadUserProfile]);
 
   /**
-   * Saves new JWT token using secureStorage and populates active session state.
+   * Saves new JWT token and populates user profile before resolving.
    */
   const login = async (newToken: string) => {
+    // 1. Immediately persist token in storage
     await secureStorage.setItem(HAVENS_JWT_TOKEN_KEY, newToken);
     if (typeof window !== 'undefined' && window.localStorage) {
-      localStorage.setItem('token', newToken);
-      localStorage.setItem('havens_jwt_token', newToken);
       localStorage.setItem(HAVENS_JWT_TOKEN_KEY, newToken);
+      localStorage.setItem('havens_jwt_token', newToken);
+      localStorage.setItem('token', newToken);
     }
+
+    // 2. Set token state
     setToken(newToken);
     setNetworkError(null);
     setIsLoading(true);
+
+    // 3. Await user profile fetch so state is ready before navigation
     try {
-      await fetchProfile();
-    } catch (err: any) {
-      console.warn('[AuthContext] Login fetchProfile error:', err);
-      clearSession();
-      setNetworkError(err?.message || 'Cannot connect to server.');
+      const profile = await loadUserProfile(newToken);
+      if (!profile) {
+        throw new Error('Authentication succeeded but failed to load user profile.');
+      }
+    } finally {
       setIsLoading(false);
     }
   };
 
   /**
-   * Removes session token from secureStorage, clears Apollo cache, and resets state.
+   * Removes session token, resets Apollo cache, and resets state.
    */
   const logout = () => {
     clearSession();
@@ -152,13 +180,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const refetchUser = async () => {
-    if (token) {
-      try {
-        await fetchProfile();
-      } catch (err) {
-        console.warn('[AuthContext] refetchUser error:', err);
-        setIsLoading(false);
-      }
+    const activeToken = token || getStoredToken();
+    if (activeToken) {
+      await loadUserProfile(activeToken);
     }
   };
 
@@ -197,3 +221,4 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
+

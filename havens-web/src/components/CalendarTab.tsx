@@ -1,3 +1,19 @@
+/**
+ * ============================================================================
+ * ARCHITECTURE OVERVIEW: CalendarTab (havens-web/src/components/CalendarTab.tsx)
+ * ============================================================================
+ * Role: Monthly calendar matrix, day-specific RSVP schedule, and RSVP updater.
+ * Current Anti-Pattern: Combines date math, day cell matrices, query filtering,
+ * modal popups, and RSVP mutations in a single component.
+ *
+ * Target Decomposition Blueprint (See MODULARITY_AUDIT.md):
+ *   - components/Calendar/CalendarGrid.tsx    -> Month grid & day cell math
+ *   - components/Calendar/DayEventList.tsx    -> Cards scheduled for selected date
+ *   - components/Calendar/EventDetailModal.tsx-> Full RSVP details popup
+ *   - components/Calendar/hooks/useCalendar.ts-> Month nav & date filtering
+ * ============================================================================
+ */
+
 import React, { useState, useMemo } from 'react'
 import { useQuery, useMutation } from '@apollo/client'
 import { useNavigate } from 'react-router-dom'
@@ -6,6 +22,7 @@ import { ScheduledEventCard, ScheduledEvent } from './ScheduledEventCard'
 import { MY_RSVPS, GET_ALL_EVENTS, SWIPE_EVENT } from '../graphql/operations'
 import { useAuth } from '../context/AuthContext'
 
+// ─── [DOMAIN 1: DATE UTILITIES & MATRIX CALCULATORS] ────────────────────────
 function getDaysInMonth(year: number, month: number): number {
   return new Date(year, month + 1, 0).getDate()
 }
