@@ -60,6 +60,13 @@ class UserType(DjangoObjectType):
     photoUrl = graphene.String()
     inviteCode = graphene.String()
     hobbies = graphene.List(HobbyType)
+    affinityScore = graphene.Int()
+    distance = graphene.Float()
+    matchPercentage = graphene.Int()
+    sharedHobbies = graphene.List(HobbyType)
+    relatedHobbies = graphene.List(HobbyType)
+    createdCirclesCount = graphene.Int()
+    canCreateCircle = graphene.Boolean()
 
     class Meta:
         model = User
@@ -73,28 +80,28 @@ class UserType(DjangoObjectType):
 
     def resolve_totalPoints(self, info):
         try:
-            profile = UserProfile.objects.get(user=self)
+            profile = getattr(self, 'profile', None) or UserProfile.objects.get(user=self)
             return profile.total_points
         except UserProfile.DoesNotExist:
             return 0
 
     def resolve_bio(self, info):
         try:
-            profile = UserProfile.objects.get(user=self)
+            profile = getattr(self, 'profile', None) or UserProfile.objects.get(user=self)
             return profile.bio
         except UserProfile.DoesNotExist:
             return ""
 
     def resolve_neighbourhood(self, info):
         try:
-            profile = UserProfile.objects.get(user=self)
+            profile = getattr(self, 'profile', None) or UserProfile.objects.get(user=self)
             return profile.neighbourhood
         except UserProfile.DoesNotExist:
             return ""
 
     def resolve_cityName(self, info):
         try:
-            profile = UserProfile.objects.get(user=self)
+            profile = getattr(self, 'profile', None) or UserProfile.objects.get(user=self)
             return profile.city_name
         except UserProfile.DoesNotExist:
             return ""
@@ -103,7 +110,7 @@ class UserType(DjangoObjectType):
         user = info.context.user
         if user and user.is_authenticated and (user.id == self.id or user.is_staff):
             try:
-                profile = UserProfile.objects.get(user=self)
+                profile = getattr(self, 'profile', None) or UserProfile.objects.get(user=self)
                 return profile.latitude
             except UserProfile.DoesNotExist:
                 return None
@@ -113,7 +120,7 @@ class UserType(DjangoObjectType):
         user = info.context.user
         if user and user.is_authenticated and (user.id == self.id or user.is_staff):
             try:
-                profile = UserProfile.objects.get(user=self)
+                profile = getattr(self, 'profile', None) or UserProfile.objects.get(user=self)
                 return profile.longitude
             except UserProfile.DoesNotExist:
                 return None
@@ -121,7 +128,7 @@ class UserType(DjangoObjectType):
 
     def resolve_photoUrl(self, info):
         try:
-            profile = UserProfile.objects.get(user=self)
+            profile = getattr(self, 'profile', None) or UserProfile.objects.get(user=self)
             return profile.photo_url
         except UserProfile.DoesNotExist:
             return ""
@@ -130,7 +137,7 @@ class UserType(DjangoObjectType):
         user = info.context.user
         if user and user.is_authenticated and (user.id == self.id or user.is_staff):
             try:
-                profile = UserProfile.objects.get(user=self)
+                profile = getattr(self, 'profile', None) or UserProfile.objects.get(user=self)
                 return profile.invite_code or ""
             except UserProfile.DoesNotExist:
                 return ""
@@ -138,10 +145,31 @@ class UserType(DjangoObjectType):
 
     def resolve_hobbies(self, info):
         try:
-            profile = UserProfile.objects.get(user=self)
+            profile = getattr(self, 'profile', None) or UserProfile.objects.get(user=self)
             return profile.hobbies.all()
         except UserProfile.DoesNotExist:
             return []
+
+    def resolve_affinityScore(self, info):
+        return getattr(self, 'affinity_score', 0)
+
+    def resolve_distance(self, info):
+        return getattr(self, 'distance', None)
+
+    def resolve_matchPercentage(self, info):
+        return getattr(self, 'match_percentage', 0)
+
+    def resolve_sharedHobbies(self, info):
+        return getattr(self, 'shared_hobbies', [])
+
+    def resolve_relatedHobbies(self, info):
+        return getattr(self, 'related_hobbies', [])
+
+    def resolve_createdCirclesCount(self, info):
+        return Community.objects.filter(creator=self).count()
+
+    def resolve_canCreateCircle(self, info):
+        return Community.objects.filter(creator=self).count() < Community.MAX_CIRCLES_PER_USER
 
 
 class CommunityMembershipType(DjangoObjectType):
@@ -302,9 +330,26 @@ class FriendshipType(DjangoObjectType):
 
 
 class MatchType(DjangoObjectType):
+    status = graphene.String()
+    initiator = graphene.Field(UserType)
+    createdAt = graphene.DateTime()
+    updatedAt = graphene.DateTime()
+
     class Meta:
         model = Match
-        fields = ("id", "user1", "user2", "created_at")
+        fields = ("id", "user1", "user2", "initiator", "status", "created_at", "updated_at")
+
+    def resolve_status(self, info):
+        return self.status
+
+    def resolve_initiator(self, info):
+        return self.initiator
+
+    def resolve_createdAt(self, info):
+        return self.created_at
+
+    def resolve_updatedAt(self, info):
+        return self.updated_at
 
 
 class MessageType(DjangoObjectType):

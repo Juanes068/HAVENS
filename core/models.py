@@ -13,6 +13,8 @@ def generate_short_invite_code(length=6):
 
 
 class Community(models.Model):
+    MAX_CIRCLES_PER_USER = 3
+
     name = models.CharField(max_length=200)
     subdomain = models.CharField(max_length=100, unique=True, default='community')
     description = models.TextField(blank=True, default='')
@@ -23,6 +25,27 @@ class Community(models.Model):
     image_url = models.URLField(max_length=500, blank=True, default='')
     hobbies = models.ManyToManyField('Hobby', blank=True, related_name='communities')
     created_at = models.DateTimeField(default=timezone.now)
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.creator:
+            existing = Community.objects.filter(creator=self.creator)
+            if self.pk:
+                existing = existing.exclude(pk=self.pk)
+            if existing.count() >= self.MAX_CIRCLES_PER_USER:
+                raise ValidationError(
+                    f"Circle creation limit reached. A user profile can create a maximum of {self.MAX_CIRCLES_PER_USER} Circles."
+                )
+
+    def save(self, *args, **kwargs):
+        from django.core.exceptions import ValidationError
+        if not self.pk and self.creator:
+            existing_count = Community.objects.filter(creator=self.creator).count()
+            if existing_count >= self.MAX_CIRCLES_PER_USER:
+                raise ValidationError(
+                    f"Circle creation limit reached. A user profile can create a maximum of {self.MAX_CIRCLES_PER_USER} Circles."
+                )
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name
@@ -203,15 +226,24 @@ class Friendship(models.Model):
 
 
 class Match(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('accepted', 'Accepted'),
+        ('rejected', 'Rejected'),
+    ]
+
     user1 = models.ForeignKey(User, on_delete=models.CASCADE, related_name='matches_as_user1')
     user2 = models.ForeignKey(User, on_delete=models.CASCADE, related_name='matches_as_user2')
+    initiator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='initiated_matches', null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         unique_together = ('user1', 'user2')
 
     def __str__(self):
-        return f"Match: {self.user1.username} ↔ {self.user2.username}"
+        return f"Match: {self.user1.username} ↔ {self.user2.username} ({self.status})"
 
 
 class Message(models.Model):

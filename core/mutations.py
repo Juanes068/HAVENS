@@ -16,7 +16,8 @@ Design Conventions:
 import graphene
 import graphql_jwt
 from django.contrib.auth.models import User
-from django.db import transaction
+from django.db import transaction, models as django_models
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.text import slugify
 from graphql import GraphQLError
@@ -350,50 +351,142 @@ class SwipeEvent(graphene.Mutation):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Feature 5: Create Match
+# Feature 5: Connect Requests & Matches (Async Matching Engine)
 # ─────────────────────────────────────────────────────────────────────────────
+class SendConnectRequest(graphene.Mutation):
+    """Initiate an async connection request with another user (creates pending match)."""
+
+    class Arguments:
+        to_user_id = graphene.Int(required=False, description="Target user ID to connect with.")
+        user2_id = graphene.Int(required=False, description="Alias for to_user_id.")
+
+    match = graphene.Field(MatchType, description="Match entity (status: pending, accepted, or rejected).")
+    success = graphene.Boolean(description="Indicates whether the request was processed successfully.")
+    message = graphene.String(description="Status message.")
+
+    @classmethod
+    @login_required
+    def mutate(cls, root, info, to_user_id=None, user2_id=None):
+        """Send connection request or mutually accept if reciprocal request already exists."""
+        target_id = to_user_id if to_user_id is not None else user2_id
+        if not target_id:
+            return cls(match=None, success=False, message="Target user ID is required.")
+
+        try:
+            current_user = info.context.user
+            target_user = User.objects.get(id=target_id)
+
+            if current_user.id == target_user.id:
+                return cls(match=None, success=False, message="Cannot connect with yourself.")
+
+            # Canonical order for user1 and user2
+            u1, u2 = (current_user, target_user) if current_user.id < target_user.id else (target_user, current_user)
+
+            match = Match.objects.filter(user1=u1, user2=u2).first()
+
+            if match:
+                if match.status == 'accepted':
+                    return cls(match=match, success=True, message="You are already connected with this user.")
+                elif match.status == 'pending':
+                    if match.initiator == current_user:
+                        return cls(match=match, success=True, message="Connection request already sent.")
+                    else:
+                        # Mutual match! The other user had sent a request; automatically accept it
+                        match.status = 'accepted'
+                        match.save()
+                        return cls(match=match, success=True, message="Mutual match! Connection accepted.")
+                elif match.status == 'rejected':
+                    match.status = 'pending'
+                    match.initiator = current_user
+                    match.save()
+                    return cls(match=match, success=True, message="Connection request sent.")
+            else:
+                match = Match.objects.create(
+                    user1=u1,
+                    user2=u2,
+                    initiator=current_user,
+                    status='pending',
+                )
+                return cls(match=match, success=True, message="Connection request sent.")
+        except User.DoesNotExist:
+            return cls(match=None, success=False, message="Target user not found.")
+        except Exception as e:
+            return cls(match=None, success=False, message=str(e))
+
+
+class RespondConnectRequest(graphene.Mutation):
+    """Accept or decline an incoming connection request."""
+
+    class Arguments:
+        match_id = graphene.Int(required=False, description="Primary key ID of the Match record.")
+        from_user_id = graphene.Int(required=False, description="User ID who sent the connection request.")
+        action = graphene.String(required=True, description="Action: 'accept' or 'reject' / 'decline'.")
+
+    match = graphene.Field(MatchType, description="The updated Match entity.")
+    success = graphene.Boolean(description="Indicates whether the response succeeded.")
+    message = graphene.String(description="Status message.")
+
+    @classmethod
+    @login_required
+    def mutate(cls, root, info, action, match_id=None, from_user_id=None):
+        """Update match status to accepted or rejected."""
+        try:
+            current_user = info.context.user
+            action_clean = action.strip().lower()
+
+            if action_clean in ('accept', 'accepted'):
+                new_status = 'accepted'
+            elif action_clean in ('reject', 'rejected', 'decline', 'declined'):
+                new_status = 'rejected'
+            else:
+                return cls(match=None, success=False, message="Invalid action. Use 'accept' or 'reject'.")
+
+            # Retrieve the match by ID or sender ID
+            match = None
+            if match_id is not None:
+                match = Match.objects.filter(
+                    id=match_id
+                ).filter(
+                    django_models.Q(user1=current_user) | django_models.Q(user2=current_user)
+                ).first()
+            elif from_user_id is not None:
+                other_user = User.objects.get(id=from_user_id)
+                u1, u2 = (current_user, other_user) if current_user.id < other_user.id else (other_user, current_user)
+                match = Match.objects.filter(user1=u1, user2=u2).first()
+
+            if not match:
+                return cls(match=None, success=False, message="Connection request not found.")
+
+            # Validate that caller is the recipient when match is pending
+            if match.initiator == current_user and match.status == 'pending':
+                return cls(match=match, success=False, message="Cannot respond to your own outgoing connection request.")
+
+            match.status = new_status
+            match.save()
+
+            msg = "Connection accepted! You are now connected." if new_status == 'accepted' else "Connection declined."
+            return cls(match=match, success=True, message=msg)
+        except User.DoesNotExist:
+            return cls(match=None, success=False, message="User not found.")
+        except Exception as e:
+            return cls(match=None, success=False, message=str(e))
+
+
 class CreateMatch(graphene.Mutation):
-    """Establish a direct mutual match pair between two users."""
+    """Establish or request a match pair between two users (delegates to SendConnectRequest)."""
 
     class Arguments:
         user2_id = graphene.Int(required=True, description="Target user ID to match with.")
 
-    match = graphene.Field(MatchType, description="Created Match entity.")
+    match = graphene.Field(MatchType, description="Created or updated Match entity.")
     success = graphene.Boolean(description="Indicates success.")
     message = graphene.String(description="Status message.")
 
     @classmethod
     @login_required
     def mutate(cls, root, info, user2_id):
-        """Instantiate a Match record with canonical ordering to prevent duplicate pairs.
-
-        Args:
-            root: Root GraphQL object.
-            info (graphene.ResolveInfo): Execution context.
-            user2_id (int): Target user ID.
-
-        Returns:
-            CreateMatch: Mutation payload.
-        """
-        try:
-            user1 = info.context.user
-            user2 = User.objects.get(id=user2_id)
-
-            if user1.id == user2.id:
-                return cls(match=None, success=False, message="Cannot match with yourself")
-
-            # Enforce canonical ordering (lower user ID as user1) to ensure uniqueness
-            u1, u2 = (user1, user2) if user1.id < user2.id else (user2, user1)
-
-            if Match.objects.filter(user1=u1, user2=u2).exists():
-                return cls(match=None, success=False, message="Match already exists")
-
-            match = Match.objects.create(user1=u1, user2=u2)
-            return cls(match=match, success=True, message="Match created")
-        except User.DoesNotExist:
-            return cls(match=None, success=False, message="User not found")
-        except Exception as e:
-            return cls(match=None, success=False, message=str(e))
+        res = SendConnectRequest.mutate(root, info, to_user_id=user2_id)
+        return cls(match=res.match, success=res.success, message=res.message)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -599,6 +692,16 @@ class CreateCommunity(graphene.Mutation):
         """Create a new circle, set creator, associate hobbies, and auto-join creator."""
         try:
             user = info.context.user
+
+            # Strict 3-circle creation limit validation
+            if user and user.is_authenticated:
+                created_count = Community.objects.filter(creator=user).count()
+                if created_count >= Community.MAX_CIRCLES_PER_USER:
+                    return cls(
+                        community=None,
+                        success=False,
+                        message=f"Circle creation limit reached. You can create a maximum of {Community.MAX_CIRCLES_PER_USER} Circles."
+                    )
 
             # Generate or clean subdomain slug
             if subdomain and subdomain.strip():
@@ -1071,7 +1174,9 @@ class Mutation(graphene.ObjectType):
     respond_friend_request = RespondFriendRequest.Field(description="Accept or reject an incoming friend request.")
 
     # ── Matches & Chat ───────────────────────────────────────────────────────
-    create_match = CreateMatch.Field(description="Establish a mutual match between two users.")
+    create_match = CreateMatch.Field(description="Establish or request a match between two users.")
+    send_connect_request = SendConnectRequest.Field(description="Initiate an async connection request with another user.")
+    respond_connect_request = RespondConnectRequest.Field(description="Accept or decline an incoming connection request.")
     send_message = SendMessage.Field(description="Send a message in an active match thread.")
 
     # ── Cloud Media Direct Uploads ──────────────────────────────────────────

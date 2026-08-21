@@ -33,7 +33,7 @@ from .models import (
     CommunityMembership, InvitationCode, EventRSVP, Friendship,
     Match, Message, HobbyCategory, Hobby,
 )
-from .utils import filter_events_by_radius
+from .utils import filter_events_by_radius, calculate_user_recommendations
 from .decorators import login_required
 
 
@@ -62,7 +62,24 @@ class Query(graphene.ObjectType):
     )
     all_users = graphene.List(
         UserType,
+        radius_km=graphene.Float(required=False, default_value=50.0),
+        latitude=graphene.Float(required=False),
+        longitude=graphene.Float(required=False),
         description="Retrieve users ranked by hobby affinity score and physical proximity."
+    )
+    get_recommended_users = graphene.List(
+        UserType,
+        radius_km=graphene.Float(required=False, default_value=50.0),
+        latitude=graphene.Float(required=False),
+        longitude=graphene.Float(required=False),
+        description="Location-first recommended users filtered by Haversine radius and sorted by affinity score."
+    )
+    recommended_users = graphene.List(
+        UserType,
+        radius_km=graphene.Float(required=False, default_value=50.0),
+        latitude=graphene.Float(required=False),
+        longitude=graphene.Float(required=False),
+        description="Alias for recommended users matching query."
     )
     user_by_id = graphene.Field(
         UserType,
@@ -200,7 +217,16 @@ class Query(graphene.ObjectType):
     # ── Feature 5: Matches & Messages ───────────────────────────────────────────
     my_matches = graphene.List(
         MatchType,
-        description="Retrieve all mutual matches involving the authenticated user (as user1 or user2)."
+        status=graphene.String(required=False),
+        description="Retrieve all matches involving the authenticated user with optional status filter ('pending', 'accepted', 'rejected')."
+    )
+    pending_connection_requests = graphene.List(
+        MatchType,
+        description="Retrieve incoming pending connection/match requests addressed to the authenticated user."
+    )
+    my_connection_requests = graphene.List(
+        MatchType,
+        description="Alias to retrieve incoming pending connection/match requests for the authenticated user."
     )
     messages_by_match = graphene.List(
         MessageType,
@@ -257,63 +283,35 @@ class Query(graphene.ObjectType):
             return user
         return None
 
-    def resolve_all_users(self, info):
-        """Fetch users ordered by shared hobby affinity and geographic distance.
-
-        If the requester is authenticated and has a configured location & hobbies:
-            1. Excludes the requester from the result set.
-            2. Annotates each user with an `affinity_score` based on the intersection
-               of shared hobby IDs.
-            3. Computes the Haversine spherical distance using database trigonometry.
-            4. Orders results by closest distance, highest affinity, and ID.
-
-        Args:
-            info (graphene.ResolveInfo): Execution context containing the active user session.
-
-        Returns:
-            django.db.models.QuerySet[User]: QuerySet of User objects ranked by proximity and affinity.
-        """
+    def resolve_all_users(self, info, radius_km=50.0, latitude=None, longitude=None):
+        """Fetch users ordered by shared hobby affinity and geographic distance."""
         user = info.context.user
-        queryset = User.objects.all()
+        return calculate_user_recommendations(
+            user=user,
+            latitude=latitude,
+            longitude=longitude,
+            radius_km=radius_km
+        )
 
-        if user and user.is_authenticated:
-            try:
-                profile = user.profile
-                # Fetch requester's active hobby IDs as a flat list
-                user_hobbies = list(profile.hobbies.values_list('id', flat=True))
+    def resolve_get_recommended_users(self, info, radius_km=50.0, latitude=None, longitude=None):
+        """Location-first recommendation resolver filtering by radius and ranking by affinity score."""
+        user = info.context.user
+        return calculate_user_recommendations(
+            user=user,
+            latitude=latitude,
+            longitude=longitude,
+            radius_km=radius_km
+        )
 
-                # Exclude the authenticated user from matching candidates
-                queryset = queryset.exclude(id=user.id)
-
-                # Calculate hobby affinity score via conditional Count aggregation
-                if user_hobbies:
-                    queryset = queryset.annotate(
-                        affinity_score=django_models.Count(
-                            'profile__hobbies',
-                            filter=django_models.Q(profile__hobbies__in=user_hobbies)
-                        )
-                    )
-                else:
-                    queryset = queryset.annotate(affinity_score=Value(0))
-
-                # If requester has geolocation coordinates, compute Haversine distance in kilometers
-                if profile.latitude is not None and profile.longitude is not None:
-                    # Earth mean radius in kilometers: 6371
-                    # Spherical Law of Cosines distance formula:
-                    # d = R * acos(cos(lat1)*cos(lat2)*cos(lon2 - lon1) + sin(lat1)*sin(lat2))
-                    distance_expr = 6371 * ACos(
-                        Cos(Radians(Value(profile.latitude))) * Cos(Radians(F('profile__latitude'))) *
-                        Cos(Radians(F('profile__longitude')) - Radians(Value(profile.longitude))) +
-                        Sin(Radians(Value(profile.latitude))) * Sin(Radians(F('profile__latitude')))
-                    )
-                    queryset = queryset.annotate(distance=distance_expr).order_by('distance', '-affinity_score', '-id')
-                else:
-                    queryset = queryset.order_by('-affinity_score', '-id')
-            except UserProfile.DoesNotExist:
-                # If UserProfile does not exist, return un-annotated QuerySet
-                pass
-
-        return queryset
+    def resolve_recommended_users(self, info, radius_km=50.0, latitude=None, longitude=None):
+        """Alias for location-first user recommendations."""
+        user = info.context.user
+        return calculate_user_recommendations(
+            user=user,
+            latitude=latitude,
+            longitude=longitude,
+            radius_km=radius_km
+        )
 
     @login_required
     def resolve_user_by_id(self, info, id):
@@ -920,21 +918,35 @@ class Query(graphene.ObjectType):
 
     # ── Feature 5: Matches & Messages ───────────────────────────────────────────
     @login_required
-    def resolve_my_matches(self, info):
-        """Retrieve all mutual matches involving the authenticated user.
-
-        Checks both match sides (`user1=user` or `user2=user`).
-
-        Args:
-            info (graphene.ResolveInfo): Execution context.
-
-        Returns:
-            django.db.models.QuerySet[Match]: Matches where caller is either user1 or user2.
+    def resolve_my_matches(self, info, status=None):
+        """Retrieve matches involving the authenticated user.
+        Optional status filter ('pending', 'accepted', 'rejected').
         """
         user = info.context.user
-        return Match.objects.filter(
+        qs = Match.objects.filter(
             django_models.Q(user1=user) | django_models.Q(user2=user)
-        ).select_related('user1', 'user2')
+        ).select_related('user1', 'user2', 'initiator')
+        if status:
+            qs = qs.filter(status=status.lower())
+        return qs
+
+    @login_required
+    def resolve_pending_connection_requests(self, info):
+        """Retrieve incoming pending connection requests for the authenticated user."""
+        user = info.context.user
+        return Match.objects.filter(
+            django_models.Q(user1=user) | django_models.Q(user2=user),
+            status='pending'
+        ).exclude(initiator=user).select_related('user1', 'user2', 'initiator')
+
+    @login_required
+    def resolve_my_connection_requests(self, info):
+        """Alias for incoming pending connection requests."""
+        user = info.context.user
+        return Match.objects.filter(
+            django_models.Q(user1=user) | django_models.Q(user2=user),
+            status='pending'
+        ).exclude(initiator=user).select_related('user1', 'user2', 'initiator')
 
     @login_required
     def resolve_messages_by_match(self, info, match_id):
