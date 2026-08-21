@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useMutation } from '@apollo/client';
 import { SWIPE_EVENT } from '../graphql/operations';
+import { Avatar } from './Avatar';
 
 export interface EventItem {
   id: string;
@@ -269,10 +270,16 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
             }}
           >
             {thirdEvent.imageUrl ? (
-              <img src={thirdEvent.imageUrl} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full bg-[#1b3826]" />
-            )}
+              <img
+                src={thirdEvent.imageUrl}
+                alt=""
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none'
+                }}
+              />
+            ) : null}
+            <div className={`w-full h-full bg-[#1b3826] ${thirdEvent.imageUrl ? 'hidden' : ''}`} />
           </div>
         )}
 
@@ -286,12 +293,18 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
             }}
           >
             {nextEvent.imageUrl ? (
-              <img src={nextEvent.imageUrl} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full bg-gradient-to-br from-[#2D5A3D] to-slate-900 flex items-center justify-center text-white/40 font-serif font-bold text-4xl">
-                {nextEvent.title.charAt(0)}
-              </div>
-            )}
+              <img
+                src={nextEvent.imageUrl}
+                alt=""
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none'
+                }}
+              />
+            ) : null}
+            <div className={`w-full h-full bg-gradient-to-br from-[#2D5A3D] to-slate-900 flex items-center justify-center text-white/40 font-serif font-bold text-4xl ${nextEvent.imageUrl ? 'hidden' : ''}`}>
+              {nextEvent.title.charAt(0)}
+            </div>
             <div className="absolute inset-0 bg-black/40" />
           </div>
         )}
@@ -317,14 +330,16 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
               src={currentEvent.imageUrl}
               alt={currentEvent.title}
               className="w-full h-full object-cover pointer-events-none"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none'
+              }}
             />
-          ) : (
-            <div className="w-full h-full bg-gradient-to-br from-[#2D5A3D] via-[#1b3826] to-slate-950 flex items-center justify-center p-8 text-center pointer-events-none">
-              <span className="text-6xl font-serif font-bold text-white/20 lowercase">
-                {currentEvent.title.charAt(0)}
-              </span>
-            </div>
-          )}
+          ) : null}
+          <div className={`w-full h-full bg-gradient-to-br from-[#2D5A3D] via-[#1b3826] to-slate-950 flex items-center justify-center p-8 text-center pointer-events-none ${currentEvent.imageUrl ? 'hidden' : ''}`}>
+            <span className="text-6xl font-serif font-bold text-white/20 lowercase">
+              {currentEvent.title.charAt(0)}
+            </span>
+          </div>
 
           {/* Drag Overlay Badges */}
           {dragOffset.x > 30 && (
@@ -368,18 +383,18 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
             <div className="space-y-3 z-10">
               {currentEvent.creator && (
                 <div className="flex items-center gap-2.5 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full w-max border border-white/10">
-                  <div className="w-6 h-6 rounded-full bg-[#2D5A3D] text-white flex items-center justify-center text-[10px] font-bold overflow-hidden">
-                    {currentEvent.creator.photoUrl ? (
-                      <img src={currentEvent.creator.photoUrl} alt="Host" className="w-full h-full object-cover" />
-                    ) : (
-                      currentEvent.creator.username.charAt(0).toUpperCase()
-                    )}
-                  </div>
+                  <Avatar
+                    name={currentEvent.creator.username}
+                    photoUrl={currentEvent.creator.photoUrl}
+                    size="sm"
+                    className="w-6 h-6"
+                  />
                   <span className="text-xs font-semibold text-white/90">
                     @{currentEvent.creator.username}
                   </span>
                 </div>
               )}
+
 
               <div>
                 <h2 className="text-2xl font-serif font-bold text-white leading-tight drop-shadow-sm">

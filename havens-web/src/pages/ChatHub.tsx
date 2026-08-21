@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   MY_MATCHES,
@@ -8,6 +8,7 @@ import {
   SEND_MESSAGE,
 } from '../graphql/operations';
 import { encryptMessage, decryptMessage } from '../utils/crypto';
+import { Avatar } from '../components/Avatar';
 
 /**
  * ChatHub — Dedicated full-page encrypted messaging center.
@@ -18,6 +19,7 @@ import { encryptMessage, decryptMessage } from '../utils/crypto';
  */
 export const ChatHubView: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user: currentUser } = useAuth();
   const [selectedMatch, setSelectedMatch] = useState<any | null>(null);
   const [messageInput, setMessageInput] = useState('');
@@ -26,6 +28,7 @@ export const ChatHubView: React.FC = () => {
   // Fetch all active match conversations
   const { data: matchesData, loading: matchesLoading } = useQuery(MY_MATCHES, {
     fetchPolicy: 'cache-and-network',
+    skip: !currentUser,
   });
 
   // Fetch messages for selected conversation
@@ -51,6 +54,18 @@ export const ChatHubView: React.FC = () => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Deep-link: auto-select conversation from ?match= query param
+  useEffect(() => {
+    const matchParam = searchParams.get('match');
+    if (matchParam && activeMatches.length > 0 && !selectedMatch) {
+      const targetMatch = activeMatches.find((m: any) => String(m.id) === matchParam);
+      if (targetMatch) {
+        const partner = targetMatch.user1?.id === currentUser?.id ? targetMatch.user2 : targetMatch.user1;
+        setSelectedMatch({ ...targetMatch, partner });
+      }
+    }
+  }, [searchParams, activeMatches, currentUser, selectedMatch]);
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,13 +176,12 @@ export const ChatHubView: React.FC = () => {
                         : 'bg-white border-[#E2DBD0]/60 hover:bg-[#F4EEE2]/50'
                     }`}
                   >
-                    <div className="w-10 h-10 rounded-full bg-[#2D5A3D] text-white flex items-center justify-center font-bold text-sm shrink-0 overflow-hidden">
-                      {partner?.photoUrl ? (
-                        <img src={partner.photoUrl} alt={partner.username} className="w-full h-full object-cover" />
-                      ) : (
-                        partner?.username?.charAt(0).toUpperCase() || 'U'
-                      )}
-                    </div>
+                    <Avatar
+                      name={partner?.username}
+                      photoUrl={partner?.photoUrl}
+                      size="lg"
+                      className="w-10 h-10 border-2 border-white shadow-xs"
+                    />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-charcoal truncate">@{partner?.username}</p>
                       <p className="text-[10px] text-[#8a8278] truncate">
@@ -201,13 +215,12 @@ export const ChatHubView: React.FC = () => {
                   </svg>
                 </button>
 
-                <div className="w-9 h-9 rounded-full bg-[#2D5A3D] text-white flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden">
-                  {selectedMatch.partner?.photoUrl ? (
-                    <img src={selectedMatch.partner.photoUrl} alt={selectedMatch.partner.username} className="w-full h-full object-cover" />
-                  ) : (
-                    selectedMatch.partner?.username?.charAt(0).toUpperCase() || 'U'
-                  )}
-                </div>
+                <Avatar
+                  name={selectedMatch.partner?.username}
+                  photoUrl={selectedMatch.partner?.photoUrl}
+                  size="md"
+                  className="w-9 h-9 border-2 border-white shadow-xs"
+                />
                 <div className="flex-1 min-w-0">
                   <h4 className="text-sm font-semibold text-charcoal truncate">
                     @{selectedMatch.partner?.username}

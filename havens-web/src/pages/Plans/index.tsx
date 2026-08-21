@@ -24,6 +24,7 @@ export const PlansView: React.FC = () => {
     variables: { upcomingOnly: false },
     fetchPolicy: 'cache-and-network',
     errorPolicy: 'ignore',
+    skip: !user,
   })
 
   const { data: allData, loading: loadingAll, refetch: refetchAll } = useQuery(GET_ALL_EVENTS, {

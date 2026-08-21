@@ -152,13 +152,45 @@ class CommunityMembershipType(DjangoObjectType):
 
 class CommunityType(DjangoObjectType):
     events = graphene.List(lambda: EventType)
+    hobbies = graphene.List(HobbyType)
+    creator = graphene.Field(UserType)
+    memberCount = graphene.Int()
+    imageUrl = graphene.String()
+    locationName = graphene.String()
+    affinityScore = graphene.Int()
+    distance = graphene.Float()
 
     class Meta:
         model = Community
-        fields = ("id", "name", "subdomain", "created_at")
+        fields = (
+            "id", "name", "subdomain", "description", "creator",
+            "latitude", "longitude", "image_url", "location_name",
+            "created_at",
+        )
 
     def resolve_events(self, info):
         return self.events.all()
+
+    def resolve_hobbies(self, info):
+        return self.hobbies.all()
+
+    def resolve_creator(self, info):
+        return self.creator
+
+    def resolve_memberCount(self, info):
+        return self.memberships.count()
+
+    def resolve_imageUrl(self, info):
+        return self.image_url
+
+    def resolve_locationName(self, info):
+        return self.location_name
+
+    def resolve_affinityScore(self, info):
+        return getattr(self, 'affinity_score', 0)
+
+    def resolve_distance(self, info):
+        return getattr(self, 'distance', None)
 
 
 class InvitationCodeType(DjangoObjectType):

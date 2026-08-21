@@ -160,6 +160,7 @@ export const CalendarTab: React.FC = () => {
     refetch: refetchRsvps,
   } = useQuery(MY_RSVPS, {
     fetchPolicy: 'cache-and-network',
+    skip: !user,
   })
 
   const {

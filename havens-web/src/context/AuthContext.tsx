@@ -176,7 +176,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     clearSession();
     setNetworkError(null);
     setIsLoading(false);
-    apolloClient.resetStore().catch(() => {});
+    apolloClient.clearStore().catch(() => {});
   };
 
   const refetchUser = async () => {

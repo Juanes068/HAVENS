@@ -1,5 +1,6 @@
 import React from 'react';
 import { computeAffinity } from '../utils/ignoreStorage';
+import { Avatar } from '../../../components/Avatar';
 
 interface MeetTabProps {
   loading: boolean;
@@ -83,13 +84,12 @@ export const MeetTab: React.FC<MeetTabProps> = ({
                 {/* Card Header: Avatar + Info + Affinity */}
                 <div>
                   <div className="flex items-start gap-3 mb-3">
-                    <div className="w-12 h-12 rounded-full bg-[#2D5A3D] text-white flex items-center justify-center font-bold text-base shrink-0 overflow-hidden border-2 border-white shadow-xs">
-                      {usr.photoUrl ? (
-                        <img src={usr.photoUrl} alt={usr.username} className="w-full h-full object-cover" />
-                      ) : (
-                        usr.username?.charAt(0).toUpperCase() || 'U'
-                      )}
-                    </div>
+                    <Avatar
+                      name={usr.username}
+                      photoUrl={usr.photoUrl}
+                      size="xl"
+                      className="w-12 h-12 border-2 border-white shadow-xs"
+                    />
                     <div className="flex-1 min-w-0">
                       <h4 className="text-sm font-semibold text-charcoal truncate">@{usr.username}</h4>
                       <p className="text-[11px] text-[#8a8278] truncate">

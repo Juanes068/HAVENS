@@ -117,6 +117,28 @@ const errorLink = onError(({ graphQLErrors, networkError, operation }) => {
  */
 export const client = new ApolloClient({
   link: ApolloLink.from([errorLink, authLink, httpLink]),
-  cache: new InMemoryCache(),
+  cache: new InMemoryCache({
+    typePolicies: {
+      Query: {
+        fields: {
+          allEvents: {
+            merge(existing, incoming) {
+              return incoming;
+            },
+          },
+          allUsers: {
+            merge(existing, incoming) {
+              return incoming;
+            },
+          },
+          allCommunities: {
+            merge(existing, incoming) {
+              return incoming;
+            },
+          },
+        },
+      },
+    },
+  }),
 });
 

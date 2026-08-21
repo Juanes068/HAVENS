@@ -29,10 +29,12 @@ export const EventCard: React.FC<EventCardProps> = ({ plan, isSaved, onToggleSav
             src={plan.img}
             alt={plan.title}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none'
+            }}
           />
-        ) : (
-          <div className="w-full h-full bg-[#E2DBD0]" />
-        )}
+        ) : null}
+        <div className={`w-full h-full bg-[#E2DBD0] ${plan.img ? 'hidden' : ''}`} />
 
         <div className="absolute top-3 right-3">
           <button

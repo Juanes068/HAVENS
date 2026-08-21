@@ -18,6 +18,7 @@ import graphql_jwt
 from django.contrib.auth.models import User
 from django.db import transaction
 from django.utils import timezone
+from django.utils.text import slugify
 from graphql import GraphQLError
 from .types import (
     UserType, CommunityType, EventType, TicketType, ParticipationType,
@@ -575,34 +576,65 @@ class UpdateUserProfile(graphene.Mutation):
 # Community & Event Management Mutations
 # ─────────────────────────────────────────────────────────────────────────────
 class CreateCommunity(graphene.Mutation):
-    """Create a new white-label Community entity."""
+    """Create a new Circle / Community entity with taxonomy and cover image."""
 
     class Arguments:
         name = graphene.String(required=True, description="Community display title.")
-        subdomain = graphene.String(required=True, description="Unique subdomain slug.")
+        subdomain = graphene.String(required=False, description="Unique subdomain slug. Auto-generated if omitted.")
+        description = graphene.String(required=False, default_value="", description="Detailed circle description.")
+        locationName = graphene.String(required=False, default_value="", description="Location or neighbourhood name.")
+        latitude = graphene.Float(required=False, description="Location latitude coordinate.")
+        longitude = graphene.Float(required=False, description="Location longitude coordinate.")
+        imageUrl = graphene.String(required=False, default_value="", description="Cloudinary cover image URL.")
+        hobbyIds = graphene.List(graphene.Int, required=False, description="List of associated Hobby IDs.")
 
     community = graphene.Field(CommunityType, description="The created Community record.")
     success = graphene.Boolean(description="Indicates success.")
     message = graphene.String(description="Status message.")
 
     @classmethod
-    def mutate(cls, root, info, name, subdomain):
-        """Create a new community if subdomain slug is available.
-
-        Args:
-            root: Root GraphQL object.
-            info (graphene.ResolveInfo): Execution context.
-            name (str): Community name.
-            subdomain (str): Unique subdomain slug.
-
-        Returns:
-            CreateCommunity: Mutation payload.
-        """
+    @login_required
+    def mutate(cls, root, info, name, subdomain=None, description="", locationName="",
+               latitude=None, longitude=None, imageUrl="", hobbyIds=None):
+        """Create a new circle, set creator, associate hobbies, and auto-join creator."""
         try:
-            if Community.objects.filter(subdomain=subdomain).exists():
-                return cls(community=None, success=False, message="Subdomain already exists")
-            community = Community.objects.create(name=name, subdomain=subdomain)
-            return cls(community=community, success=True, message="Community created successfully")
+            user = info.context.user
+
+            # Generate or clean subdomain slug
+            if subdomain and subdomain.strip():
+                slug = slugify(subdomain.strip())
+            else:
+                base_slug = slugify(name.strip()) or 'circle'
+                slug = base_slug
+                counter = 1
+                while Community.objects.filter(subdomain=slug).exists():
+                    slug = f"{base_slug}-{counter}"
+                    counter += 1
+
+            if Community.objects.filter(subdomain=slug).exists():
+                return cls(community=None, success=False, message="A circle with this subdomain or slug already exists.")
+
+            community = Community.objects.create(
+                name=name.strip(),
+                subdomain=slug,
+                description=description.strip() if description else "",
+                location_name=locationName.strip() if locationName else "",
+                latitude=latitude,
+                longitude=longitude,
+                image_url=imageUrl.strip() if imageUrl else "",
+                creator=user if user and user.is_authenticated else None,
+            )
+
+            # Associate hobby tags
+            if hobbyIds:
+                hobbies = Hobby.objects.filter(id__in=hobbyIds)
+                community.hobbies.set(hobbies)
+
+            # Automatically add creator as a member of the new circle
+            if user and user.is_authenticated:
+                CommunityMembership.objects.get_or_create(user=user, community=community)
+
+            return cls(community=community, success=True, message=f"Circle '{community.name}' created successfully!")
         except Exception as e:
             return cls(community=None, success=False, message=str(e))
 

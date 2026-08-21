@@ -9,6 +9,7 @@ import {
 } from '../graphql/operations';
 import { useAuth } from '../context/AuthContext';
 import { LocationInput } from '../components/LocationInput';
+import { Avatar } from '../components/Avatar';
 
 interface Hobby {
   id: string;
@@ -291,13 +292,12 @@ export const ProfileSettingsView: React.FC = () => {
       <section className="bg-white border border-[#E2DBD0] rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-6 border-b border-[#E2DBD0]/60 pb-6">
           <div className="flex items-center gap-5">
-            <div className="w-20 h-20 rounded-full bg-[#2D5A3D] text-white flex items-center justify-center font-bold text-2xl overflow-hidden border-2 border-[#E2DBD0] shadow-sm">
-              {profile.photoUrl ? (
-                <img src={profile.photoUrl} alt="Avatar" className="w-full h-full object-cover" />
-              ) : (
-                profile.username.charAt(0).toUpperCase()
-              )}
-            </div>
+            <Avatar
+              name={profile.username}
+              photoUrl={profile.photoUrl}
+              size="xl"
+              className="w-20 h-20 text-2xl border-2 border-[#E2DBD0] shadow-sm"
+            />
             <div>
               <h2 className="text-lg font-serif font-bold text-charcoal flex items-center gap-2">
                 @{profile.username}
@@ -476,6 +476,7 @@ export const ProfileSettingsView: React.FC = () => {
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
+                  autoComplete="new-password"
                   placeholder="Leave blank to keep unchanged"
                   className="w-full px-4 py-2.5 rounded-xl bg-white border border-[#E2DBD0] text-[#2C2C2C] text-sm focus:outline-none focus:border-[#2D5A3D]"
                 />
@@ -487,6 +488,7 @@ export const ProfileSettingsView: React.FC = () => {
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
+                  autoComplete="new-password"
                   placeholder="Re-enter new password"
                   className="w-full px-4 py-2.5 rounded-xl bg-white border border-[#E2DBD0] text-[#2C2C2C] text-sm focus:outline-none focus:border-[#2D5A3D]"
                 />
@@ -510,6 +512,7 @@ export const ProfileSettingsView: React.FC = () => {
               type="password"
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
+              autoComplete="current-password"
               placeholder="Enter your current password"
               className="w-full px-4 py-2.5 rounded-xl bg-white border border-[#E2DBD0] text-[#2C2C2C] text-sm focus:outline-none focus:border-[#2D5A3D]"
             />

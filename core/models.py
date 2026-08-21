@@ -15,6 +15,13 @@ def generate_short_invite_code(length=6):
 class Community(models.Model):
     name = models.CharField(max_length=200)
     subdomain = models.CharField(max_length=100, unique=True, default='community')
+    description = models.TextField(blank=True, default='')
+    creator = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_communities')
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
+    location_name = models.CharField(max_length=300, blank=True, default='')
+    image_url = models.URLField(max_length=500, blank=True, default='')
+    hobbies = models.ManyToManyField('Hobby', blank=True, related_name='communities')
     created_at = models.DateTimeField(default=timezone.now)
 
     def __str__(self):

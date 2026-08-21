@@ -75,6 +75,10 @@ class Query(graphene.ObjectType):
         CommunityType,
         description="Retrieve all communities on the Havens platform."
     )
+    recommended_circles = graphene.List(
+        CommunityType,
+        description="Retrieve recommended circles/communities scored by hobby affinity & distance."
+    )
     community_by_id = graphene.Field(
         CommunityType,
         id=graphene.Int(required=True),
@@ -338,7 +342,46 @@ class Query(graphene.ObjectType):
         Returns:
             django.db.models.QuerySet[Community]: All Community records.
         """
-        return Community.objects.all()
+        return Community.objects.prefetch_related('hobbies', 'memberships').select_related('creator').all()
+
+    def resolve_recommended_circles(self, info):
+        """Retrieve recommended circles/communities for the authenticated user,
+        scored and ordered by shared hobby affinity and geographic distance.
+        """
+        user = info.context.user
+        queryset = Community.objects.prefetch_related('hobbies', 'memberships').select_related('creator').all()
+
+        if user and user.is_authenticated:
+            try:
+                profile = user.profile
+                user_hobbies = list(profile.hobbies.values_list('id', flat=True))
+
+                if user_hobbies:
+                    queryset = queryset.annotate(
+                        affinity_score=django_models.Count(
+                            'hobbies',
+                            filter=django_models.Q(hobbies__in=user_hobbies),
+                            distinct=True
+                        )
+                    )
+                else:
+                    queryset = queryset.annotate(affinity_score=Value(0))
+
+                if profile.latitude is not None and profile.longitude is not None:
+                    distance_expr = 6371 * ACos(
+                        Cos(Radians(Value(profile.latitude))) * Cos(Radians(F('latitude'))) *
+                        Cos(Radians(F('longitude')) - Radians(Value(profile.longitude))) +
+                        Sin(Radians(Value(profile.latitude))) * Sin(Radians(F('latitude')))
+                    )
+                    queryset = queryset.annotate(distance=distance_expr).order_by('-affinity_score', 'distance', '-id')
+                else:
+                    queryset = queryset.order_by('-affinity_score', '-id')
+            except UserProfile.DoesNotExist:
+                queryset = queryset.order_by('-id')
+        else:
+            queryset = queryset.order_by('-id')
+
+        return queryset
 
     def resolve_community_by_id(self, info, id):
         """Retrieve a single community by primary key.

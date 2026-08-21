@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useApp, Language } from '../context/AppContext'
+import { Avatar } from './Avatar'
 
 interface NavItem {
   key: 'discover' | 'social' | 'calendar' | 'saved' | 'plans'
@@ -159,13 +160,14 @@ export const Navigation: React.FC = () => {
                 navigate('/profile')
               }}
               title={`View @${user.username}'s Profile`}
-              className="w-9 h-9 rounded-full bg-[#2D5A3D] text-white flex items-center justify-center font-bold text-xs cursor-pointer overflow-hidden border-2 border-white shadow-xs hover:scale-105 transition-transform shrink-0"
+              className="cursor-pointer hover:scale-105 transition-transform"
             >
-              {user.photoUrl ? (
-                <img src={user.photoUrl} alt={user.username} className="w-full h-full object-cover" />
-              ) : (
-                user.username.charAt(0).toUpperCase()
-              )}
+              <Avatar
+                name={user.username}
+                photoUrl={user.photoUrl}
+                size="md"
+                className="w-9 h-9 border-2 border-white shadow-xs"
+              />
             </div>
           )}
 

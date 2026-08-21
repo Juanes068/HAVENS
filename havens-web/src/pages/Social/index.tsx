@@ -33,12 +33,15 @@ export const SocialView: React.FC = () => {
   });
   const { data: matchesData, refetch: refetchMatches } = useQuery(MY_MATCHES, {
     fetchPolicy: 'cache-and-network',
+    skip: !currentUser,
   });
   const { data: requestsData, loading: requestsLoading, refetch: refetchRequests } = useQuery(MY_FRIEND_REQUESTS, {
     fetchPolicy: 'cache-and-network',
+    skip: !currentUser,
   });
   const { data: friendsData, loading: friendsLoading } = useQuery(MY_FRIENDS, {
     fetchPolicy: 'cache-and-network',
+    skip: !currentUser,
   });
   useQuery(GET_ALL_COMMUNITIES, {
     fetchPolicy: 'cache-and-network',
@@ -209,7 +212,14 @@ export const SocialView: React.FC = () => {
           acceptedFriends={acceptedFriends}
           activeMatches={activeMatches}
           currentUser={currentUser}
+          myHobbies={myHobbies}
           onRespondRequest={handleRespondRequest}
+          onCreateMatch={(userId: string) => {
+            const id = parseInt(userId, 10);
+            if (!id) return;
+            setMatchedUserIds((prev) => [...prev, id]);
+            createMatchMutation({ variables: { user2Id: id } });
+          }}
         />
       )}
 
@@ -218,6 +228,8 @@ export const SocialView: React.FC = () => {
         <CirclesTab
           joinedCircleIds={joinedCircleIds}
           onJoinCircle={handleJoinCircle}
+          myHobbies={myHobbies}
+          onActionStatus={(msg: string) => setActionStatus(msg)}
         />
       )}
     </div>

@@ -116,12 +116,14 @@ export const PlanCardGrid: React.FC<PlanCardGridProps> = ({
                       src={plan.imageUrl}
                       alt={plan.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none'
+                      }}
                     />
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-[#eaf3ed] to-[#F0EAE0] flex items-center justify-center text-4xl">
-                      {CATEGORY_ICONS[plan.category || 'Social'] || '🌿'}
-                    </div>
-                  )}
+                  ) : null}
+                  <div className={`w-full h-full bg-gradient-to-br from-[#eaf3ed] to-[#F0EAE0] flex items-center justify-center text-4xl ${plan.imageUrl ? 'hidden' : ''}`}>
+                    {CATEGORY_ICONS[plan.category || 'Social'] || '🌿'}
+                  </div>
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
 
                   {/* Badges */}

@@ -156,12 +156,14 @@ export const DiscoveryMapView: React.FC<DiscoveryMapViewProps> = ({ events }) =>
                     src={selectedEvent.imageUrl}
                     alt={selectedEvent.title}
                     className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none'
+                    }}
                   />
-                ) : (
-                  <div className="w-full h-full bg-gradient-to-br from-[#2D5A3D] to-slate-900 flex items-center justify-center text-white font-serif font-bold text-xl">
-                    {selectedEvent.title.charAt(0)}
-                  </div>
-                )}
+                ) : null}
+                <div className={`w-full h-full bg-gradient-to-br from-[#2D5A3D] to-slate-900 flex items-center justify-center text-white font-serif font-bold text-xl ${selectedEvent.imageUrl ? 'hidden' : ''}`}>
+                  {selectedEvent.title.charAt(0)}
+                </div>
                 <div className="absolute top-2 right-2 bg-black/50 backdrop-blur-xs text-white text-[10px] font-semibold px-2 py-0.5 rounded-full">
                   ⭐ +{selectedEvent.pointsReward || 10} pts
                 </div>

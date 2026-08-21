@@ -93,9 +93,10 @@ admin_site.register(Group, GroupAdmin)
 # Register core application models
 @admin.register(Community, site=admin_site)
 class CommunityAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name', 'subdomain', 'member_count', 'created_at')
-    search_fields = ('name', 'subdomain')
+    list_display = ('id', 'name', 'subdomain', 'location_name', 'creator', 'member_count', 'created_at')
+    search_fields = ('name', 'subdomain', 'location_name', 'description')
     list_filter = ('created_at',)
+    filter_horizontal = ('hobbies',)
 
     @admin.display(description='Members')
     def member_count(self, obj):

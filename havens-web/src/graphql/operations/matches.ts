@@ -72,8 +72,8 @@ export const SEND_MESSAGE = gql`
   mutation SendMessage($matchId: Int!, $content: String!) {
     sendMessage(matchId: $matchId, content: $content) {
       success
-      message
-      messageObject {
+      messageField
+      message {
         id
         content
         createdAt
