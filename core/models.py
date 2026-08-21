@@ -22,6 +22,7 @@ class Community(models.Model):
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
     location_name = models.CharField(max_length=300, blank=True, default='')
+    is_virtual = models.BooleanField(default=False)
     image_url = models.URLField(max_length=500, blank=True, default='')
     hobbies = models.ManyToManyField('Hobby', blank=True, related_name='communities')
     created_at = models.DateTimeField(default=timezone.now)

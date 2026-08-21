@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { useQuery } from '@apollo/client';
-import { GET_RECOMMENDED_CIRCLES } from '../../../graphql/operations';
+import { useQuery, useMutation } from '@apollo/client';
+import { GET_RECOMMENDED_CIRCLES, DELETE_COMMUNITY } from '../../../graphql/operations';
+import { useAuth } from '../../../context/AuthContext';
 import { Circle } from '../types';
 import { CreateCircleWizard } from './CreateCircleWizard';
 
@@ -41,13 +42,17 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
   myHobbies = [],
   onActionStatus,
 }) => {
+  const { user: currentUser } = useAuth();
   const [exploringCircle, setExploringCircle] = useState<Circle | null>(null);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [circleToDelete, setCircleToDelete] = useState<Circle | null>(null);
 
   // GraphQL query for real circles
   const { data, loading, refetch } = useQuery(GET_RECOMMENDED_CIRCLES, {
     fetchPolicy: 'cache-and-network',
   });
+
+  const [deleteCommunityMutation, { loading: isDeleting }] = useMutation(DELETE_COMMUNITY);
 
   const circles: Circle[] = useMemo(() => {
     return data?.recommendedCircles || [];
@@ -57,6 +62,33 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
     refetch();
     if (onActionStatus) {
       onActionStatus(message);
+    }
+  };
+
+  const handleDeleteCircle = async () => {
+    if (!circleToDelete) return;
+    try {
+      const res = await deleteCommunityMutation({
+        variables: { id: Number(circleToDelete.id) },
+      });
+      if (res?.data?.deleteCommunity?.success) {
+        if (onActionStatus) {
+          onActionStatus(res.data.deleteCommunity.message || `Circle "${circleToDelete.name}" deleted successfully!`);
+        }
+        setCircleToDelete(null);
+        if (exploringCircle?.id === circleToDelete.id) {
+          setExploringCircle(null);
+        }
+        refetch();
+      } else {
+        if (onActionStatus) {
+          onActionStatus(res?.data?.deleteCommunity?.message || 'Failed to delete circle.');
+        }
+      }
+    } catch (err: any) {
+      if (onActionStatus) {
+        onActionStatus(`Error: ${err.message}`);
+      }
     }
   };
 
@@ -148,6 +180,32 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
               const affinity = getAffinityPercent(circle);
               const membersCount = circle.memberCount || 1;
 
+              // Intersect Circle hobbies with user's hobbies (exact + related category)
+              const myHobbyIds = new Set((myHobbies || []).map((mh: any) => String(mh.id)));
+              const myCategoryIds = new Set(
+                (myHobbies || [])
+                  .map((mh: any) => String(mh.category?.id || mh.categoryId || ''))
+                  .filter((id: string) => id && id !== 'undefined' && id !== 'null')
+              );
+
+              const sharedList = circle.sharedHobbies || (circle.hobbies || []).filter((h: any) =>
+                myHobbyIds.has(String(h.id))
+              );
+
+              const relatedList = circle.relatedHobbies || (circle.hobbies || []).filter((h: any) => {
+                const isExact = myHobbyIds.has(String(h.id));
+                const catId = String(h.category?.id || h.categoryId || '');
+                return !isExact && catId && myCategoryIds.has(catId);
+              });
+
+              const totalCircleMatches = sharedList.length + relatedList.length;
+
+              const isCreator = Boolean(
+                currentUser &&
+                circle.creator &&
+                (String(currentUser.id) === String(circle.creator.id) || currentUser.id === circle.creator.id)
+              );
+
               return (
                 <div
                   key={circle.id}
@@ -175,12 +233,21 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
                     {/* Circle Header Metadata */}
                     <div className="flex items-center justify-between gap-2 mb-2">
                       <span className="text-[11px] font-semibold text-[#2D5A3D] bg-[#eaf3ed] px-2.5 py-1 rounded-full truncate">
-                        📍 {circle.locationName || 'Vancouver, BC'}
-                        {circle.distance !== undefined && circle.distance !== null ? ` • ${circle.distance.toFixed(1)} km away` : ''}
+                        {circle.isVirtual ? '🌐 Virtual Group' : `📍 ${circle.locationName || 'Local'}`}
+                        {!circle.isVirtual && circle.distance !== undefined && circle.distance !== null ? ` • ${circle.distance.toFixed(1)} km away` : ''}
                       </span>
-                      <span className="text-[11px] font-bold text-[#C47B5A] bg-[#C47B5A]/10 px-2.5 py-1 rounded-full shrink-0">
-                        {affinity}% Match
-                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {isCreator && (
+                          <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                            👑 Host
+                          </span>
+                        )}
+                        {affinity > 0 && (
+                          <span className="text-[11px] font-bold text-[#C47B5A] bg-[#C47B5A]/10 px-2.5 py-1 rounded-full">
+                            {affinity}% Match
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <h4 className="text-base font-semibold text-charcoal mb-1">{circle.name}</h4>
@@ -188,39 +255,73 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
                       {circle.description || 'A community of passionate members connecting around shared interests.'}
                     </p>
 
-                    {/* Common Interest Tags */}
-                    {circle.hobbies && circle.hobbies.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mb-4">
-                        {circle.hobbies.map((h) => {
-                          const isShared = myHobbies.some((mh: any) => String(mh.id) === String(h.id));
-                          return (
-                            <span
-                              key={h.id}
-                              className={`text-[11px] px-2.5 py-1 rounded-md font-medium border ${
-                                isShared
-                                  ? 'bg-[#eaf3ed] text-[#2D5A3D] border-[#7aaa8a]/30'
-                                  : 'bg-[#F4EEE2] text-[#5a5450] border-[#E2DBD0]/60'
-                              }`}
-                            >
-                              {isShared && '✦ '}#{h.name}
-                            </span>
-                          );
-                        })}
+                    {/* Filtered Matching Hobbies ONLY */}
+                    <div className="space-y-1.5 mb-4">
+                      <div className="text-[10px] font-semibold text-[#8a8278] uppercase tracking-wider flex items-center justify-between">
+                        <span>Matching Topics</span>
+                        {totalCircleMatches > 0 && (
+                          <span className="text-[9px] text-[#2D5A3D] font-bold bg-[#eaf3ed] px-1.5 py-0.5 rounded">
+                            {totalCircleMatches} {totalCircleMatches === 1 ? 'topic' : 'topics'}
+                          </span>
+                        )}
                       </div>
-                    )}
+                      <div className="flex flex-wrap gap-1.5 min-h-[26px] items-center">
+                        {/* 1. Exact shared hobbies */}
+                        {sharedList.map((h: any) => (
+                          <span
+                            key={`circle-shared-${h.id}`}
+                            className="text-[11px] px-2.5 py-1 rounded-md font-semibold bg-[#eaf3ed] text-[#2D5A3D] border border-[#7aaa8a]/30 shadow-2xs"
+                            title="Shared exact interest"
+                          >
+                            ✦ #{h.name}
+                          </span>
+                        ))}
+
+                        {/* 2. Related category hobbies */}
+                        {relatedList.map((h: any) => (
+                          <span
+                            key={`circle-related-${h.id}`}
+                            className="text-[11px] px-2.5 py-1 rounded-md font-medium bg-[#fdf6ed] text-[#C47B5A] border border-[#C47B5A]/30"
+                            title={`Related topic in ${h.category?.name || 'shared category'}`}
+                          >
+                            ◈ #{h.name}
+                          </span>
+                        ))}
+
+                        {/* Fallback when no direct hobby match */}
+                        {totalCircleMatches === 0 && (
+                          <span className="text-[11px] px-2.5 py-1 rounded-md font-normal bg-[#F4EEE2] text-[#8a8278] border border-[#E2DBD0]/60 italic">
+                            ⭕ Open Community Circle
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Card Actions Footer */}
-                  <div className="pt-4 border-t border-[#E2DBD0]/60 flex items-center justify-between">
-                    <span className="text-xs text-[#8a8278] font-medium">
-                      👥 {membersCount} {membersCount === 1 ? 'trusted member' : 'trusted members'}
+                  <div className="pt-4 border-t border-[#E2DBD0]/60 flex items-center justify-between gap-2">
+                    <span className="text-xs text-[#8a8278] font-medium truncate">
+                      👥 {membersCount} {membersCount === 1 ? 'member' : 'members'}
                     </span>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {isCreator && (
+                        <button
+                          type="button"
+                          onClick={() => setCircleToDelete(circle)}
+                          className="px-2.5 py-1.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                          title="Delete your circle"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                          <span className="hidden sm:inline">Delete</span>
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => setExploringCircle(circle)}
-                        className="px-3.5 py-1.5 rounded-xl border border-[#E2DBD0] text-xs font-semibold text-[#5a5450] hover:bg-[#F4EEE2] transition-colors cursor-pointer"
+                        className="px-3 py-1.5 rounded-xl border border-[#E2DBD0] text-xs font-semibold text-[#5a5450] hover:bg-[#F4EEE2] transition-colors cursor-pointer"
                       >
                         Explore
                       </button>
@@ -228,7 +329,7 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
                         type="button"
                         disabled={isJoined}
                         onClick={() => onJoinCircle(Number(circle.id))}
-                        className={`px-4 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                        className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                           isJoined
                             ? 'bg-[#eaf3ed] text-[#2D5A3D] border border-[#7aaa8a]/40 cursor-default'
                             : 'bg-[#2D5A3D] text-white hover:bg-[#3d7a55] shadow-xs'
@@ -292,13 +393,33 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
 
             {exploringCircle.hobbies && exploringCircle.hobbies.length > 0 && (
               <div className="space-y-2">
-                <span className="text-xs font-semibold text-charcoal">Matching Interests & Tags:</span>
+                <span className="text-xs font-semibold text-charcoal">Community Topics & Passions:</span>
                 <div className="flex flex-wrap gap-1.5">
-                  {exploringCircle.hobbies.map((t) => (
-                    <span key={t.id} className="text-[11px] bg-[#eaf3ed] text-[#2D5A3D] px-2.5 py-1 rounded-md font-medium">
-                      #{t.name}
-                    </span>
-                  ))}
+                  {exploringCircle.hobbies.map((t: any) => {
+                    const myHobbyIds = new Set((myHobbies || []).map((mh: any) => String(mh.id)));
+                    const myCatIds = new Set(
+                      (myHobbies || [])
+                        .map((mh: any) => String(mh.category?.id || mh.categoryId || ''))
+                        .filter((id: string) => id && id !== 'undefined' && id !== 'null')
+                    );
+                    const isExact = myHobbyIds.has(String(t.id));
+                    const isRelated = !isExact && t.category?.id && myCatIds.has(String(t.category.id));
+
+                    return (
+                      <span
+                        key={t.id}
+                        className={`text-[11px] px-2.5 py-1 rounded-md font-medium border ${
+                          isExact
+                            ? 'bg-[#eaf3ed] text-[#2D5A3D] border-[#7aaa8a]/40 font-semibold shadow-2xs'
+                            : isRelated
+                            ? 'bg-[#fdf6ed] text-[#C47B5A] border-[#C47B5A]/30'
+                            : 'bg-[#F4EEE2] text-[#5a5450] border-[#E2DBD0]/60'
+                        }`}
+                      >
+                        {isExact && '✦ '}{isRelated && '◈ '}#{t.name}
+                      </span>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -308,24 +429,84 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
               <span>🎯 Affinity Match: <strong>{getAffinityPercent(exploringCircle)}%</strong></span>
             </div>
 
-            <div className="pt-2 flex items-center justify-end gap-3">
+            <div className="pt-2 flex items-center justify-between gap-3">
+              {currentUser && exploringCircle.creator && String(currentUser.id) === String(exploringCircle.creator.id) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCircleToDelete(exploringCircle);
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  Delete Circle
+                </button>
+              )}
+
+              <div className="flex items-center gap-2 ml-auto">
+                <button
+                  type="button"
+                  onClick={() => setExploringCircle(null)}
+                  className="px-4 py-2 rounded-xl border border-[#E2DBD0] text-xs font-semibold text-[#5a5450] hover:bg-[#F4EEE2] transition-colors cursor-pointer"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  disabled={joinedCircleIds.some((id) => String(id) === String(exploringCircle.id))}
+                  onClick={() => {
+                    onJoinCircle(Number(exploringCircle.id));
+                    setExploringCircle(null);
+                  }}
+                  className="px-5 py-2 rounded-xl bg-[#2D5A3D] text-white text-xs font-semibold hover:bg-[#3d7a55] transition-colors shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  {joinedCircleIds.some((id) => String(id) === String(exploringCircle.id)) ? '✓ Already Joined' : 'Join Circle Now'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Delete Circle Confirmation Modal ─── */}
+      {circleToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-[#E2DBD0] rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 text-rose-600">
+              <span className="text-2xl p-2 bg-rose-50 rounded-2xl border border-rose-100">🗑️</span>
+              <div>
+                <h3 className="text-base font-bold text-[#2C2C2C]">Delete Circle?</h3>
+                <p className="text-xs text-[#8a8278]">This action cannot be undone.</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-[#FDFBF7] border border-[#E2DBD0] rounded-2xl text-xs text-[#5a5450] space-y-1.5">
+              <p>
+                Are you sure you want to permanently delete <strong>"{circleToDelete.name}"</strong>?
+              </p>
+              <p className="text-[11px] text-[#2D5A3D] font-semibold bg-[#eaf3ed] p-2 rounded-xl border border-[#7aaa8a]/30">
+                ✓ Deleting this circle will free up 1 slot in your 3-circle creation limit so you can create a new circle.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
               <button
                 type="button"
-                onClick={() => setExploringCircle(null)}
+                disabled={isDeleting}
+                onClick={() => setCircleToDelete(null)}
                 className="px-4 py-2 rounded-xl border border-[#E2DBD0] text-xs font-semibold text-[#5a5450] hover:bg-[#F4EEE2] transition-colors cursor-pointer"
               >
-                Close
+                Cancel
               </button>
               <button
                 type="button"
-                disabled={joinedCircleIds.some((id) => String(id) === String(exploringCircle.id))}
-                onClick={() => {
-                  onJoinCircle(Number(exploringCircle.id));
-                  setExploringCircle(null);
-                }}
-                className="px-5 py-2 rounded-xl bg-[#2D5A3D] text-white text-xs font-semibold hover:bg-[#3d7a55] transition-colors shadow-xs cursor-pointer disabled:opacity-50"
+                disabled={isDeleting}
+                onClick={handleDeleteCircle}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold transition-colors shadow-xs cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
               >
-                {joinedCircleIds.some((id) => String(id) === String(exploringCircle.id)) ? '✓ Already Joined' : 'Join Circle Now'}
+                {isDeleting ? 'Deleting...' : 'Yes, Delete Circle'}
               </button>
             </div>
           </div>

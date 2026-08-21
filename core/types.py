@@ -185,16 +185,23 @@ class CommunityType(DjangoObjectType):
     memberCount = graphene.Int()
     imageUrl = graphene.String()
     locationName = graphene.String()
+    isVirtual = graphene.Boolean()
     affinityScore = graphene.Int()
     distance = graphene.Float()
+    matchPercentage = graphene.Int()
+    sharedHobbies = graphene.List(HobbyType)
+    relatedHobbies = graphene.List(HobbyType)
 
     class Meta:
         model = Community
         fields = (
             "id", "name", "subdomain", "description", "creator",
             "latitude", "longitude", "image_url", "location_name",
-            "created_at",
+            "is_virtual", "created_at",
         )
+
+    def resolve_isVirtual(self, info):
+        return getattr(self, 'is_virtual', False)
 
     def resolve_events(self, info):
         return self.events.all()
@@ -219,6 +226,15 @@ class CommunityType(DjangoObjectType):
 
     def resolve_distance(self, info):
         return getattr(self, 'distance', None)
+
+    def resolve_matchPercentage(self, info):
+        return getattr(self, 'match_percentage', 0)
+
+    def resolve_sharedHobbies(self, info):
+        return getattr(self, 'shared_hobbies', [])
+
+    def resolve_relatedHobbies(self, info):
+        return getattr(self, 'related_hobbies', [])
 
 
 class InvitationCodeType(DjangoObjectType):

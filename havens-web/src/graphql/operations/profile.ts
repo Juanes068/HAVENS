@@ -27,24 +27,50 @@ export const MY_PROFILE = gql`
 `;
 
 /**
- * Query to fetch all recommended users (sorted by implicit hobby affinity & location proximity).
+ * Query to fetch recommended users (strictly location-filtered by Haversine radius & ranked by affinity).
  */
 export const GET_ALL_USERS = gql`
-  query GetAllUsers {
-    allUsers {
+  query GetAllUsers($radiusKm: Float, $latitude: Float, $longitude: Float) {
+    allUsers(radiusKm: $radiusKm, latitude: $latitude, longitude: $longitude) {
       id
       username
       email
       bio
       neighbourhood
+      cityName
       photoUrl
+      distance
+      affinityScore
+      matchPercentage
+      sharedHobbies {
+        id
+        name
+        category {
+          id
+          name
+        }
+      }
+      relatedHobbies {
+        id
+        name
+        category {
+          id
+          name
+        }
+      }
       hobbies {
         id
         name
+        category {
+          id
+          name
+        }
       }
     }
   }
 `;
+
+export const GET_RECOMMENDED_USERS = GET_ALL_USERS;
 
 /**
  * Mutation to update user profile details (bio, neighbourhood, photoUrl).

@@ -4,11 +4,11 @@ import { useAuth } from '../../context/AuthContext';
 import { SectionHeading } from '../../components/SectionHeading';
 import {
   GET_ALL_USERS,
-  CREATE_MATCH,
+  SEND_CONNECT_REQUEST,
+  RESPOND_CONNECT_REQUEST,
   MY_MATCHES,
-  MY_FRIEND_REQUESTS,
+  PENDING_CONNECTION_REQUESTS,
   MY_FRIENDS,
-  RESPOND_FRIEND_REQUEST,
   GET_ALL_COMMUNITIES,
   JOIN_COMMUNITY,
 } from '../../graphql/operations';
@@ -23,49 +23,68 @@ export const SocialView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('meet');
   const [actionStatus, setActionStatus] = useState<string>('');
   const [joinedCircleIds, setJoinedCircleIds] = useState<number[]>([]);
-  const [matchedUserIds, setMatchedUserIds] = useState<number[]>([]);
+  const [sentRequestIds, setSentRequestIds] = useState<number[]>([]);
   const [passedUserIds, setPassedUserIds] = useState<string[]>([]);
   const [fadingCardId, setFadingCardId] = useState<string | null>(null);
+  const [connectingUserId, setConnectingUserId] = useState<number | null>(null);
 
   // ─── GraphQL Queries ───
-  const { data: usersData, loading: usersLoading } = useQuery(GET_ALL_USERS, {
+  const { data: usersData, loading: usersLoading, refetch: refetchUsers } = useQuery(GET_ALL_USERS, {
     fetchPolicy: 'cache-and-network',
   });
+
   const { data: matchesData, refetch: refetchMatches } = useQuery(MY_MATCHES, {
+    variables: { status: 'accepted' },
     fetchPolicy: 'cache-and-network',
     skip: !currentUser,
   });
-  const { data: requestsData, loading: requestsLoading, refetch: refetchRequests } = useQuery(MY_FRIEND_REQUESTS, {
+
+  const { data: pendingData, loading: requestsLoading, refetch: refetchPending } = useQuery(PENDING_CONNECTION_REQUESTS, {
     fetchPolicy: 'cache-and-network',
     skip: !currentUser,
   });
-  const { data: friendsData, loading: friendsLoading } = useQuery(MY_FRIENDS, {
+
+  const { data: friendsData, loading: friendsLoading, refetch: refetchFriends } = useQuery(MY_FRIENDS, {
     fetchPolicy: 'cache-and-network',
     skip: !currentUser,
   });
+
   useQuery(GET_ALL_COMMUNITIES, {
     fetchPolicy: 'cache-and-network',
   });
 
   // ─── Mutations ───
-  const [createMatchMutation, { loading: isMatching }] = useMutation(CREATE_MATCH, {
+  const [sendConnectRequestMutation] = useMutation(SEND_CONNECT_REQUEST, {
     onCompleted: (res) => {
-      if (res?.createMatch?.success) {
-        setActionStatus(res.createMatch.message || 'Connection created! 🎉');
+      setConnectingUserId(null);
+      if (res?.sendConnectRequest?.success) {
+        setActionStatus(res.sendConnectRequest.message || 'Connection request sent! 🎉');
         refetchMatches();
+        refetchPending();
+        refetchFriends();
       } else {
-        setActionStatus(res?.createMatch?.message || 'Connection request sent.');
+        setActionStatus(res?.sendConnectRequest?.message || 'Notice on connection request.');
       }
     },
     onError: (err) => {
+      setConnectingUserId(null);
       setActionStatus(`Error: ${err.message}`);
     },
   });
 
-  const [respondFriendRequest] = useMutation(RESPOND_FRIEND_REQUEST, {
+  const [respondConnectRequestMutation] = useMutation(RESPOND_CONNECT_REQUEST, {
     onCompleted: (res) => {
-      setActionStatus(res?.respondFriendRequest?.message || 'Request updated.');
-      refetchRequests();
+      if (res?.respondConnectRequest?.success) {
+        setActionStatus(res.respondConnectRequest.message || 'Connection updated.');
+        refetchPending();
+        refetchMatches();
+        refetchFriends();
+      } else {
+        setActionStatus(res?.respondConnectRequest?.message || 'Error updating connection.');
+      }
+    },
+    onError: (err) => {
+      setActionStatus(`Error: ${err.message}`);
     },
   });
 
@@ -77,44 +96,72 @@ export const SocialView: React.FC = () => {
 
   // ─── Derived Data ───
   const recommendedUsers = usersData?.allUsers || [];
-  const activeMatches = matchesData?.myMatches || [];
-  const pendingRequests = requestsData?.myFriendRequests || [];
-  const acceptedFriends = friendsData?.myFriends || [];
+  const acceptedMatches = matchesData?.myMatches || [];
+  const pendingRequests = pendingData?.pendingConnectionRequests || [];
+  const acceptedFriendsList = friendsData?.myFriends || [];
+
+  // Combine accepted friends with accepted match partners to provide rich directory
+  const allFriends = useMemo(() => {
+    const friendMap = new Map<string, any>();
+
+    // 1. Add from myFriends
+    acceptedFriendsList.forEach((f: any) => {
+      friendMap.set(String(f.id), { ...f });
+    });
+
+    // 2. Add from accepted matches
+    acceptedMatches.forEach((m: any) => {
+      const partner = m.user1?.id === currentUser?.id ? m.user2 : m.user1;
+      if (partner) {
+        const id = String(partner.id);
+        if (!friendMap.has(id)) {
+          friendMap.set(id, {
+            ...partner,
+            matchId: m.id,
+          });
+        } else {
+          friendMap.set(id, {
+            ...friendMap.get(id),
+            matchId: m.id,
+          });
+        }
+      }
+    });
+
+    return Array.from(friendMap.values());
+  }, [acceptedFriendsList, acceptedMatches, currentUser]);
+
   const myHobbies = currentUser?.hobbies || [];
 
-  // Filter suggestions: exclude self, already matched, and ignored users
+  // Filter suggestions: exclude self, already connected/requested friends, and ignored users
   const suggestedUsers = useMemo(() => {
-    const matchedIds = new Set([
-      ...matchedUserIds.map(String),
-      ...activeMatches.map((m: any) => {
-        const partnerId = m.user1?.id === currentUser?.id ? m.user2?.id : m.user1?.id;
-        return String(partnerId);
+    const connectedIds = new Set([
+      ...allFriends.map((f: any) => String(f.id)),
+      ...pendingRequests.map((r: any) => {
+        const other = r.initiator || r.fromUser || (r.user1?.id === currentUser?.id ? r.user2 : r.user1);
+        return String(other?.id);
       }),
     ]);
 
     return recommendedUsers.filter((u: any) => {
       if (u.id === currentUser?.id || u.username === currentUser?.username) return false;
-      if (matchedIds.has(String(u.id))) return false;
+      if (connectedIds.has(String(u.id))) return false;
       if (passedUserIds.includes(String(u.id))) return false;
       if (isUserIgnored(String(u.id))) return false;
       return true;
     });
-  }, [recommendedUsers, currentUser, matchedUserIds, activeMatches, passedUserIds]);
+  }, [recommendedUsers, currentUser, allFriends, pendingRequests, passedUserIds]);
 
   // ─── Handlers ───
   const handleConnect = useCallback((userId: string) => {
     const id = parseInt(userId, 10);
     if (!id) return;
-    setFadingCardId(userId);
-    setTimeout(() => {
-      setMatchedUserIds((prev) => [...prev, id]);
-      setFadingCardId(null);
-      setActionStatus('');
-      createMatchMutation({ variables: { user2Id: id } });
-    }, 300);
-  }, [createMatchMutation]);
+    setConnectingUserId(id);
+    setSentRequestIds((prev) => [...prev, id]);
+    sendConnectRequestMutation({ variables: { toUserId: id } });
+  }, [sendConnectRequestMutation]);
 
-  const handlePass = useCallback((userId: string) => {
+  const handleIgnore = useCallback((userId: string) => {
     setFadingCardId(userId);
     setTimeout(() => {
       ignoreUser(userId);
@@ -125,10 +172,10 @@ export const SocialView: React.FC = () => {
 
   const handleRespondRequest = (requestId: string | number, action: 'accepted' | 'rejected') => {
     setActionStatus('');
-    respondFriendRequest({
+    respondConnectRequestMutation({
       variables: {
-        requestId: parseInt(String(requestId), 10),
-        action,
+        matchId: parseInt(String(requestId), 10),
+        action: action === 'accepted' ? 'accept' : 'reject',
       },
     });
   };
@@ -197,9 +244,10 @@ export const SocialView: React.FC = () => {
           suggestedUsers={suggestedUsers}
           myHobbies={myHobbies}
           fadingCardId={fadingCardId}
-          isMatching={isMatching}
+          sentRequestUserIds={sentRequestIds}
+          connectingUserId={connectingUserId}
           onConnect={handleConnect}
-          onPass={handlePass}
+          onIgnore={handleIgnore}
         />
       )}
 
@@ -209,17 +257,10 @@ export const SocialView: React.FC = () => {
           requestsLoading={requestsLoading}
           pendingRequests={pendingRequests}
           friendsLoading={friendsLoading}
-          acceptedFriends={acceptedFriends}
-          activeMatches={activeMatches}
+          acceptedFriends={allFriends}
           currentUser={currentUser}
           myHobbies={myHobbies}
           onRespondRequest={handleRespondRequest}
-          onCreateMatch={(userId: string) => {
-            const id = parseInt(userId, 10);
-            if (!id) return;
-            setMatchedUserIds((prev) => [...prev, id]);
-            createMatchMutation({ variables: { user2Id: id } });
-          }}
         />
       )}
 

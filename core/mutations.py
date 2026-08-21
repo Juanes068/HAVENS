@@ -678,6 +678,7 @@ class CreateCommunity(graphene.Mutation):
         locationName = graphene.String(required=False, default_value="", description="Location or neighbourhood name.")
         latitude = graphene.Float(required=False, description="Location latitude coordinate.")
         longitude = graphene.Float(required=False, description="Location longitude coordinate.")
+        isVirtual = graphene.Boolean(required=False, default_value=False, description="True if circle is a virtual group with no physical coordinates.")
         imageUrl = graphene.String(required=False, default_value="", description="Cloudinary cover image URL.")
         hobbyIds = graphene.List(graphene.Int, required=False, description="List of associated Hobby IDs.")
 
@@ -688,7 +689,7 @@ class CreateCommunity(graphene.Mutation):
     @classmethod
     @login_required
     def mutate(cls, root, info, name, subdomain=None, description="", locationName="",
-               latitude=None, longitude=None, imageUrl="", hobbyIds=None):
+               latitude=None, longitude=None, isVirtual=False, imageUrl="", hobbyIds=None):
         """Create a new circle, set creator, associate hobbies, and auto-join creator."""
         try:
             user = info.context.user
@@ -717,13 +718,18 @@ class CreateCommunity(graphene.Mutation):
             if Community.objects.filter(subdomain=slug).exists():
                 return cls(community=None, success=False, message="A circle with this subdomain or slug already exists.")
 
+            final_lat = None if isVirtual else latitude
+            final_lng = None if isVirtual else longitude
+            final_loc_name = "Virtual Group" if (isVirtual and not locationName.strip()) else locationName.strip()
+
             community = Community.objects.create(
                 name=name.strip(),
                 subdomain=slug,
                 description=description.strip() if description else "",
-                location_name=locationName.strip() if locationName else "",
-                latitude=latitude,
-                longitude=longitude,
+                location_name=final_loc_name,
+                latitude=final_lat,
+                longitude=final_lng,
+                is_virtual=isVirtual,
                 image_url=imageUrl.strip() if imageUrl else "",
                 creator=user if user and user.is_authenticated else None,
             )
@@ -740,6 +746,51 @@ class CreateCommunity(graphene.Mutation):
             return cls(community=community, success=True, message=f"Circle '{community.name}' created successfully!")
         except Exception as e:
             return cls(community=None, success=False, message=str(e))
+
+
+class DeleteCommunity(graphene.Mutation):
+    """Permanently delete a circle/community. Allowed only for the creator or staff."""
+
+    class Arguments:
+        id = graphene.Int(required=False, description="Primary key ID of the circle to delete.")
+        communityId = graphene.Int(required=False, description="Alias for id.")
+
+    success = graphene.Boolean(description="Indicates success.")
+    message = graphene.String(description="Status message.")
+    deletedCircleId = graphene.Int(description="Primary key ID of the deleted circle.")
+
+    @classmethod
+    @login_required
+    def mutate(cls, root, info, id=None, communityId=None):
+        target_id = id if id is not None else communityId
+        if not target_id:
+            return cls(success=False, message="Circle ID is required.", deletedCircleId=None)
+
+        try:
+            user = info.context.user
+            community = Community.objects.get(id=target_id)
+
+            # Security check: Caller must be the circle's creator or staff
+            if community.creator != user and not user.is_staff:
+                return cls(
+                    success=False,
+                    message="Permission denied. You can only delete circles that you created.",
+                    deletedCircleId=None
+                )
+
+            circle_name = community.name
+            circle_id = community.id
+            community.delete()
+
+            return cls(
+                success=True,
+                message=f"Circle '{circle_name}' was deleted successfully. Your circle quota has been updated.",
+                deletedCircleId=circle_id
+            )
+        except Community.DoesNotExist:
+            return cls(success=False, message="Circle not found.", deletedCircleId=None)
+        except Exception as e:
+            return cls(success=False, message=str(e), deletedCircleId=None)
 
 
 class CreateEvent(graphene.Mutation):
@@ -1158,6 +1209,7 @@ class Mutation(graphene.ObjectType):
 
     # ── Communities ─────────────────────────────────────────────────────────
     create_community = CreateCommunity.Field(description="Create a new white-label community.")
+    delete_community = DeleteCommunity.Field(description="Delete a circle created by the caller.")
     join_community = JoinCommunity.Field(description="Join an existing community as a member.")
 
     # ── Events & RSVP ───────────────────────────────────────────────────────

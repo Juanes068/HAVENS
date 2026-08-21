@@ -1,7 +1,7 @@
 from django.test import TestCase
 from django.contrib.auth.models import User
-from core.models import UserProfile, HobbyCategory, Hobby, Match
-from core.utils import haversine_km, calculate_user_recommendations
+from core.models import UserProfile, HobbyCategory, Hobby, Match, Community
+from core.utils import haversine_km, calculate_user_recommendations, calculate_circle_recommendations
 from havens.schema import schema
 
 
@@ -241,4 +241,202 @@ class MatchingEngineAndAsyncLogicTests(TestCase):
                 subdomain="circle-4-direct",
                 creator=self.user_main
             )
+
+    def test_security_third_party_cannot_respond_to_request(self):
+        """User C cannot accept/decline match requests between User A and User B."""
+        # Request from User Main (A) -> User Near High (B)
+        match = Match.objects.create(
+            user1=min(self.user_main, self.user_near_high, key=lambda u: u.id),
+            user2=max(self.user_main, self.user_near_high, key=lambda u: u.id),
+            initiator=self.user_main,
+            status='pending'
+        )
+
+        class MockContext:
+            def __init__(self, user):
+                self.user = user
+                self.is_authenticated = True
+
+        # User Far (C) attempts to accept the request between A and B
+        ctx_c = MockContext(self.user_far)
+        mutation = f"""
+        mutation {{
+            respondConnectRequest(matchId: {match.id}, action: "accept") {{
+                success
+                message
+            }}
+        }}
+        """
+        res = schema.execute(mutation, context_value=ctx_c)
+        self.assertFalse(res.data['respondConnectRequest']['success'])
+        self.assertEqual(res.data['respondConnectRequest']['message'], "Connection request not found.")
+
+        # Verify match is still untouched and pending
+        match.refresh_from_db()
+        self.assertEqual(match.status, 'pending')
+
+    def test_security_requester_cannot_respond_to_own_request(self):
+        """User A cannot accept/decline their own pending outgoing request."""
+        match = Match.objects.create(
+            user1=min(self.user_main, self.user_near_high, key=lambda u: u.id),
+            user2=max(self.user_main, self.user_near_high, key=lambda u: u.id),
+            initiator=self.user_main,
+            status='pending'
+        )
+
+        class MockContext:
+            def __init__(self, user):
+                self.user = user
+                self.is_authenticated = True
+
+        ctx_a = MockContext(self.user_main)
+        mutation = f"""
+        mutation {{
+            respondConnectRequest(matchId: {match.id}, action: "accept") {{
+                success
+                message
+            }}
+        }}
+        """
+        res = schema.execute(mutation, context_value=ctx_a)
+        self.assertFalse(res.data['respondConnectRequest']['success'])
+        self.assertIn("Cannot respond to your own outgoing connection request", res.data['respondConnectRequest']['message'])
+
+    def test_circle_recommendations_physical_radius_and_virtual_bypass(self):
+        """Physical circles outside radius are excluded; virtual circles bypass radius filter."""
+        # Circle 1: Bogota (Near, ~2 km from user_main), 1 exact hobby match (+3)
+        circle_near = Community.objects.create(
+            name="Bogota Running Club",
+            subdomain="bogota-running",
+            latitude=4.6200,
+            longitude=-74.0700,
+            is_virtual=False,
+            creator=self.user_near_high
+        )
+        circle_near.hobbies.add(self.hobby_running)
+
+        # Circle 2: Vancouver (Far, ~6300 km from user_main), 2 exact hobbies
+        circle_far = Community.objects.create(
+            name="Vancouver Marathoners",
+            subdomain="vancouver-marathoners",
+            latitude=49.2827,
+            longitude=-123.1207,
+            is_virtual=False,
+            creator=self.user_far
+        )
+        circle_far.hobbies.add(self.hobby_running, self.hobby_cycling)
+
+        # Circle 3: Virtual Group (null coords, is_virtual=True), 1 related category hobby (+1)
+        circle_virtual = Community.objects.create(
+            name="Global Sports Tech Hub",
+            subdomain="global-sports-tech",
+            latitude=None,
+            longitude=None,
+            is_virtual=True,
+            creator=self.user_near_low
+        )
+        circle_virtual.hobbies.add(self.hobby_cycling)
+
+        class MockContext:
+            def __init__(self, user):
+                self.user = user
+                self.is_authenticated = True
+
+        ctx = MockContext(self.user_main)
+        query = """
+        query {
+            getRecommendedCircles(radiusKm: 50.0) {
+                id
+                name
+                isVirtual
+                distance
+                affinityScore
+                matchPercentage
+            }
+        }
+        """
+        res = schema.execute(query, context_value=ctx)
+        self.assertIsNone(res.errors)
+        recommended = res.data['getRecommendedCircles']
+
+        # Vancouver circle (~6300 km away) must be completely excluded
+        rec_ids = [c['id'] for c in recommended]
+        self.assertNotIn(str(circle_far.id), rec_ids)
+        self.assertNotIn(circle_far.id, rec_ids)
+
+        # Bogota and Virtual circles must be included
+        self.assertIn(str(circle_near.id), [str(c['id']) for c in recommended])
+        self.assertIn(str(circle_virtual.id), [str(c['id']) for c in recommended])
+
+        # Bogota circle (exact match, affinity = 3) ranks before Virtual circle (related category, affinity = 1)
+        self.assertEqual(int(recommended[0]['id']), circle_near.id)
+        self.assertEqual(recommended[0]['affinityScore'], 3)
+        self.assertEqual(int(recommended[1]['id']), circle_virtual.id)
+        self.assertEqual(recommended[1]['affinityScore'], 1)
+        self.assertTrue(recommended[1]['isVirtual'])
+
+    def test_delete_community_success_restores_quota(self):
+        """Deleting a circle succeeds for creator and releases 1 slot in the creation quota."""
+        # Create circle
+        circle = Community.objects.create(
+            name="Circle To Delete",
+            subdomain=f"circle-to-delete-{self.user_main.id}",
+            creator=self.user_main
+        )
+        self.assertEqual(Community.objects.filter(creator=self.user_main).count(), 1)
+
+        class MockContext:
+            def __init__(self, user):
+                self.user = user
+                self.is_authenticated = True
+
+        ctx = MockContext(self.user_main)
+        mutation = f"""
+        mutation {{
+            deleteCommunity(id: {circle.id}) {{
+                success
+                message
+                deletedCircleId
+            }}
+        }}
+        """
+        res = schema.execute(mutation, context_value=ctx)
+        self.assertIsNone(res.errors)
+        self.assertTrue(res.data['deleteCommunity']['success'])
+        self.assertEqual(res.data['deleteCommunity']['deletedCircleId'], circle.id)
+
+        # Confirm deleted and quota freed
+        self.assertEqual(Community.objects.filter(id=circle.id).count(), 0)
+        self.assertEqual(Community.objects.filter(creator=self.user_main).count(), 0)
+
+    def test_delete_community_permission_denied_for_non_creator(self):
+        """A user cannot delete a circle created by someone else."""
+        circle = Community.objects.create(
+            name="Protected Circle",
+            subdomain=f"protected-circle-{self.user_main.id}",
+            creator=self.user_main
+        )
+
+        class MockContext:
+            def __init__(self, user):
+                self.user = user
+                self.is_authenticated = True
+
+        # Non-creator user attempts deletion
+        ctx_other = MockContext(self.user_far)
+        mutation = f"""
+        mutation {{
+            deleteCommunity(id: {circle.id}) {{
+                success
+                message
+            }}
+        }}
+        """
+        res = schema.execute(mutation, context_value=ctx_other)
+        self.assertFalse(res.data['deleteCommunity']['success'])
+        self.assertIn("Permission denied", res.data['deleteCommunity']['message'])
+
+        # Circle remains intact
+        self.assertEqual(Community.objects.filter(id=circle.id).count(), 1)
+
 

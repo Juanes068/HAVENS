@@ -11,6 +11,7 @@ export const GET_ALL_COMMUNITIES = gql`
       subdomain
       description
       locationName
+      isVirtual
       imageUrl
       memberCount
       latitude
@@ -23,6 +24,10 @@ export const GET_ALL_COMMUNITIES = gql`
       hobbies {
         id
         name
+        category {
+          id
+          name
+        }
       }
     }
   }
@@ -32,17 +37,19 @@ export const GET_ALL_COMMUNITIES = gql`
  * Query to fetch recommended circles scored by user hobby affinity and proximity.
  */
 export const GET_RECOMMENDED_CIRCLES = gql`
-  query GetRecommendedCircles {
-    recommendedCircles {
+  query GetRecommendedCircles($radiusKm: Float, $latitude: Float, $longitude: Float) {
+    recommendedCircles(radiusKm: $radiusKm, latitude: $latitude, longitude: $longitude) {
       id
       name
       subdomain
       description
       locationName
+      isVirtual
       imageUrl
       memberCount
       affinityScore
       distance
+      matchPercentage
       latitude
       longitude
       createdAt
@@ -53,6 +60,26 @@ export const GET_RECOMMENDED_CIRCLES = gql`
       hobbies {
         id
         name
+        category {
+          id
+          name
+        }
+      }
+      sharedHobbies {
+        id
+        name
+        category {
+          id
+          name
+        }
+      }
+      relatedHobbies {
+        id
+        name
+        category {
+          id
+          name
+        }
       }
     }
   }
@@ -69,6 +96,7 @@ export const CREATE_COMMUNITY = gql`
     $locationName: String
     $latitude: Float
     $longitude: Float
+    $isVirtual: Boolean
     $imageUrl: String
     $hobbyIds: [Int]
   ) {
@@ -79,6 +107,7 @@ export const CREATE_COMMUNITY = gql`
       locationName: $locationName
       latitude: $latitude
       longitude: $longitude
+      isVirtual: $isVirtual
       imageUrl: $imageUrl
       hobbyIds: $hobbyIds
     ) {
@@ -90,6 +119,7 @@ export const CREATE_COMMUNITY = gql`
         subdomain
         description
         locationName
+        isVirtual
         imageUrl
         memberCount
         createdAt
@@ -118,6 +148,19 @@ export const JOIN_COMMUNITY = gql`
           name
         }
       }
+    }
+  }
+`;
+
+/**
+ * Mutation to delete a circle created by the current user.
+ */
+export const DELETE_COMMUNITY = gql`
+  mutation DeleteCommunity($id: Int, $communityId: Int) {
+    deleteCommunity(id: $id, communityId: $communityId) {
+      success
+      message
+      deletedCircleId
     }
   }
 `;

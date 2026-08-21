@@ -33,7 +33,7 @@ from .models import (
     CommunityMembership, InvitationCode, EventRSVP, Friendship,
     Match, Message, HobbyCategory, Hobby,
 )
-from .utils import filter_events_by_radius, calculate_user_recommendations
+from .utils import filter_events_by_radius, calculate_user_recommendations, calculate_circle_recommendations
 from .decorators import login_required
 
 
@@ -94,7 +94,17 @@ class Query(graphene.ObjectType):
     )
     recommended_circles = graphene.List(
         CommunityType,
+        radius_km=graphene.Float(required=False, default_value=50.0),
+        latitude=graphene.Float(required=False),
+        longitude=graphene.Float(required=False),
         description="Retrieve recommended circles/communities scored by hobby affinity & distance."
+    )
+    get_recommended_circles = graphene.List(
+        CommunityType,
+        radius_km=graphene.Float(required=False, default_value=50.0),
+        latitude=graphene.Float(required=False),
+        longitude=graphene.Float(required=False),
+        description="Location-first recommended circles with Haversine radius filtering for physical circles and bypass for virtual circles."
     )
     community_by_id = graphene.Field(
         CommunityType,
@@ -342,44 +352,27 @@ class Query(graphene.ObjectType):
         """
         return Community.objects.prefetch_related('hobbies', 'memberships').select_related('creator').all()
 
-    def resolve_recommended_circles(self, info):
+    def resolve_recommended_circles(self, info, radius_km=50.0, latitude=None, longitude=None):
         """Retrieve recommended circles/communities for the authenticated user,
         scored and ordered by shared hobby affinity and geographic distance.
         """
         user = info.context.user
-        queryset = Community.objects.prefetch_related('hobbies', 'memberships').select_related('creator').all()
+        return calculate_circle_recommendations(
+            user=user,
+            latitude=latitude,
+            longitude=longitude,
+            radius_km=radius_km
+        )
 
-        if user and user.is_authenticated:
-            try:
-                profile = user.profile
-                user_hobbies = list(profile.hobbies.values_list('id', flat=True))
-
-                if user_hobbies:
-                    queryset = queryset.annotate(
-                        affinity_score=django_models.Count(
-                            'hobbies',
-                            filter=django_models.Q(hobbies__in=user_hobbies),
-                            distinct=True
-                        )
-                    )
-                else:
-                    queryset = queryset.annotate(affinity_score=Value(0))
-
-                if profile.latitude is not None and profile.longitude is not None:
-                    distance_expr = 6371 * ACos(
-                        Cos(Radians(Value(profile.latitude))) * Cos(Radians(F('latitude'))) *
-                        Cos(Radians(F('longitude')) - Radians(Value(profile.longitude))) +
-                        Sin(Radians(Value(profile.latitude))) * Sin(Radians(F('latitude')))
-                    )
-                    queryset = queryset.annotate(distance=distance_expr).order_by('-affinity_score', 'distance', '-id')
-                else:
-                    queryset = queryset.order_by('-affinity_score', '-id')
-            except UserProfile.DoesNotExist:
-                queryset = queryset.order_by('-id')
-        else:
-            queryset = queryset.order_by('-id')
-
-        return queryset
+    def resolve_get_recommended_circles(self, info, radius_km=50.0, latitude=None, longitude=None):
+        """Location-first recommendation resolver filtering physical circles by radius and ranking by affinity score."""
+        user = info.context.user
+        return calculate_circle_recommendations(
+            user=user,
+            latitude=latitude,
+            longitude=longitude,
+            radius_km=radius_km
+        )
 
     def resolve_community_by_id(self, info, id):
         """Retrieve a single community by primary key.
@@ -861,7 +854,7 @@ class Query(graphene.ObjectType):
         # Collect IDs of friends where the current user received and accepted the request
         received = Friendship.objects.filter(to_user=user, status='accepted').values_list('from_user_id', flat=True)
         friend_ids = set(sent) | set(received)
-        return User.objects.filter(id__in=friend_ids)
+        return User.objects.filter(id__in=friend_ids).select_related('profile').prefetch_related('profile__hobbies__category')
 
     @login_required
     def resolve_my_friend_requests(self, info):
@@ -874,7 +867,14 @@ class Query(graphene.ObjectType):
             django.db.models.QuerySet[Friendship]: Pending friendships awaiting action by the caller.
         """
         user = info.context.user
-        return Friendship.objects.filter(to_user=user, status='pending')
+        return Friendship.objects.filter(
+            to_user=user,
+            status='pending'
+        ).select_related(
+            'from_user', 'from_user__profile'
+        ).prefetch_related(
+            'from_user__profile__hobbies__category'
+        )
 
     @login_required
     def resolve_pending_friend_requests(self, info):
@@ -887,7 +887,14 @@ class Query(graphene.ObjectType):
             django.db.models.QuerySet[Friendship]: Pending incoming friendships.
         """
         user = info.context.user
-        return Friendship.objects.filter(to_user=user, status='pending')
+        return Friendship.objects.filter(
+            to_user=user,
+            status='pending'
+        ).select_related(
+            'from_user', 'from_user__profile'
+        ).prefetch_related(
+            'from_user__profile__hobbies__category'
+        )
 
     # ── Feature 4: Event RSVPs ──────────────────────────────────────────────────
     @login_required
@@ -925,7 +932,13 @@ class Query(graphene.ObjectType):
         user = info.context.user
         qs = Match.objects.filter(
             django_models.Q(user1=user) | django_models.Q(user2=user)
-        ).select_related('user1', 'user2', 'initiator')
+        ).select_related(
+            'user1', 'user2', 'initiator', 'user1__profile', 'user2__profile', 'initiator__profile'
+        ).prefetch_related(
+            'user1__profile__hobbies__category',
+            'user2__profile__hobbies__category',
+            'initiator__profile__hobbies__category'
+        )
         if status:
             qs = qs.filter(status=status.lower())
         return qs
@@ -937,7 +950,13 @@ class Query(graphene.ObjectType):
         return Match.objects.filter(
             django_models.Q(user1=user) | django_models.Q(user2=user),
             status='pending'
-        ).exclude(initiator=user).select_related('user1', 'user2', 'initiator')
+        ).exclude(initiator=user).select_related(
+            'user1', 'user2', 'initiator', 'user1__profile', 'user2__profile', 'initiator__profile'
+        ).prefetch_related(
+            'user1__profile__hobbies__category',
+            'user2__profile__hobbies__category',
+            'initiator__profile__hobbies__category'
+        )
 
     @login_required
     def resolve_my_connection_requests(self, info):
@@ -946,7 +965,13 @@ class Query(graphene.ObjectType):
         return Match.objects.filter(
             django_models.Q(user1=user) | django_models.Q(user2=user),
             status='pending'
-        ).exclude(initiator=user).select_related('user1', 'user2', 'initiator')
+        ).exclude(initiator=user).select_related(
+            'user1', 'user2', 'initiator', 'user1__profile', 'user2__profile', 'initiator__profile'
+        ).prefetch_related(
+            'user1__profile__hobbies__category',
+            'user2__profile__hobbies__category',
+            'initiator__profile__hobbies__category'
+        )
 
     @login_required
     def resolve_messages_by_match(self, info, match_id):

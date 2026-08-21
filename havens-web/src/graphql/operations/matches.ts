@@ -1,22 +1,32 @@
 import { gql } from '@apollo/client';
 
 /**
- * Mutation to create a match connection with another user (user2Id).
+ * Mutation to send an async connection request to a target user.
  */
-export const CREATE_MATCH = gql`
-  mutation CreateMatch($user2Id: Int!) {
-    createMatch(user2Id: $user2Id) {
+export const SEND_CONNECT_REQUEST = gql`
+  mutation SendConnectRequest($toUserId: Int!) {
+    sendConnectRequest(toUserId: $toUserId) {
       success
       message
       match {
         id
+        status
+        createdAt
+        initiator {
+          id
+          username
+        }
         user1 {
           id
           username
+          photoUrl
+          neighbourhood
         }
         user2 {
           id
           username
+          photoUrl
+          neighbourhood
         }
       }
     }
@@ -24,24 +34,98 @@ export const CREATE_MATCH = gql`
 `;
 
 /**
- * Query to fetch active user matches.
+ * Backward-compatible alias for creating a match connection.
  */
-export const MY_MATCHES = gql`
-  query MyMatches {
-    myMatches {
+export const CREATE_MATCH = SEND_CONNECT_REQUEST;
+
+/**
+ * Mutation to accept or reject an incoming connection request.
+ */
+export const RESPOND_CONNECT_REQUEST = gql`
+  mutation RespondConnectRequest($matchId: Int, $fromUserId: Int, $action: String!) {
+    respondConnectRequest(matchId: $matchId, fromUserId: $fromUserId, action: $action) {
+      success
+      message
+      match {
+        id
+        status
+        updatedAt
+      }
+    }
+  }
+`;
+
+/**
+ * Query to fetch pending incoming connection requests.
+ */
+export const PENDING_CONNECTION_REQUESTS = gql`
+  query PendingConnectionRequests {
+    pendingConnectionRequests {
       id
+      status
       createdAt
+      initiator {
+        id
+        username
+        photoUrl
+        neighbourhood
+      }
       user1 {
         id
         username
         photoUrl
         neighbourhood
+        hobbies {
+          id
+          name
+        }
       }
       user2 {
         id
         username
         photoUrl
         neighbourhood
+        hobbies {
+          id
+          name
+        }
+      }
+    }
+  }
+`;
+
+/**
+ * Query to fetch user matches (optionally filtered by status, e.g., 'accepted').
+ */
+export const MY_MATCHES = gql`
+  query MyMatches($status: String) {
+    myMatches(status: $status) {
+      id
+      status
+      createdAt
+      initiator {
+        id
+        username
+      }
+      user1 {
+        id
+        username
+        photoUrl
+        neighbourhood
+        hobbies {
+          id
+          name
+        }
+      }
+      user2 {
+        id
+        username
+        photoUrl
+        neighbourhood
+        hobbies {
+          id
+          name
+        }
       }
     }
   }
