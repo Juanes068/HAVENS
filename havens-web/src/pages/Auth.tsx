@@ -220,6 +220,7 @@ export const AuthPage: React.FC = () => {
             <label className="block text-xs font-medium text-[#8a8278] mb-1">Username</label>
             <input
               type="text"
+              autoComplete="username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="Enter username"
@@ -232,6 +233,7 @@ export const AuthPage: React.FC = () => {
               <label className="block text-xs font-medium text-[#8a8278] mb-1">Email</label>
               <input
                 type="email"
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@example.com"
@@ -244,6 +246,7 @@ export const AuthPage: React.FC = () => {
             <label className="block text-xs font-medium text-[#8a8278] mb-1">Password</label>
             <input
               type="password"
+              autoComplete={isRegisterMode ? 'new-password' : 'current-password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter password"
@@ -259,6 +262,7 @@ export const AuthPage: React.FC = () => {
               </label>
               <input
                 type="password"
+                autoComplete="new-password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Re-enter your password"
