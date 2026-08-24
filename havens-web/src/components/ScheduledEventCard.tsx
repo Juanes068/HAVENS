@@ -1,5 +1,6 @@
 import React from 'react'
 import { Avatar } from './Avatar'
+import { HelpCircle, Clock, Crown, Check } from 'lucide-react'
 
 export interface ScheduledEvent {
   id: string | number
@@ -118,22 +119,26 @@ export const ScheduledEventCard: React.FC<ScheduledEventCardProps> = ({
               </h3>
 
               {isHost && (
-                <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-[#eaf3ed] text-[#2D5A3D] border border-[#2D5A3D]/20">
-                  👑 Hosting
+                <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-[#eaf3ed] text-[#2D5A3D] border border-[#2D5A3D]/20 flex items-center gap-1">
+                  <Crown className="w-3 h-3 text-[#2D5A3D]" />
+                  <span>Hosting</span>
                 </span>
               )}
 
               {isPast ? (
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#fdf0eb] text-[#C47B5A] border border-[#C47B5A]/20">
-                  ⌛ Past Event
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#fdf0eb] text-[#C47B5A] border border-[#C47B5A]/20 flex items-center gap-1">
+                  <Clock className="w-3 h-3 text-[#C47B5A]" />
+                  <span>Past Event</span>
                 </span>
               ) : rsvpStatus === 'going' ? (
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#eaf3ed] text-[#2D5A3D]">
-                  💚 Going
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#eaf3ed] text-[#2D5A3D] flex items-center gap-1">
+                  <Check className="w-3 h-3 text-[#2D5A3D]" />
+                  <span>Going</span>
                 </span>
               ) : rsvpStatus === 'maybe' ? (
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#fef9ee] text-[#b87e28]">
-                  ❓ Maybe
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#fef9ee] text-[#b87e28] flex items-center gap-1">
+                  <HelpCircle className="w-3 h-3 text-[#b87e28]" />
+                  <span>Maybe</span>
                 </span>
               ) : null}
 
@@ -260,14 +265,14 @@ export const ScheduledEventCard: React.FC<ScheduledEventCardProps> = ({
                         const eventIdNum = typeof event.id === 'string' ? parseInt(event.id, 10) : event.id
                         onRsvpChange(eventIdNum, 'maybe')
                       }}
-                      className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer border ${
+                      className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer border flex items-center justify-center ${
                         rsvpStatus === 'maybe'
                           ? 'bg-amber-100 border-amber-300 text-amber-900'
                           : 'border-border bg-white text-muted hover:text-charcoal hover:border-[#b5cebe]'
                       }`}
                       title="Mark as Maybe"
                     >
-                      ❓
+                      <HelpCircle className="w-3.5 h-3.5" />
                     </button>
                   </>
                 )}

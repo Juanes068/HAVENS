@@ -4,6 +4,7 @@ import { GET_RECOMMENDED_CIRCLES, DELETE_COMMUNITY } from '../../../graphql/oper
 import { useAuth } from '../../../context/AuthContext';
 import { Circle } from '../types';
 import { CreateCircleWizard } from './CreateCircleWizard';
+import { Target, Users, Crown, Trash2 } from 'lucide-react';
 
 interface CirclesTabProps {
   joinedCircleIds: (number | string)[];
@@ -129,8 +130,9 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
           </div>
 
           <div className="flex items-center gap-3">
-            <span className="text-xs bg-[#2D5A3D] text-white px-3 py-2 rounded-xl font-semibold self-start md:self-auto shadow-xs">
-              🎯 {circles.length} Circles Available
+            <span className="text-xs bg-[#2D5A3D] text-white px-3 py-2 rounded-xl font-semibold self-start md:self-auto shadow-xs flex items-center gap-1.5">
+              <Target className="w-3.5 h-3.5" />
+              <span>{circles.length} Circles Available</span>
             </span>
             <button
               type="button"
@@ -155,7 +157,9 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
         ) : circles.length === 0 ? (
           /* Empty State */
           <div className="bg-white border border-[#E2DBD0] rounded-2xl p-12 text-center space-y-4">
-            <span className="text-5xl block">⭕</span>
+            <div className="w-16 h-16 rounded-full bg-[#eaf3ed] flex items-center justify-center mx-auto">
+              <Users className="w-8 h-8 text-[#2D5A3D]" />
+            </div>
             <div>
               <h4 className="text-base font-semibold text-[#2D5A3D]">No circles created yet</h4>
               <p className="text-xs text-[#8a8278] max-w-md mx-auto mt-1">
@@ -226,7 +230,7 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
                       </div>
                     ) : (
                       <div className="w-full h-20 rounded-xl bg-gradient-to-r from-[#2D5A3D]/10 via-[#F4EEE2] to-[#C47B5A]/10 flex items-center justify-center mb-3 border border-[#E2DBD0]/60">
-                        <span className="text-2xl opacity-60">⭕</span>
+                        <Users className="w-8 h-8 text-[#2D5A3D]/40" />
                       </div>
                     )}
 
@@ -238,8 +242,9 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
                       </span>
                       <div className="flex items-center gap-1.5 shrink-0">
                         {isCreator && (
-                          <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-                            👑 Host
+                          <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <Crown className="w-3 h-3 text-amber-700" />
+                            <span>Host</span>
                           </span>
                         )}
                         {affinity > 0 && (
@@ -291,7 +296,7 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
                         {/* Fallback when no direct hobby match */}
                         {totalCircleMatches === 0 && (
                           <span className="text-[11px] px-2.5 py-1 rounded-md font-normal bg-[#F4EEE2] text-[#8a8278] border border-[#E2DBD0]/60 italic">
-                            ⭕ Open Community Circle
+                            Open Community Circle
                           </span>
                         )}
                       </div>
@@ -426,7 +431,7 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
 
             <div className="p-3 bg-[#F0EAE0]/70 rounded-2xl flex items-center justify-between text-xs text-[#5a5450]">
               <span>👥 Active Community Size: <strong>{exploringCircle.memberCount || 1} members</strong></span>
-              <span>🎯 Affinity Match: <strong>{getAffinityPercent(exploringCircle)}%</strong></span>
+              <span>Affinity Match: <strong>{getAffinityPercent(exploringCircle)}%</strong></span>
             </div>
 
             <div className="pt-2 flex items-center justify-between gap-3">
@@ -475,7 +480,9 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white border border-[#E2DBD0] rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center gap-3 text-rose-600">
-              <span className="text-2xl p-2 bg-rose-50 rounded-2xl border border-rose-100">🗑️</span>
+              <div className="p-2.5 bg-rose-50 rounded-2xl border border-rose-100 flex items-center justify-center">
+                <Trash2 className="w-5 h-5 text-rose-600" />
+              </div>
               <div>
                 <h3 className="text-base font-bold text-[#2C2C2C]">Delete Circle?</h3>
                 <p className="text-xs text-[#8a8278]">This action cannot be undone.</p>

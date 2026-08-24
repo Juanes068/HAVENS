@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useMutation } from '@apollo/client';
 import { SWIPE_EVENT } from '../graphql/operations';
 import { Avatar } from './Avatar';
+import { Check, HelpCircle, RefreshCw, Compass } from 'lucide-react';
 
 export interface EventItem {
   id: string;
@@ -85,7 +86,7 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
         });
 
         if (res?.data?.swipeEvent?.success) {
-          showToast(`💚 RSVP Confirmed for "${eventTitle}"!`, 'rsvp');
+          showToast(`✓ RSVP Confirmed for "${eventTitle}"!`, 'rsvp');
         }
       } catch (err: any) {
         console.error('[Swipe Right Error]', err);
@@ -132,7 +133,7 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
     setExitDirection('up');
 
     setTimeout(() => {
-      showToast(`❓ Saved "${eventTitle}" for maybe later this session.`, 'maybe');
+      showToast(`Saved "${eventTitle}" for maybe later this session.`, 'maybe');
       setSessionSkippedIds((prev) => [...prev, currentEvent.id]);
       setExitDirection(null);
       setDragOffset({ x: 0, y: 0 });
@@ -206,8 +207,8 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
   if (!currentEvent || currentIndex >= activeEvents.length) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[520px] max-w-md mx-auto p-8 text-center bg-white border border-[#E2DBD0] rounded-3xl shadow-sm space-y-6 antialiased">
-        <div className="w-16 h-16 rounded-full bg-[#eaf3ed] text-[#2D5A3D] flex items-center justify-center text-3xl font-bold">
-          🌿
+        <div className="w-16 h-16 rounded-full bg-[#eaf3ed] text-[#2D5A3D] flex items-center justify-center shadow-xs">
+          <Compass className="w-8 h-8 text-[#2D5A3D]" />
         </div>
         <div>
           <h3 className="text-xl font-serif font-bold text-[#2D5A3D]">
@@ -220,9 +221,10 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
         <button
           type="button"
           onClick={handleResetStack}
-          className="px-6 py-3 rounded-xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+          className="px-6 py-3 rounded-xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center gap-2"
         >
-          🔄 Reset Swipe Stack
+          <RefreshCw className="w-3.5 h-3.5" />
+          <span>Reset Swipe Stack</span>
         </button>
       </div>
     );
@@ -344,7 +346,7 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
           {/* Drag Overlay Badges */}
           {dragOffset.x > 30 && (
             <div className="absolute top-8 left-8 border-4 border-emerald-400 text-emerald-400 font-bold text-2xl px-4 py-1.5 rounded-2xl rotate-[-15deg] uppercase tracking-wider backdrop-blur-xs bg-black/20 pointer-events-none z-30 animate-pulse">
-              RSVP 💚
+              RSVP ✓
             </div>
           )}
           {dragOffset.x < -30 && (
@@ -354,7 +356,7 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
           )}
           {dragOffset.y < -30 && Math.abs(dragOffset.x) < 30 && (
             <div className="absolute top-8 left-1/2 -translate-x-1/2 border-4 border-amber-400 text-amber-400 font-bold text-2xl px-4 py-1.5 rounded-2xl uppercase tracking-wider backdrop-blur-xs bg-black/20 pointer-events-none z-30 animate-pulse">
-              MAYBE ❓
+              MAYBE
             </div>
           )}
 
@@ -445,9 +447,9 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
           type="button"
           onClick={triggerSwipeUp}
           title="Maybe Later (Up Arrow / Swipe Up)"
-          className="w-12 h-12 rounded-full bg-white border border-amber-200 text-amber-600 hover:bg-amber-50 flex items-center justify-center text-lg font-bold shadow-md hover:scale-110 active:scale-95 transition-all cursor-pointer"
+          className="w-12 h-12 rounded-full bg-white border border-amber-200 text-amber-600 hover:bg-amber-50 flex items-center justify-center text-sm font-bold shadow-md hover:scale-110 active:scale-95 transition-all cursor-pointer"
         >
-          ❓
+          <HelpCircle className="w-5 h-5" />
         </button>
 
         {/* RSVP (Swipe Right) */}
@@ -457,13 +459,13 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
           title="RSVP / I'm In! (Right Arrow / Swipe Right)"
           className="w-14 h-14 rounded-full bg-[#2D5A3D] text-white hover:bg-[#3d7a55] flex items-center justify-center text-xl font-bold shadow-lg hover:scale-110 active:scale-95 transition-all cursor-pointer"
         >
-          💚
+          <Check className="w-6 h-6 stroke-[3]" />
         </button>
       </div>
 
       {/* Keyboard Shortcuts Guide */}
       <p className="text-[11px] text-[#8a8278] font-mono flex items-center gap-2">
-        <span>⌨️ Shortcuts:</span>
+        <span>Shortcuts:</span>
         <kbd className="bg-[#E2DBD0]/60 px-1.5 py-0.5 rounded border border-[#E2DBD0] text-[10px]">← Left</kbd> Pass
         <span>•</span>
         <kbd className="bg-[#E2DBD0]/60 px-1.5 py-0.5 rounded border border-[#E2DBD0] text-[10px]">↑ Up</kbd> Maybe

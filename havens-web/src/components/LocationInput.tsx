@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useLoadScript } from '@react-google-maps/api';
+import { Loader2 } from 'lucide-react';
 
 export interface LocationData {
   formatted_address: string;
@@ -441,8 +442,8 @@ export const LocationInput: React.FC<LocationInputProps> = ({
             </button>
           </div>
         ) : isLoadingPredictions ? (
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#8a8278] animate-spin">
-            ⌛
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center">
+            <Loader2 className="w-4 h-4 text-[#8a8278] animate-spin" />
           </span>
         ) : inputValue ? (
           <button

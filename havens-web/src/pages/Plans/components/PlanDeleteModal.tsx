@@ -1,6 +1,7 @@
 import React from 'react'
 import { useApp } from '../../../context/AppContext'
 import { PlanItem } from '../types'
+import { Trash2 } from 'lucide-react'
 
 interface PlanDeleteModalProps {
   plan: PlanItem | null
@@ -63,7 +64,7 @@ export const PlanDeleteModal: React.FC<PlanDeleteModalProps> = ({
               <span>Deleting...</span>
             ) : (
               <>
-                <span>🗑️</span>
+                <Trash2 className="w-3.5 h-3.5" />
                 <span>{t('confirmDelete')}</span>
               </>
             )}

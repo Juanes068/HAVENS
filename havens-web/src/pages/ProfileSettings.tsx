@@ -10,6 +10,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { LocationInput } from '../components/LocationInput';
 import { Avatar } from '../components/Avatar';
+import { Clock, Copy, Check, RefreshCw, Pencil } from 'lucide-react';
 
 interface Hobby {
   id: string;
@@ -330,7 +331,8 @@ export const ProfileSettingsView: React.FC = () => {
                     className="text-[11px] font-mono font-medium text-[#7a7268] bg-[#E2DBD0]/60 px-1.5 py-0.5 rounded-md flex items-center gap-1"
                     title={`Code rotates automatically in ${formatTime(timeLeft)}`}
                   >
-                    ⏱️ {formatTime(timeLeft)}
+                    <Clock className="w-3 h-3 text-[#7a7268]" />
+                    <span>{formatTime(timeLeft)}</span>
                   </span>
 
                   {/* Copy Button */}
@@ -338,9 +340,9 @@ export const ProfileSettingsView: React.FC = () => {
                     type="button"
                     onClick={handleCopyCode}
                     title="Copy invite code to clipboard"
-                    className="p-1 rounded-md hover:bg-[#E2DBD0] text-xs transition-colors cursor-pointer text-[#5a5450]"
+                    className="p-1 rounded-md hover:bg-[#E2DBD0] text-xs transition-colors cursor-pointer text-[#5a5450] flex items-center justify-center"
                   >
-                    {copySuccess ? '✓' : '📋'}
+                    {copySuccess ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-[#5a5450]" />}
                   </button>
 
                   {/* Manual Refresh Button */}
@@ -349,9 +351,9 @@ export const ProfileSettingsView: React.FC = () => {
                     disabled={isGeneratingInvite}
                     onClick={() => handleGenerateInvite(true)}
                     title="Generate new invitation code (auto-refreshes every 2 min)"
-                    className="p-1 rounded-md hover:bg-[#E2DBD0] text-xs transition-colors cursor-pointer disabled:opacity-50 text-[#5a5450]"
+                    className="p-1 rounded-md hover:bg-[#E2DBD0] text-xs transition-colors cursor-pointer disabled:opacity-50 text-[#5a5450] flex items-center justify-center"
                   >
-                    {isGeneratingInvite ? '⏳' : '🔄'}
+                    <RefreshCw className={`w-3.5 h-3.5 text-[#5a5450] ${isGeneratingInvite ? 'animate-spin' : ''}`} />
                   </button>
                 </div>
               </div>
@@ -360,10 +362,11 @@ export const ProfileSettingsView: React.FC = () => {
 
           <button
             type="button"
-            onClick={() => navigate('/onboarding')}
-            className="px-4 py-2 rounded-xl bg-[#F0EAE0] hover:bg-[#E2DBD0] text-[#2C2C2C] text-xs font-semibold border border-[#E2DBD0] transition-colors cursor-pointer"
+            onClick={() => navigate('/onboarding', { state: { editMode: true } })}
+            className="px-4 py-2 rounded-xl bg-[#F0EAE0] hover:bg-[#E2DBD0] text-[#2C2C2C] text-xs font-semibold border border-[#E2DBD0] transition-colors cursor-pointer flex items-center gap-1.5"
           >
-            ✏️ Edit Hobbies Taxonomy
+            <Pencil className="w-3.5 h-3.5 text-[#2C2C2C]" />
+            <span>Edit Hobbies Taxonomy</span>
           </button>
         </div>
 
@@ -417,9 +420,12 @@ export const ProfileSettingsView: React.FC = () => {
         <form onSubmit={handleUpdateSecurity} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-[#8a8278] mb-1">Username</label>
+              <label htmlFor="profile-username" className="block text-xs font-medium text-[#8a8278] mb-1">Username</label>
               <input
+                id="profile-username"
+                name="username"
                 type="text"
+                autoComplete="username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full px-4 py-2.5 rounded-xl bg-white border border-[#E2DBD0] text-[#2C2C2C] text-sm focus:outline-none focus:border-[#2D5A3D]"
@@ -427,9 +433,12 @@ export const ProfileSettingsView: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-[#8a8278] mb-1">Email Address</label>
+              <label htmlFor="profile-email" className="block text-xs font-medium text-[#8a8278] mb-1">Email Address</label>
               <input
+                id="profile-email"
+                name="email"
                 type="email"
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-2.5 rounded-xl bg-white border border-[#E2DBD0] text-[#2C2C2C] text-sm focus:outline-none focus:border-[#2D5A3D]"
@@ -439,7 +448,7 @@ export const ProfileSettingsView: React.FC = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-[#8a8278] mb-1">Neighbourhood / Location</label>
+              <label htmlFor="profile-neighbourhood" className="block text-xs font-medium text-[#8a8278] mb-1">Neighbourhood / Location</label>
               <LocationInput
                 initialValue={neighbourhood}
                 onSelectLocation={(loc) => {
@@ -452,9 +461,12 @@ export const ProfileSettingsView: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-[#8a8278] mb-1">Bio / Short Bio</label>
+              <label htmlFor="profile-bio" className="block text-xs font-medium text-[#8a8278] mb-1">Bio / Short Bio</label>
               <input
+                id="profile-bio"
+                name="bio"
                 type="text"
+                autoComplete="off"
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
                 placeholder="Tell members about yourself..."
@@ -471,8 +483,10 @@ export const ProfileSettingsView: React.FC = () => {
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-[#8a8278] mb-1">New Password</label>
+                <label htmlFor="profile-new-password" className="block text-xs font-medium text-[#8a8278] mb-1">New Password</label>
                 <input
+                  id="profile-new-password"
+                  name="newPassword"
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
@@ -483,8 +497,10 @@ export const ProfileSettingsView: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-[#8a8278] mb-1">Confirm New Password</label>
+                <label htmlFor="profile-confirm-password" className="block text-xs font-medium text-[#8a8278] mb-1">Confirm New Password</label>
                 <input
+                  id="profile-confirm-password"
+                  name="confirmPassword"
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
@@ -502,13 +518,15 @@ export const ProfileSettingsView: React.FC = () => {
               ? 'bg-amber-50/80 border-amber-300 ring-2 ring-amber-300/40'
               : 'bg-[#F0EAE0]/50 border-[#E2DBD0]'
           }`}>
-            <label className="block text-xs font-bold text-charcoal mb-1">
+            <label htmlFor="profile-current-password" className="block text-xs font-bold text-charcoal mb-1">
               Current Password {isSensitiveChange && <span className="text-rose-600">* (REQUIRED TO AUTHORIZE CHANGES)</span>}
             </label>
             <p className="text-[11px] text-[#8a8278] mb-2">
               Enter your existing password to authorize updates to your Username or Password credentials.
             </p>
             <input
+              id="profile-current-password"
+              name="currentPassword"
               type="password"
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}

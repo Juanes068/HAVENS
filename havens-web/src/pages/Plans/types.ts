@@ -2,14 +2,6 @@ export const SERIF = "'Playfair Display', Georgia, serif"
 
 export const CATEGORIES = ['Outdoors', 'Food & Drink', 'Arts', 'Social', 'Wellness']
 
-export const CATEGORY_ICONS: Record<string, string> = {
-  'Outdoors': '🌿',
-  'Food & Drink': '🍷',
-  'Arts': '🎨',
-  'Social': '✨',
-  'Wellness': '🧘',
-}
-
 export const CLOUDINARY_CLOUD_NAME = 'g8jffrmx'
 
 export type Visibility = 'friends_only' | 'community_only' | 'public'

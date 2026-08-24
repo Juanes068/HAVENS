@@ -9,6 +9,7 @@ import {
 } from '../graphql/operations';
 import { encryptMessage, decryptMessage } from '../utils/crypto';
 import { Avatar } from '../components/Avatar';
+import { MessageSquare, MessageCircle } from 'lucide-react';
 
 /**
  * ChatHub — Dedicated full-page encrypted messaging center.
@@ -147,7 +148,9 @@ export const ChatHubView: React.FC = () => {
             </div>
           ) : activeMatches.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-              <span className="text-4xl mb-3">🤝</span>
+              <div className="w-14 h-14 rounded-full bg-[#F4EEE2] flex items-center justify-center mb-3">
+                <MessageSquare className="w-7 h-7 text-[#2D5A3D]" />
+              </div>
               <p className="text-sm font-medium text-[#5a5450] mb-1">No conversations yet</p>
               <p className="text-xs text-[#8a8278] mb-4">
                 Connect with members in the Social tab to start chatting
@@ -277,7 +280,9 @@ export const ChatHubView: React.FC = () => {
                   </>
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full py-16 text-center">
-                    <span className="text-4xl mb-3">👋</span>
+                    <div className="w-14 h-14 rounded-full bg-[#F4EEE2] flex items-center justify-center mb-3">
+                      <MessageCircle className="w-7 h-7 text-[#2D5A3D]" />
+                    </div>
                     <p className="text-sm font-medium text-[#5a5450] mb-1">
                       Start the conversation
                     </p>

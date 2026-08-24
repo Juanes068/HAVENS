@@ -164,3 +164,30 @@ export const DELETE_COMMUNITY = gql`
     }
   }
 `;
+
+/**
+ * Query to fetch all community memberships belonging to the authenticated user.
+ */
+export const MY_COMMUNITIES = gql`
+  query MyCommunities {
+    myCommunities {
+      id
+      joinedAt
+      community {
+        id
+        name
+        subdomain
+        description
+        locationName
+        isVirtual
+        imageUrl
+        memberCount
+        creator {
+          id
+          username
+        }
+      }
+    }
+  }
+`;
+

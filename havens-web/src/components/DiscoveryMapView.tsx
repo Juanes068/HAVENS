@@ -81,7 +81,7 @@ export const DiscoveryMapView: React.FC<DiscoveryMapViewProps> = ({ events }) =>
       });
 
       if (res?.data?.swipeEvent?.success) {
-        setRsvpSuccessMsg(`💚 RSVP Confirmed for "${eventItem.title}"!`);
+        setRsvpSuccessMsg(`✓ RSVP Confirmed for "${eventItem.title}"!`);
         setTimeout(() => setRsvpSuccessMsg(''), 3500);
       }
     } catch (err: any) {

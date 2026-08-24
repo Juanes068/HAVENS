@@ -6,6 +6,7 @@ import {
   CREATE_COMMUNITY,
 } from '../../../graphql/operations';
 import { LocationInput, LocationData } from '../../../components/LocationInput';
+import { Folder, Camera, Lightbulb } from 'lucide-react';
 
 interface CreateCircleWizardProps {
   isOpen: boolean;
@@ -483,7 +484,7 @@ export const CreateCircleWizard: React.FC<CreateCircleWizardProps> = ({
                             : 'bg-[#F4EEE2] text-[#5a5450] border-[#E2DBD0] hover:border-[#2D5A3D]/50 hover:bg-[#F4EEE2]/80'
                         }`}
                       >
-                        <span>{isSelected ? '✓' : '📁'}</span>
+                        {isSelected ? <span>✓</span> : <Folder className="w-3.5 h-3.5" />}
                         <span>{cat.name}</span>
                       </button>
                     );
@@ -510,7 +511,7 @@ export const CreateCircleWizard: React.FC<CreateCircleWizardProps> = ({
 
               {selectedCategoriesList.length === 0 ? (
                 <div className="p-6 bg-[#FDFBF7] border border-dashed border-[#E2DBD0] rounded-2xl text-center text-xs text-[#8a8278]">
-                  👈 Please select at least 1 Main Hobby above to unlock its secondary hobbies.
+                  Please select at least 1 Main Hobby above to unlock its secondary hobbies.
                 </div>
               ) : (
                 <div className="space-y-4 max-h-[260px] overflow-y-auto pr-1">
@@ -528,7 +529,7 @@ export const CreateCircleWizard: React.FC<CreateCircleWizardProps> = ({
                       >
                         <div className="flex items-center justify-between">
                           <h5 className="text-xs font-bold text-[#2D5A3D] flex items-center gap-1.5">
-                            <span>📁</span>
+                            <Folder className="w-3.5 h-3.5" />
                             <span>{category.name}</span>
                           </h5>
                           <span className="text-[10px] font-semibold text-[#8a8278] bg-white border border-[#E2DBD0] px-2 py-0.5 rounded-md">
@@ -598,7 +599,7 @@ export const CreateCircleWizard: React.FC<CreateCircleWizardProps> = ({
               </div>
             ) : (
               <label className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-[#E2DBD0] hover:border-[#2D5A3D] rounded-2xl cursor-pointer bg-[#F4EEE2]/40 hover:bg-[#F4EEE2]/80 transition-all">
-                <span className="text-3xl mb-2">📸</span>
+                <Camera className="w-8 h-8 text-[#2D5A3D] mb-2" />
                 <span className="text-xs font-semibold text-[#2D5A3D]">Upload Cover Photo</span>
                 <span className="text-[10px] text-[#8a8278] mt-1">PNG, JPG, WEBP up to 5MB</span>
                 <input
@@ -610,8 +611,9 @@ export const CreateCircleWizard: React.FC<CreateCircleWizardProps> = ({
               </label>
             )}
 
-            <div className="p-3.5 bg-[#eaf3ed] rounded-2xl text-xs text-[#2D5A3D] leading-relaxed border border-[#7aaa8a]/30">
-              💡 <strong>Creator Benefit:</strong> As the circle creator, you will automatically be registered as the community host and member.
+            <div className="p-3.5 bg-[#eaf3ed] rounded-2xl text-xs text-[#2D5A3D] leading-relaxed border border-[#7aaa8a]/30 flex items-start gap-2">
+              <Lightbulb className="w-4 h-4 text-[#2D5A3D] shrink-0 mt-0.5" />
+              <span><strong>Creator Benefit:</strong> As the circle creator, you will automatically be registered as the community host and member.</span>
             </div>
           </div>
         )}

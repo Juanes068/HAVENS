@@ -30,7 +30,6 @@ export const ProtectedRoute: React.FC = () => {
 
   // 2. Unauthenticated: No token or user after loading finished -> redirect to /auth
   if (!token || !user) {
-    console.warn('[ProtectedRoute] No valid authenticated user found. Redirecting to /auth.');
     return <Navigate to="/auth" state={{ from: location }} replace />;
   }
 
@@ -38,16 +37,10 @@ export const ProtectedRoute: React.FC = () => {
 
   // 3. Authenticated but Incomplete Onboarding: Lock user to /onboarding
   if (!isOnboarded && !isOnboardingRoute) {
-    console.warn('[ProtectedRoute] User has not completed onboarding. Locking access to /onboarding.');
     return <Navigate to="/onboarding" replace />;
   }
 
-  // 4. Already Onboarded but navigating directly to /onboarding -> redirect to /discover
-  if (isOnboarded && isOnboardingRoute) {
-    return <Navigate to="/discover" replace />;
-  }
-
-  // 5. Stable DOM structure: Render navigation and private route outlet
+  // 4. Stable DOM structure: Render navigation and private route outlet
   const showNav = isOnboarded && !isOnboardingRoute;
 
   return (

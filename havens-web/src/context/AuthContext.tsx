@@ -40,18 +40,19 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 /**
- * Safely retrieve the JWT token from storage on initial startup.
+ * Safely retrieve the JWT token from sessionStorage on startup / page refresh.
+ * Tokens stored in sessionStorage automatically expire upon closing the browser.
  */
 const getStoredToken = (): string | null => {
   try {
     const direct = secureStorage.getItemSync(HAVENS_JWT_TOKEN_KEY);
     if (direct) return direct;
-    if (typeof window !== 'undefined' && window.localStorage) {
-      return (
-        localStorage.getItem(HAVENS_JWT_TOKEN_KEY) ||
-        localStorage.getItem('havens_jwt_token') ||
-        localStorage.getItem('token')
-      );
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      const sessionToken =
+        sessionStorage.getItem(HAVENS_JWT_TOKEN_KEY) ||
+        sessionStorage.getItem('havens_jwt_token') ||
+        sessionStorage.getItem('token');
+      if (sessionToken) return sessionToken;
     }
   } catch (e) {
     console.warn('[AuthContext] Error reading initial token from storage:', e);
@@ -70,14 +71,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const apolloClient = useApolloClient();
 
   /**
-   * Clears all session tokens from storage and resets in-memory auth state.
+   * Clears all session tokens from sessionStorage and resets in-memory auth state.
    */
   const clearSession = useCallback(() => {
     secureStorage.removeItem(HAVENS_JWT_TOKEN_KEY);
-    if (typeof window !== 'undefined' && window.localStorage) {
-      localStorage.removeItem(HAVENS_JWT_TOKEN_KEY);
-      localStorage.removeItem('havens_jwt_token');
-      localStorage.removeItem('token');
+    if (typeof window !== 'undefined') {
+      if (window.sessionStorage) {
+        sessionStorage.removeItem(HAVENS_JWT_TOKEN_KEY);
+        sessionStorage.removeItem('havens_jwt_token');
+        sessionStorage.removeItem('token');
+      }
+      if (window.localStorage) {
+        localStorage.removeItem(HAVENS_JWT_TOKEN_KEY);
+        localStorage.removeItem('havens_jwt_token');
+        localStorage.removeItem('token');
+      }
     }
     setToken(null);
     setUser(null);
@@ -142,15 +150,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [loadUserProfile]);
 
   /**
-   * Saves new JWT token and populates user profile before resolving.
+   * Saves new JWT token in sessionStorage and populates user profile before resolving.
    */
   const login = async (newToken: string) => {
-    // 1. Immediately persist token in storage
+    // 1. Immediately persist token in sessionStorage (expires on browser close)
     await secureStorage.setItem(HAVENS_JWT_TOKEN_KEY, newToken);
-    if (typeof window !== 'undefined' && window.localStorage) {
-      localStorage.setItem(HAVENS_JWT_TOKEN_KEY, newToken);
-      localStorage.setItem('havens_jwt_token', newToken);
-      localStorage.setItem('token', newToken);
+    if (typeof window !== 'undefined') {
+      if (window.sessionStorage) {
+        sessionStorage.setItem(HAVENS_JWT_TOKEN_KEY, newToken);
+      }
+      // Purge any legacy localStorage tokens to ensure session does not persist across browser restarts
+      if (window.localStorage) {
+        localStorage.removeItem(HAVENS_JWT_TOKEN_KEY);
+        localStorage.removeItem('havens_jwt_token');
+        localStorage.removeItem('token');
+      }
     }
 
     // 2. Set token state

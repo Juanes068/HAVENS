@@ -9,10 +9,10 @@ import {
   CREATE_EVENT,
   GENERATE_CLOUDINARY_SIGNATURE,
 } from '../../../graphql/operations'
+import { Clock, Calendar } from 'lucide-react'
 import {
   SERIF,
   CATEGORIES,
-  CATEGORY_ICONS,
   CLOUDINARY_CLOUD_NAME,
   Visibility,
 } from '../types'
@@ -208,7 +208,6 @@ export const PlanCreateForm: React.FC<PlanCreateFormProps> = ({ onSuccess, onCan
                       : 'bg-[#F0EAE0] text-[#5a5450] hover:bg-[#e4dcd2]'
                   }`}
                 >
-                  <span>{CATEGORY_ICONS[cat] || '✨'}</span>
                   <span>{cat}</span>
                 </button>
               ))}
@@ -357,7 +356,7 @@ export const PlanCreateForm: React.FC<PlanCreateFormProps> = ({ onSuccess, onCan
               {imagePreview ? (
                 <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
               ) : (
-                <span className="text-5xl">{CATEGORY_ICONS[category] || '📅'}</span>
+                <Calendar className="w-12 h-12 text-[#2D5A3D]/40" />
               )}
               <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm rounded-full px-2.5 py-0.5 text-[10px] font-bold text-[#2D5A3D]">
                 {visibility.replace('_', ' ')}
@@ -380,7 +379,7 @@ export const PlanCreateForm: React.FC<PlanCreateFormProps> = ({ onSuccess, onCan
 
               <div className="space-y-1 text-xs text-stone-500 mb-3">
                 <p className="flex items-center gap-1.5">
-                  <span>⏰</span>
+                  <Clock className="w-3.5 h-3.5 text-stone-400" />
                   <span>{time ? `${time}` : 'Time TBD'}</span>
                 </p>
                 <p className="flex items-center gap-1.5 truncate">

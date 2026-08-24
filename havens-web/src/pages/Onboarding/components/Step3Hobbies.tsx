@@ -5,8 +5,10 @@ interface Step3HobbiesProps {
   activeCategories: HobbyCategory[];
   selectedHobbyIds: string[];
   isSavingHobbies: boolean;
+  isEditMode?: boolean;
   onToggleHobby: (category: HobbyCategory, hobbyId: string | number) => void;
   onNext: () => void;
+  onSaveAndExit?: () => void;
   onBack: () => void;
 }
 
@@ -14,8 +16,10 @@ export const Step3Hobbies: React.FC<Step3HobbiesProps> = ({
   activeCategories,
   selectedHobbyIds,
   isSavingHobbies,
+  isEditMode = false,
   onToggleHobby,
   onNext,
+  onSaveAndExit,
   onBack,
 }) => {
   return (
@@ -87,25 +91,38 @@ export const Step3Hobbies: React.FC<Step3HobbiesProps> = ({
         </div>
       )}
 
-      <div className="flex items-center justify-between pt-4 border-t border-[#E2DBD0]">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-[#E2DBD0]">
         <button
           type="button"
           onClick={onBack}
-          className="px-5 py-2.5 rounded-xl border border-[#E2DBD0] text-[#2C2C2C] text-xs font-medium hover:bg-white transition-colors cursor-pointer"
+          className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-[#E2DBD0] text-[#2C2C2C] text-xs font-medium hover:bg-white transition-colors cursor-pointer"
         >
           ← Back to Main Categories
         </button>
 
-        <button
-          type="button"
-          disabled={isSavingHobbies || selectedHobbyIds.length === 0}
-          onClick={onNext}
-          className="px-8 py-3 rounded-xl bg-[#2D5A3D] text-white text-xs font-semibold shadow-sm hover:bg-[#3d7a55] transition-colors disabled:opacity-50 cursor-pointer"
-        >
-          {isSavingHobbies
-            ? 'Saving Sub-categories...'
-            : `Save & Continue to Profile Photo (${selectedHobbyIds.length} selected) →`}
-        </button>
+        <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+          {isEditMode && onSaveAndExit && (
+            <button
+              type="button"
+              disabled={isSavingHobbies || selectedHobbyIds.length === 0}
+              onClick={onSaveAndExit}
+              className="w-full sm:w-auto px-6 py-3 rounded-xl border border-[#2D5A3D] text-[#2D5A3D] hover:bg-[#eaf3ed] text-xs font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+            >
+              {isSavingHobbies ? 'Saving...' : '✓ Save & Return to Profile'}
+            </button>
+          )}
+
+          <button
+            type="button"
+            disabled={isSavingHobbies || selectedHobbyIds.length === 0}
+            onClick={onNext}
+            className="w-full sm:w-auto px-8 py-3 rounded-xl bg-[#2D5A3D] text-white text-xs font-semibold shadow-sm hover:bg-[#3d7a55] transition-colors disabled:opacity-50 cursor-pointer"
+          >
+            {isSavingHobbies
+              ? 'Saving Sub-categories...'
+              : `Save & Continue to Profile Photo (${selectedHobbyIds.length} selected) →`}
+          </button>
+        </div>
       </div>
     </div>
   );

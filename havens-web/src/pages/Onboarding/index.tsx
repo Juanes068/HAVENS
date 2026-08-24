@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@apollo/client';
 import { useAuth } from '../../context/AuthContext';
 import { GET_ALL_HOBBY_CATEGORIES, UPDATE_USER_HOBBIES } from '../../graphql/operations';
@@ -14,6 +15,14 @@ import { Step4ProfilePhoto } from './components/Step4ProfilePhoto';
 
 export const OnboardingView: React.FC = () => {
   const { token, user: currentUser, refetchUser } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const isEditMode = Boolean(
+    location.state?.editMode ||
+    new URLSearchParams(location.search).get('mode') === 'edit' ||
+    (currentUser?.hobbies && currentUser.hobbies.length > 0)
+  );
 
   // Wizard Step (1: Account, 2: Main Categories, 3: Sub-categories, 4: Photo)
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(() => (token ? 2 : 1));
@@ -46,24 +55,26 @@ export const OnboardingView: React.FC = () => {
     }
   }, [token, wizardStep]);
 
-  // Pre-populate existing hobbies
+  // Robustly pre-populate existing user categories and sub-hobbies from taxonomy
   useEffect(() => {
-    if (currentUser?.hobbies && currentUser.hobbies.length > 0 && selectedHobbyIds.length === 0) {
+    if (currentUser?.hobbies && currentUser.hobbies.length > 0) {
       const existingHobbyIds = currentUser.hobbies.map((h) => String(h.id));
-      const existingCategoryIds = Array.from(
-        new Set(
-          currentUser.hobbies
-            .map((h) => (h.category?.id ? String(h.category.id) : null))
-            .filter(Boolean) as string[]
-        )
-      );
+      setSelectedHobbyIds((prev) => (prev.length === 0 ? existingHobbyIds : prev));
 
-      setSelectedHobbyIds(existingHobbyIds);
-      if (existingCategoryIds.length > 0 && selectedCategoryIds.length === 0) {
-        setSelectedCategoryIds(existingCategoryIds);
-      }
+      const catIdsFromUser = currentUser.hobbies
+        .map((h) => (h.category?.id ? String(h.category.id) : null))
+        .filter(Boolean) as string[];
+
+      const catIdsFromTaxonomy = categories
+        .filter((cat) => cat.hobbies?.some((hb) => existingHobbyIds.includes(String(hb.id))))
+        .map((cat) => String(cat.id));
+
+      const allFoundCatIds = Array.from(new Set([...catIdsFromUser, ...catIdsFromTaxonomy]));
+      setSelectedCategoryIds((prev) =>
+        prev.length === 0 && allFoundCatIds.length > 0 ? allFoundCatIds : prev
+      );
     }
-  }, [currentUser, selectedHobbyIds.length, selectedCategoryIds.length]);
+  }, [currentUser, categories]);
 
   // Handlers
   const handleToggleCategory = (catIdRaw: string | number) => {
@@ -119,7 +130,7 @@ export const OnboardingView: React.FC = () => {
     }
   };
 
-  const handleStep3Next = async () => {
+  const handleSaveHobbies = async (goToPhoto: boolean = true) => {
     if (selectedHobbyIds.length === 0) {
       setErrorMsg('Please select at least 1 sub-category tag to personalize your circles.');
       return;
@@ -135,8 +146,12 @@ export const OnboardingView: React.FC = () => {
       });
 
       if (res?.data?.updateUserHobbies?.success) {
-        setWizardStep(4);
-        refetchUser().catch((err) => console.warn('refetchUser notice:', err));
+        await refetchUser().catch((err) => console.warn('refetchUser notice:', err));
+        if (goToPhoto) {
+          setWizardStep(4);
+        } else {
+          navigate('/profile');
+        }
       } else {
         setErrorMsg(res?.data?.updateUserHobbies?.message || 'Failed to save sub-categories.');
       }
@@ -166,7 +181,9 @@ export const OnboardingView: React.FC = () => {
           </div>
 
           <span className="text-xs font-semibold tracking-wider text-[#C47B5A] uppercase">
-            {token
+            {isEditMode
+              ? `Profile Settings • Edit Hobbies Taxonomy (Step ${wizardStep === 2 ? '1' : wizardStep === 3 ? '2' : '3'} of 3)`
+              : token
               ? `Step ${wizardStep - 1} of 3 • Profile Setup`
               : `Step ${wizardStep} of 4 • Havens Onboarding`}
           </span>
@@ -181,7 +198,7 @@ export const OnboardingView: React.FC = () => {
             {wizardStep === 1 && 'Enter your details, 6-character invitation code, and location.'}
             {wizardStep === 2 && `Select up to ${MAX_PRIMARY_CATEGORIES} main categories that interest you.`}
             {wizardStep === 3 && `Select up to ${MAX_SUB_HOBBIES_PER_CATEGORY} sub-hobbies per category.`}
-            {wizardStep === 4 && 'Add an optional profile picture or skip to enter your dashboard.'}
+            {wizardStep === 4 && 'Add an optional profile picture or finish to enter your dashboard.'}
           </p>
         </div>
 
@@ -218,9 +235,16 @@ export const OnboardingView: React.FC = () => {
             loadingTaxonomy={loadingTaxonomy}
             taxonomyError={taxonomyError}
             token={token}
+            isEditMode={isEditMode}
             onToggleCategory={handleToggleCategory}
             onNext={handleStep2Next}
-            onBack={() => setWizardStep(1)}
+            onBack={() => {
+              if (isEditMode) {
+                navigate('/profile');
+              } else {
+                setWizardStep(1);
+              }
+            }}
           />
         )}
 
@@ -230,8 +254,10 @@ export const OnboardingView: React.FC = () => {
             activeCategories={activeCategories}
             selectedHobbyIds={selectedHobbyIds}
             isSavingHobbies={isSavingHobbies}
+            isEditMode={isEditMode}
             onToggleHobby={handleToggleHobby}
-            onNext={handleStep3Next}
+            onNext={() => handleSaveHobbies(true)}
+            onSaveAndExit={() => handleSaveHobbies(false)}
             onBack={() => setWizardStep(2)}
           />
         )}
@@ -241,6 +267,7 @@ export const OnboardingView: React.FC = () => {
           <Step4ProfilePhoto
             currentUser={currentUser}
             refetchUser={refetchUser}
+            isEditMode={isEditMode}
             onBack={() => setWizardStep(3)}
           />
         )}

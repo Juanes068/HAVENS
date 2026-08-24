@@ -217,8 +217,10 @@ export const AuthPage: React.FC = () => {
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-[#8a8278] mb-1">Username</label>
+            <label htmlFor="auth-username" className="block text-xs font-medium text-[#8a8278] mb-1">Username</label>
             <input
+              id="auth-username"
+              name="username"
               type="text"
               autoComplete="username"
               value={username}
@@ -230,8 +232,10 @@ export const AuthPage: React.FC = () => {
 
           {isRegisterMode && (
             <div>
-              <label className="block text-xs font-medium text-[#8a8278] mb-1">Email</label>
+              <label htmlFor="auth-email" className="block text-xs font-medium text-[#8a8278] mb-1">Email</label>
               <input
+                id="auth-email"
+                name="email"
                 type="email"
                 autoComplete="email"
                 value={email}
@@ -243,8 +247,10 @@ export const AuthPage: React.FC = () => {
           )}
 
           <div>
-            <label className="block text-xs font-medium text-[#8a8278] mb-1">Password</label>
+            <label htmlFor="auth-password" className="block text-xs font-medium text-[#8a8278] mb-1">Password</label>
             <input
+              id="auth-password"
+              name="password"
               type="password"
               autoComplete={isRegisterMode ? 'new-password' : 'current-password'}
               value={password}
@@ -257,10 +263,12 @@ export const AuthPage: React.FC = () => {
           {/* ── CONFIRM PASSWORD — only shown in Register mode ── */}
           {isRegisterMode && (
             <div>
-              <label className="block text-xs font-medium text-[#8a8278] mb-1">
+              <label htmlFor="auth-confirm-password" className="block text-xs font-medium text-[#8a8278] mb-1">
                 Confirm Password <span className="text-[#C47B5A]">*</span>
               </label>
               <input
+                id="auth-confirm-password"
+                name="confirmPassword"
                 type="password"
                 autoComplete="new-password"
                 value={confirmPassword}
@@ -292,11 +300,14 @@ export const AuthPage: React.FC = () => {
           {isRegisterMode && (
             <>
               <div>
-                <label className="block text-xs font-medium text-[#8a8278] mb-1">
+                <label htmlFor="auth-invite-code" className="block text-xs font-medium text-[#8a8278] mb-1">
                   Invitation Code <span className="text-[#C47B5A]">*</span>
                 </label>
                 <input
+                  id="auth-invite-code"
+                  name="invitationCode"
                   type="text"
+                  autoComplete="off"
                   maxLength={6}
                   value={invitationCode}
                   onChange={(e) => setInvitationCode(e.target.value.toUpperCase())}
@@ -306,7 +317,7 @@ export const AuthPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-[#8a8278] mb-1">
+                <label htmlFor="auth-location" className="block text-xs font-medium text-[#8a8278] mb-1">
                   Location / Neighbourhood <span className="text-[#C47B5A]">*</span>
                 </label>
                 <LocationInput

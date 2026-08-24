@@ -15,12 +15,13 @@
  */
 
 import React, { useState, useMemo } from 'react'
-import { useQuery, useMutation } from '@apollo/client'
 import { useNavigate } from 'react-router-dom'
+import { useQuery, useMutation } from '@apollo/client'
 import { SectionHeading } from './SectionHeading'
 import { ScheduledEventCard, ScheduledEvent } from './ScheduledEventCard'
 import { MY_RSVPS, GET_ALL_EVENTS, SWIPE_EVENT } from '../graphql/operations'
 import { useAuth } from '../context/AuthContext'
+import { CalendarDays, Compass } from 'lucide-react'
 
 // ─── [DOMAIN 1: DATE UTILITIES & MATRIX CALCULATORS] ────────────────────────
 function getDaysInMonth(year: number, month: number): number {
@@ -628,8 +629,8 @@ export const CalendarTab: React.FC = () => {
           {/* 3. CLEAN EMPTY STATE: Displayed ONLY when exact clicked date has 0 events */}
           {!isLoading && displayedFeedEvents.length === 0 && (
             <div className="text-center py-12 px-5 rounded-3xl bg-white/80 border border-[#E2DBD0] shadow-2xs space-y-3">
-              <div className="w-12 h-12 rounded-full bg-[#eaf3ed] text-[#2D5A3D] flex items-center justify-center text-xl mx-auto font-serif font-bold">
-                🌿
+              <div className="w-12 h-12 rounded-full bg-[#eaf3ed] text-[#2D5A3D] flex items-center justify-center mx-auto">
+                <CalendarDays className="w-6 h-6 text-[#2D5A3D]" />
               </div>
 
               <div>
@@ -648,9 +649,10 @@ export const CalendarTab: React.FC = () => {
               <button
                 type="button"
                 onClick={() => navigate('/discover')}
-                className="w-full py-2.5 rounded-xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                className="w-full py-2.5 rounded-xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
               >
-                🔍 Discover Havens
+                <Compass className="w-4 h-4" />
+                <span>Discover Havens</span>
               </button>
             </div>
           )}

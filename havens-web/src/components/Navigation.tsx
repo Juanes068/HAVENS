@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useApp, Language } from '../context/AppContext'
 import { Avatar } from './Avatar'
+import { LogOut } from 'lucide-react'
 
 interface NavItem {
   key: 'discover' | 'social' | 'calendar' | 'saved' | 'plans'
@@ -236,7 +237,7 @@ export const Navigation: React.FC = () => {
               className="w-full text-left px-4 py-3 rounded-xl text-sm font-semibold text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer flex items-center justify-between"
             >
               <span>{t('signOut')}</span>
-              <span className="text-xs">🚪</span>
+              <LogOut className="w-4 h-4 text-rose-700" />
             </button>
           </div>
         </div>

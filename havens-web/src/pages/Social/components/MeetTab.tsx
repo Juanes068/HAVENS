@@ -1,6 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { computeAffinity } from '../utils/ignoreStorage';
 import { Avatar } from '../../../components/Avatar';
+import { Zap, Sparkles, Compass } from 'lucide-react';
+import { UserProfileModal } from './UserProfileModal';
+import { useAuth } from '../../../context/AuthContext';
 
 interface MeetTabProps {
   loading: boolean;
@@ -11,6 +14,7 @@ interface MeetTabProps {
   connectingUserId?: string | number | null;
   onConnect: (userId: string) => void;
   onIgnore: (userId: string) => void;
+  onOpenChat?: (userId: string, matchId?: string) => void;
 }
 
 const CardSkeleton: React.FC = () => (
@@ -47,6 +51,7 @@ export const SuggestionCard: React.FC<{
   isConnecting: boolean;
   onConnect: (userId: string) => void;
   onIgnore: (userId: string) => void;
+  onExplore: (user: any) => void;
 }> = ({
   user: usr,
   myHobbies,
@@ -55,6 +60,7 @@ export const SuggestionCard: React.FC<{
   isConnecting,
   onConnect,
   onIgnore,
+  onExplore,
 }) => {
   // Use backend computed match percentage or calculate client-side fallback
   const affinity = usr.matchPercentage ?? computeAffinity(myHobbies, usr.hobbies);
@@ -88,18 +94,22 @@ export const SuggestionCard: React.FC<{
       <div>
         {/* Top Header: Avatar + User Info + % Match Affinity Badge */}
         <div className="flex items-start justify-between gap-3 mb-4">
-          <div className="flex items-center gap-3.5 min-w-0">
+          <div
+            onClick={() => onExplore(usr)}
+            className="flex items-center gap-3.5 min-w-0 cursor-pointer group/user"
+            title="View member profile"
+          >
             <div className="relative">
               <Avatar
                 name={usr.username}
                 photoUrl={usr.photoUrl}
                 size="xl"
-                className="w-14 h-14 border-2 border-white shadow-xs rounded-full ring-2 ring-[#2D5A3D]/10"
+                className="w-14 h-14 border-2 border-white shadow-xs rounded-full ring-2 ring-[#2D5A3D]/10 group-hover/user:ring-[#2D5A3D]/40 transition-all"
               />
               <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 border-2 border-white rounded-full" />
             </div>
             <div className="min-w-0">
-              <h4 className="text-base font-semibold text-[#2C2C2C] truncate group-hover:text-[#2D5A3D] transition-colors">
+              <h4 className="text-base font-semibold text-[#2C2C2C] truncate group-hover/user:text-[#2D5A3D] transition-colors">
                 @{usr.username}
               </h4>
               {/* Geographic Proximity & Location */}
@@ -120,13 +130,13 @@ export const SuggestionCard: React.FC<{
           {/* % Match Affinity Pill */}
           {affinity > 0 && (
             <div
-              className={`shrink-0 flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-full shadow-2xs ${
+              className={`shrink-0 flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full shadow-2xs ${
                 affinity >= 70
                   ? 'bg-gradient-to-r from-[#2D5A3D]/15 to-[#3d7a55]/20 text-[#2D5A3D] border border-[#2D5A3D]/25'
                   : 'bg-[#C47B5A]/15 text-[#C47B5A] border border-[#C47B5A]/25'
               }`}
             >
-              <span className="text-[11px]">{affinity >= 70 ? '⚡' : '✨'}</span>
+              {affinity >= 70 ? <Zap className="w-3 h-3 text-[#2D5A3D]" /> : <Sparkles className="w-3 h-3 text-[#C47B5A]" />}
               <span>{affinity}% Match</span>
             </div>
           )}
@@ -181,44 +191,51 @@ export const SuggestionCard: React.FC<{
             {/* Fallback if no specific hobby match */}
             {totalMatchingCount === 0 && (
               <span className="text-[11px] px-2.5 py-1 rounded-xl font-normal bg-[#F4EEE2] text-[#8a8278] border border-[#E2DBD0]/60 italic">
-                ✨ Local Community Explorer
+                Local Community Explorer
               </span>
             )}
           </div>
         </div>
       </div>
 
-      {/* Card Footer Actions: Ignore & Connect */}
-      <div className="flex items-center gap-2.5 pt-4 border-t border-[#E2DBD0]/60">
+      {/* Card Footer Actions: Ignore, Explore, & Connect */}
+      <div className="flex items-center gap-2 pt-4 border-t border-[#E2DBD0]/60">
         <button
           type="button"
           onClick={() => onIgnore(String(usr.id))}
-          className="flex-1 py-2.5 px-4 rounded-2xl border border-[#E2DBD0] text-[#8a8278] hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50/60 text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5"
+          className="p-2.5 rounded-2xl border border-[#E2DBD0] text-[#8a8278] hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50/60 text-xs font-semibold transition-all cursor-pointer flex items-center justify-center shrink-0"
           title="Hide profile with 24-hour cooldown"
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
           </svg>
-          Ignore
+        </button>
+
+        <button
+          type="button"
+          onClick={() => onExplore(usr)}
+          className="px-3.5 py-2.5 rounded-2xl border border-[#E2DBD0] text-xs font-semibold text-[#5a5450] hover:bg-[#F4EEE2] transition-colors cursor-pointer"
+        >
+          Explore
         </button>
 
         {isSent ? (
           <button
             type="button"
             disabled
-            className="flex-1 py-2.5 px-4 rounded-2xl bg-[#eaf3ed] text-[#2D5A3D] border border-[#7aaa8a]/40 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-default shadow-xs"
+            className="flex-1 py-2.5 px-3 rounded-2xl bg-[#eaf3ed] text-[#2D5A3D] border border-[#7aaa8a]/40 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-default shadow-xs"
           >
             <svg className="w-3.5 h-3.5 text-[#2D5A3D]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
-            Request Sent
+            <span>Sent</span>
           </button>
         ) : (
           <button
             type="button"
             disabled={isConnecting}
             onClick={() => onConnect(String(usr.id))}
-            className="flex-1 py-2.5 px-4 rounded-2xl bg-[#2D5A3D] text-white hover:bg-[#3d7a55] text-xs font-semibold transition-all shadow-xs hover:shadow-md cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+            className="flex-1 py-2.5 px-3 rounded-2xl bg-[#2D5A3D] text-white hover:bg-[#3d7a55] text-xs font-semibold transition-all shadow-xs hover:shadow-md cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
           >
             {isConnecting ? (
               <>
@@ -226,14 +243,14 @@ export const SuggestionCard: React.FC<{
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
-                Sending...
+                <span>Sending...</span>
               </>
             ) : (
               <>
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                 </svg>
-                Connect
+                <span>Connect</span>
               </>
             )}
           </button>
@@ -252,7 +269,11 @@ export const MeetTab: React.FC<MeetTabProps> = ({
   connectingUserId = null,
   onConnect,
   onIgnore,
+  onOpenChat,
 }) => {
+  const { user: currentUser } = useAuth();
+  const [exploringUser, setExploringUser] = useState<any | null>(null);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -277,7 +298,9 @@ export const MeetTab: React.FC<MeetTabProps> = ({
         </div>
       ) : suggestedUsers.length === 0 ? (
         <div className="bg-white border border-[#E2DBD0] rounded-3xl p-12 text-center shadow-xs space-y-3 max-w-lg mx-auto">
-          <span className="text-5xl block">🌿</span>
+          <div className="w-16 h-16 rounded-full bg-[#eaf3ed] flex items-center justify-center mx-auto">
+            <Compass className="w-8 h-8 text-[#2D5A3D]" />
+          </div>
           <h4 className="text-base font-semibold text-[#2D5A3D]">You're all caught up!</h4>
           <p className="text-xs text-[#8a8278] leading-relaxed">
             There are no new unreviewed profiles in your local radius right now. Check back as new members join, or invite friends to your community!
@@ -300,13 +323,29 @@ export const MeetTab: React.FC<MeetTabProps> = ({
                 isConnecting={isConnecting}
                 onConnect={onConnect}
                 onIgnore={onIgnore}
+                onExplore={(u) => setExploringUser(u)}
               />
             );
           })}
         </div>
+      )}
+
+      {/* ─── User Profile Preview Modal ─── */}
+      {exploringUser && (
+        <UserProfileModal
+          user={exploringUser}
+          currentUser={currentUser}
+          myHobbies={myHobbies}
+          isSent={sentRequestUserIds.some((id) => String(id) === String(exploringUser.id))}
+          isConnecting={String(connectingUserId) === String(exploringUser.id)}
+          onClose={() => setExploringUser(null)}
+          onConnect={onConnect}
+          onOpenChat={onOpenChat}
+        />
       )}
     </div>
   );
 };
 
 export default MeetTab;
+

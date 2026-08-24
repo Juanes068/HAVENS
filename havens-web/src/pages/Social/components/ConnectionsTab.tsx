@@ -2,6 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { computeAffinity } from '../utils/ignoreStorage';
 import { Avatar } from '../../../components/Avatar';
+import { Inbox, Users } from 'lucide-react';
+import { UserProfileModal } from './UserProfileModal';
 
 interface ConnectionsTabProps {
   requestsLoading: boolean;
@@ -66,6 +68,7 @@ export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
   const [fadingRequestId, setFadingRequestId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSubSection, setActiveSubSection] = useState<'all' | 'requests' | 'friends'>('all');
+  const [exploringUser, setExploringUser] = useState<any | null>(null);
 
   // ─── Search Filter for Friends ────────────────────────────
   const filteredFriends = useMemo(() => {
@@ -179,7 +182,7 @@ export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
             </div>
           ) : pendingRequests.length === 0 ? (
             <div className="bg-white border border-[#E2DBD0] rounded-3xl p-8 text-center text-[#8a8278] text-xs shadow-xs space-y-1">
-              <span className="text-2xl block mb-1">📬</span>
+              <Inbox className="w-8 h-8 text-[#8a8278] mx-auto mb-1 opacity-70" />
               <p className="font-semibold text-[#5a5450]">No pending connection requests</p>
               <p className="text-[11px]">When other members invite you to connect, their invitations will appear here.</p>
             </div>
@@ -197,16 +200,20 @@ export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
                       isFading ? 'opacity-0 scale-95 translate-x-4' : 'opacity-100 scale-100'
                     }`}
                   >
-                    <div className="flex items-start gap-3.5 mb-4">
+                    <div
+                      onClick={() => setExploringUser(sender)}
+                      className="flex items-start gap-3.5 mb-4 cursor-pointer group/req"
+                      title="View profile details"
+                    >
                       <Avatar
                         name={sender?.username}
                         photoUrl={sender?.photoUrl}
                         color="#C47B5A"
                         size="lg"
-                        className="w-12 h-12 border-2 border-white shadow-xs rounded-full"
+                        className="w-12 h-12 border-2 border-white shadow-xs rounded-full group-hover/req:ring-2 ring-[#2D5A3D]/30 transition-all"
                       />
                       <div className="min-w-0 flex-1">
-                        <h4 className="text-sm font-semibold text-[#2C2C2C] truncate">
+                        <h4 className="text-sm font-semibold text-[#2C2C2C] truncate group-hover/req:text-[#2D5A3D] transition-colors">
                           @{sender?.username || 'member'}
                         </h4>
                         <p className="text-xs text-[#8a8278] truncate">
@@ -305,7 +312,7 @@ export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
             </div>
           ) : acceptedFriends.length === 0 ? (
             <div className="bg-white border border-[#E2DBD0] rounded-3xl p-12 text-center shadow-xs space-y-2">
-              <span className="text-4xl block mb-2">🤝</span>
+              <Users className="w-10 h-10 text-[#8a8278] mx-auto mb-2 opacity-70" />
               <h4 className="text-sm font-semibold text-[#5a5450]">No connected friends yet</h4>
               <p className="text-xs text-[#8a8278] max-w-xs mx-auto">
                 Explore the Meet tab to discover people nearby and send connect requests.
@@ -327,15 +334,19 @@ export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
                   >
                     <div>
                       {/* Header info */}
-                      <div className="flex items-start gap-3.5 mb-3.5">
+                      <div
+                        onClick={() => setExploringUser(friend)}
+                        className="flex items-start gap-3.5 mb-3.5 cursor-pointer group/friend"
+                        title="View full profile"
+                      >
                         <Avatar
                           name={friend.username}
                           photoUrl={friend.photoUrl}
                           size="lg"
-                          className="w-12 h-12 border-2 border-white shadow-xs rounded-full"
+                          className="w-12 h-12 border-2 border-white shadow-xs rounded-full group-hover/friend:ring-2 ring-[#2D5A3D]/30 transition-all"
                         />
                         <div className="flex-1 min-w-0">
-                          <h4 className="text-sm font-semibold text-[#2C2C2C] truncate">
+                          <h4 className="text-sm font-semibold text-[#2C2C2C] truncate group-hover/friend:text-[#2D5A3D] transition-colors">
                             @{friend.username}
                           </h4>
                           <p className="text-xs text-[#8a8278] truncate">
@@ -376,23 +387,47 @@ export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
                       )}
                     </div>
 
-                    {/* Direct Chat Button */}
-                    <button
-                      type="button"
-                      onClick={() => handleChat(String(friend.id), friend.matchId)}
-                      className="w-full py-2.5 rounded-2xl bg-[#eaf3ed] text-[#2D5A3D] hover:bg-[#2D5A3D] hover:text-white text-xs font-semibold transition-all shadow-2xs hover:shadow-xs cursor-pointer flex items-center justify-center gap-2"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                      </svg>
-                      Open Chat
-                    </button>
+                    {/* Actions: Explore & Direct Chat */}
+                    <div className="flex items-center gap-2 pt-2 border-t border-[#E2DBD0]/50">
+                      <button
+                        type="button"
+                        onClick={() => setExploringUser(friend)}
+                        className="px-3.5 py-2 rounded-2xl border border-[#E2DBD0] text-xs font-semibold text-[#5a5450] hover:bg-[#F4EEE2] transition-colors cursor-pointer"
+                      >
+                        Explore
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleChat(String(friend.id), friend.matchId)}
+                        className="flex-1 py-2 rounded-2xl bg-[#eaf3ed] text-[#2D5A3D] hover:bg-[#2D5A3D] hover:text-white text-xs font-semibold transition-all shadow-2xs hover:shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                        <span>Open Chat</span>
+                      </button>
+                    </div>
                   </div>
                 );
               })}
             </div>
           )}
         </section>
+      )}
+
+      {/* ─── User Profile Preview Modal ─── */}
+      {exploringUser && (
+        <UserProfileModal
+          user={exploringUser}
+          currentUser={currentUser}
+          myHobbies={myHobbies}
+          isConnected={true}
+          onClose={() => setExploringUser(null)}
+          onOpenChat={(id, matchId) => {
+            setExploringUser(null);
+            handleChat(id, matchId);
+          }}
+        />
       )}
     </div>
   );

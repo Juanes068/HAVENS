@@ -9,17 +9,17 @@ import { secureStorage } from './secureStore';
 export const HAVENS_JWT_TOKEN_KEY = 'havens_jwt_token';
 
 /**
- * Helper to safely retrieve the token from secureStore or localStorage fallbacks.
+ * Helper to safely retrieve the token from secureStore or sessionStorage.
  */
 export const getAuthToken = (): string | null => {
   try {
     const direct = secureStorage.getItemSync(HAVENS_JWT_TOKEN_KEY);
     if (direct) return direct;
-    if (typeof window !== 'undefined' && window.localStorage) {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
       return (
-        localStorage.getItem(HAVENS_JWT_TOKEN_KEY) ||
-        localStorage.getItem('havens_jwt_token') ||
-        localStorage.getItem('token')
+        sessionStorage.getItem(HAVENS_JWT_TOKEN_KEY) ||
+        sessionStorage.getItem('havens_jwt_token') ||
+        sessionStorage.getItem('token')
       );
     }
   } catch (err) {
@@ -96,12 +96,19 @@ const errorLink = onError(({ graphQLErrors, networkError, operation }) => {
   const isAuthMutation = ['TokenAuth', 'CreateUser'].includes(operation.operationName || '');
 
   if (isAuthError && !isAuthMutation) {
-    // Purge session tokens from secureStorage & localStorage
+    // Purge session tokens from secureStorage & sessionStorage
     secureStorage.removeItem(HAVENS_JWT_TOKEN_KEY);
-    if (typeof window !== 'undefined' && window.localStorage) {
-      localStorage.removeItem(HAVENS_JWT_TOKEN_KEY);
-      localStorage.removeItem('havens_jwt_token');
-      localStorage.removeItem('token');
+    if (typeof window !== 'undefined') {
+      if (window.sessionStorage) {
+        sessionStorage.removeItem(HAVENS_JWT_TOKEN_KEY);
+        sessionStorage.removeItem('havens_jwt_token');
+        sessionStorage.removeItem('token');
+      }
+      if (window.localStorage) {
+        localStorage.removeItem(HAVENS_JWT_TOKEN_KEY);
+        localStorage.removeItem('havens_jwt_token');
+        localStorage.removeItem('token');
+      }
     }
 
     // Redirect to /auth if not already on the auth page

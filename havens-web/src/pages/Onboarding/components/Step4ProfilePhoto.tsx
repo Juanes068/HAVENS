@@ -6,12 +6,14 @@ import { GENERATE_CLOUDINARY_SIGNATURE, UPDATE_USER_PROFILE } from '../../../gra
 interface Step4ProfilePhotoProps {
   currentUser: any;
   refetchUser: () => Promise<any>;
+  isEditMode?: boolean;
   onBack: () => void;
 }
 
 export const Step4ProfilePhoto: React.FC<Step4ProfilePhotoProps> = ({
   currentUser,
   refetchUser,
+  isEditMode = false,
   onBack,
 }) => {
   const navigate = useNavigate();
@@ -39,7 +41,7 @@ export const Step4ProfilePhoto: React.FC<Step4ProfilePhotoProps> = ({
     e.stopPropagation();
 
     if (!selectedImageFile) {
-      navigate('/discover');
+      navigate(isEditMode ? '/profile' : '/discover');
       return;
     }
 
@@ -93,7 +95,7 @@ export const Step4ProfilePhoto: React.FC<Step4ProfilePhotoProps> = ({
         await refetchUser();
       }
 
-      navigate('/discover');
+      navigate(isEditMode ? '/profile' : '/discover');
     } catch (err: any) {
       console.error('[Step 4 Upload Error]', err);
       setErrorMsg(err.message || 'Failed to upload photo.');
@@ -105,7 +107,7 @@ export const Step4ProfilePhoto: React.FC<Step4ProfilePhotoProps> = ({
   const handleSkip = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    navigate('/discover');
+    navigate(isEditMode ? '/profile' : '/discover');
   };
 
   return (
@@ -136,7 +138,7 @@ export const Step4ProfilePhoto: React.FC<Step4ProfilePhotoProps> = ({
           {imagePreviewUrl ? (
             <img src={imagePreviewUrl} alt="Avatar Preview" className="w-full h-full object-cover" />
           ) : (
-            <span>{currentUser?.username?.charAt(0).toUpperCase() || '📷'}</span>
+            <span>{currentUser?.username?.charAt(0).toUpperCase() || 'U'}</span>
           )}
           <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-white text-xs font-semibold">
             Choose Photo

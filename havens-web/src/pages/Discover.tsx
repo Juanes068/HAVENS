@@ -5,6 +5,8 @@ import { SwipeCardsView, EventItem } from '../components/SwipeCardsView';
 import { DiscoveryMapView } from '../components/DiscoveryMapView';
 import { GET_ALL_EVENTS } from '../graphql/operations';
 
+import { Layers } from 'lucide-react';
+
 type ViewMode = 'swipe' | 'map';
 
 export const DiscoverView: React.FC = () => {
@@ -50,7 +52,8 @@ export const DiscoverView: React.FC = () => {
                 : 'text-[#5a5450] hover:text-charcoal'
             }`}
           >
-            🔥 Swipe Cards
+            <Layers className="w-3.5 h-3.5" />
+            <span>Swipe Cards</span>
           </button>
 
           <button

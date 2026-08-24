@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { SectionHeading } from '../../components/SectionHeading';
 import {
@@ -11,18 +12,20 @@ import {
   MY_FRIENDS,
   GET_ALL_COMMUNITIES,
   JOIN_COMMUNITY,
+  MY_COMMUNITIES,
 } from '../../graphql/operations';
 import { TabType } from './types';
 import { ignoreUser, isUserIgnored } from './utils/ignoreStorage';
 import { MeetTab } from './components/MeetTab';
 import { ConnectionsTab } from './components/ConnectionsTab';
 import { CirclesTab } from './components/CirclesTab';
+import { Sparkles, UserCheck, Users } from 'lucide-react';
 
 export const SocialView: React.FC = () => {
   const { user: currentUser } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('meet');
   const [actionStatus, setActionStatus] = useState<string>('');
-  const [joinedCircleIds, setJoinedCircleIds] = useState<number[]>([]);
+  const [optimisticJoinedCircleIds, setOptimisticJoinedCircleIds] = useState<number[]>([]);
   const [sentRequestIds, setSentRequestIds] = useState<number[]>([]);
   const [passedUserIds, setPassedUserIds] = useState<string[]>([]);
   const [fadingCardId, setFadingCardId] = useState<string | null>(null);
@@ -49,8 +52,13 @@ export const SocialView: React.FC = () => {
     skip: !currentUser,
   });
 
-  useQuery(GET_ALL_COMMUNITIES, {
+  const { refetch: refetchAllCommunities } = useQuery(GET_ALL_COMMUNITIES, {
     fetchPolicy: 'cache-and-network',
+  });
+
+  const { data: myCommunitiesData, refetch: refetchMyCommunities } = useQuery(MY_COMMUNITIES, {
+    fetchPolicy: 'cache-and-network',
+    skip: !currentUser,
   });
 
   // ─── Mutations ───
@@ -58,7 +66,7 @@ export const SocialView: React.FC = () => {
     onCompleted: (res) => {
       setConnectingUserId(null);
       if (res?.sendConnectRequest?.success) {
-        setActionStatus(res.sendConnectRequest.message || 'Connection request sent! 🎉');
+        setActionStatus(res.sendConnectRequest.message || 'Connection request sent!');
         refetchMatches();
         refetchPending();
         refetchFriends();
@@ -90,11 +98,28 @@ export const SocialView: React.FC = () => {
 
   const [joinCommunity] = useMutation(JOIN_COMMUNITY, {
     onCompleted: (res) => {
-      setActionStatus(res?.joinCommunity?.message || 'Joined circle!');
+      if (res?.joinCommunity?.success) {
+        setActionStatus(res.joinCommunity.message || 'Joined circle!');
+        refetchMyCommunities();
+        refetchAllCommunities();
+      } else {
+        setActionStatus(res?.joinCommunity?.message || 'Notice on joining circle.');
+        refetchMyCommunities();
+      }
+    },
+    onError: (err) => {
+      setActionStatus(`Error: ${err.message}`);
+      refetchMyCommunities();
     },
   });
 
   // ─── Derived Data ───
+  const joinedCircleIds = useMemo(() => {
+    const fromServer = (myCommunitiesData?.myCommunities || [])
+      .map((m: any) => Number(m.community?.id))
+      .filter((id: number) => !isNaN(id));
+    return Array.from(new Set([...fromServer, ...optimisticJoinedCircleIds]));
+  }, [myCommunitiesData, optimisticJoinedCircleIds]);
   const recommendedUsers = usersData?.allUsers || [];
   const acceptedMatches = matchesData?.myMatches || [];
   const pendingRequests = pendingData?.pendingConnectionRequests || [];
@@ -180,9 +205,19 @@ export const SocialView: React.FC = () => {
     });
   };
 
+  const navigate = useNavigate();
+
   const handleJoinCircle = (circleId: number) => {
-    setJoinedCircleIds((prev) => [...prev, circleId]);
+    setOptimisticJoinedCircleIds((prev) => [...prev, circleId]);
     joinCommunity({ variables: { communityId: circleId } });
+  };
+
+  const handleOpenChat = (userId: string, matchId?: string) => {
+    if (matchId) {
+      navigate(`/chat?match=${matchId}`);
+    } else {
+      navigate('/chat');
+    }
   };
 
   const connectionsCount = pendingRequests.length;
@@ -201,9 +236,9 @@ export const SocialView: React.FC = () => {
         {/* Pill Tabs */}
         <div className="flex items-center gap-1 p-1 bg-[#E2DBD0]/60 rounded-2xl w-full md:w-auto">
           {([
-            { key: 'meet' as TabType, label: 'Meet', icon: '👋' },
-            { key: 'connections' as TabType, label: 'Connections', icon: '🤝', badge: connectionsCount },
-            { key: 'circles' as TabType, label: 'Circles', icon: '⭕' },
+            { key: 'meet' as TabType, label: 'Meet', icon: <Sparkles className="w-3.5 h-3.5" /> },
+            { key: 'connections' as TabType, label: 'Connections', icon: <UserCheck className="w-3.5 h-3.5" />, badge: connectionsCount },
+            { key: 'circles' as TabType, label: 'Circles', icon: <Users className="w-3.5 h-3.5" /> },
           ]).map((tab) => (
             <button
               key={tab.key}
@@ -215,8 +250,8 @@ export const SocialView: React.FC = () => {
                   : 'text-[#8a8278] hover:text-[#2C2C2C]'
               }`}
             >
-              <span className="text-sm">{tab.icon}</span>
-              {tab.label}
+              <span>{tab.icon}</span>
+              <span>{tab.label}</span>
               {tab.badge && tab.badge > 0 ? (
                 <span className="ml-1 px-1.5 py-0.5 text-[10px] bg-rose-500 text-white rounded-full font-bold leading-none">
                   {tab.badge}
@@ -248,6 +283,7 @@ export const SocialView: React.FC = () => {
           connectingUserId={connectingUserId}
           onConnect={handleConnect}
           onIgnore={handleIgnore}
+          onOpenChat={handleOpenChat}
         />
       )}
 
@@ -261,6 +297,7 @@ export const SocialView: React.FC = () => {
           currentUser={currentUser}
           myHobbies={myHobbies}
           onRespondRequest={handleRespondRequest}
+          onOpenChat={handleOpenChat}
         />
       )}
 

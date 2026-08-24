@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react'
 import { useAuth } from '../../../context/AuthContext'
 import { useApp } from '../../../context/AppContext'
+import { Calendar, Sparkles } from 'lucide-react'
 import {
   SERIF,
-  CATEGORY_ICONS,
   PlanItem,
   formatEventDisplayDate,
 } from '../types'
@@ -121,15 +121,15 @@ export const PlanCardGrid: React.FC<PlanCardGridProps> = ({
                       }}
                     />
                   ) : null}
-                  <div className={`w-full h-full bg-gradient-to-br from-[#eaf3ed] to-[#F0EAE0] flex items-center justify-center text-4xl ${plan.imageUrl ? 'hidden' : ''}`}>
-                    {CATEGORY_ICONS[plan.category || 'Social'] || '🌿'}
+                  <div className={`w-full h-full bg-gradient-to-br from-[#eaf3ed] to-[#F0EAE0] flex items-center justify-center ${plan.imageUrl ? 'hidden' : ''}`}>
+                    <Calendar className="w-12 h-12 text-[#2D5A3D]/40" />
                   </div>
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
 
                   {/* Badges */}
                   <div className="absolute top-3 left-3 flex items-center gap-1.5">
-                    <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-white/95 text-[#2D5A3D] backdrop-blur-md shadow-xs flex items-center gap-1">
-                      <span>{CATEGORY_ICONS[plan.category || 'Social'] || '📅'}</span>
+                    <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-white/95 text-[#2D5A3D] backdrop-blur-md shadow-xs flex items-center gap-1.5">
+                      <Calendar className="w-3 h-3 text-[#2D5A3D]" />
                       <span>{plan.category || 'Gathering'}</span>
                     </span>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#2D5A3D] text-white shadow-xs">
@@ -223,8 +223,8 @@ export const PlanCardGrid: React.FC<PlanCardGridProps> = ({
       {/* Empty State */}
       {!loading && myCreatedPlans.length === 0 && (
         <div className="text-center py-16 px-6 rounded-3xl bg-white border border-[#E2DBD0] shadow-2xs space-y-4 max-w-lg mx-auto my-8">
-          <div className="w-16 h-16 rounded-2xl bg-[#eaf3ed] text-[#2D5A3D] flex items-center justify-center text-3xl mx-auto shadow-2xs">
-            ✨
+          <div className="w-16 h-16 rounded-2xl bg-[#eaf3ed] text-[#2D5A3D] flex items-center justify-center mx-auto shadow-2xs">
+            <Sparkles className="w-8 h-8 text-[#2D5A3D]" />
           </div>
           <div>
             <h3 className="text-lg font-bold text-[#2C2C2C] font-serif">

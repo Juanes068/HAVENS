@@ -7,6 +7,7 @@ interface Step2CategoriesProps {
   loadingTaxonomy: boolean;
   taxonomyError: any;
   token: string | null;
+  isEditMode?: boolean;
   onToggleCategory: (catId: string | number) => void;
   onNext: () => void;
   onBack: () => void;
@@ -18,6 +19,7 @@ export const Step2Categories: React.FC<Step2CategoriesProps> = ({
   loadingTaxonomy,
   taxonomyError,
   token,
+  isEditMode = false,
   onToggleCategory,
   onNext,
   onBack,
@@ -82,7 +84,15 @@ export const Step2Categories: React.FC<Step2CategoriesProps> = ({
       )}
 
       <div className="flex items-center justify-between pt-4 border-t border-[#E2DBD0]">
-        {!token && (
+        {isEditMode ? (
+          <button
+            type="button"
+            onClick={onBack}
+            className="px-5 py-2.5 rounded-xl border border-[#E2DBD0] text-[#2C2C2C] text-xs font-medium hover:bg-white transition-colors cursor-pointer"
+          >
+            ← Back to Profile
+          </button>
+        ) : !token ? (
           <button
             type="button"
             onClick={onBack}
@@ -90,7 +100,7 @@ export const Step2Categories: React.FC<Step2CategoriesProps> = ({
           >
             ← Back to Account
           </button>
-        )}
+        ) : <div />}
 
         <div className="ml-auto">
           <button
