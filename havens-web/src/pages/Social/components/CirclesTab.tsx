@@ -38,7 +38,7 @@ const CircleCardSkeleton: React.FC = () => (
   </div>
 );
 
-const CIRCLES_PAGE_SIZE = 8;
+const CIRCLES_PAGE_SIZE = 6;
 
 export const CirclesTab: React.FC<CirclesTabProps> = ({
   joinedCircleIds,
@@ -263,7 +263,7 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
         {/* ─── Grid of Circles ─── */}
         {isContentLoading && circles.length === 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {[1, 2, 3, 4].map((i) => (
+            {[1, 2, 3, 4, 5, 6].map((i) => (
               <CircleCardSkeleton key={i} />
             ))}
           </div>

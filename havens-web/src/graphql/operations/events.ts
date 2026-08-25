@@ -21,10 +21,32 @@ export const GET_ALL_EVENTS = gql`
       minAge
       maxAge
       createdAt
+      goingCount
       creator {
         id
         username
         photoUrl
+      }
+      attendees {
+        id
+        username
+        photoUrl
+        age
+        neighbourhood
+        cityName
+      }
+      rsvps {
+        id
+        response
+        createdAt
+        user {
+          id
+          username
+          photoUrl
+          age
+          neighbourhood
+          cityName
+        }
       }
       hobbies {
         id
@@ -278,10 +300,19 @@ export const MY_RSVPS = gql`
         minAge
         maxAge
         createdAt
+        goingCount
         creator {
           id
           username
           photoUrl
+        }
+        attendees {
+          id
+          username
+          photoUrl
+          age
+          neighbourhood
+          cityName
         }
         hobbies {
           id

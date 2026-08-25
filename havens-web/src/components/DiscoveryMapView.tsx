@@ -3,7 +3,9 @@ import { useMutation } from '@apollo/client';
 import { GoogleMap, useLoadScript, MarkerF, InfoWindowF } from '@react-google-maps/api';
 import { SWIPE_EVENT } from '../graphql/operations';
 import { EventItem } from './SwipeCardsView';
+import { Avatar } from './Avatar';
 import { GOOGLE_MAPS_LIBRARIES } from './LocationInput';
+import { Calendar, Clock, MapPin, Users } from 'lucide-react';
 
 interface DiscoveryMapViewProps {
   events: EventItem[];
@@ -223,7 +225,25 @@ export const DiscoveryMapView: React.FC<DiscoveryMapViewProps> = ({ events, myRs
                 <h4 className="text-sm font-serif font-bold text-charcoal leading-snug">
                   {selectedEvent.title}
                 </h4>
-                <p className="text-[11px] text-[#2D5A3D] font-medium mt-0.5">
+                {selectedEvent.scheduledDate && !isNaN(new Date(selectedEvent.scheduledDate).getTime()) && (
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#2D5A3D] mt-1">
+                    <Calendar className="w-3.5 h-3.5 text-[#2D5A3D]" />
+                    <span>
+                      {new Intl.DateTimeFormat('en-US', {
+                        weekday: 'short',
+                        month: 'short',
+                        day: 'numeric',
+                      }).format(new Date(selectedEvent.scheduledDate))}
+                      {' • '}
+                      {new Intl.DateTimeFormat('en-US', {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true,
+                      }).format(new Date(selectedEvent.scheduledDate))}
+                    </span>
+                  </div>
+                )}
+                <p className="text-[11px] text-stone-600 font-medium mt-0.5">
                   📍 {selectedEvent.locationName || 'Nearby'}
                 </p>
                 <p className="text-[11px] text-[#8a8278] mt-0.5 line-clamp-2">
@@ -252,6 +272,28 @@ export const DiscoveryMapView: React.FC<DiscoveryMapViewProps> = ({ events, myRs
                         </span>
                       )}
                     </div>
+
+                    {/* Attendee avatars preview */}
+                    {((selectedEvent.goingCount && selectedEvent.goingCount > 0) || (selectedEvent.attendees && selectedEvent.attendees.length > 0)) && (
+                      <div className="flex items-center gap-2 py-0.5">
+                        <span className="text-[10px] font-bold text-stone-500 uppercase">Going:</span>
+                        <div className="flex items-center -space-x-1.5">
+                          {(selectedEvent.attendees || []).slice(0, 4).map((att: any) => (
+                            <Avatar
+                              key={att.id}
+                              name={att.username}
+                              photoUrl={att.photoUrl}
+                              size="xs"
+                              className="w-5 h-5 rounded-full border border-white shadow-2xs"
+                              title={`@${att.username}`}
+                            />
+                          ))}
+                        </div>
+                        <span className="text-[11px] font-bold text-[#2D5A3D]">
+                          {selectedEvent.goingCount || selectedEvent.attendees?.length || 1} attending
+                        </span>
+                      </div>
+                    )}
 
                     <div className="flex items-center gap-2">
                       <button

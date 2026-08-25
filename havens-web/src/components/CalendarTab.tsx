@@ -232,6 +232,9 @@ export const CalendarTab: React.FC = () => {
           pointsReward: r.event.pointsReward,
           visibility: r.event.visibility,
           trustScore: r.event.trustScore,
+          ageRange: r.event.ageRange,
+          goingCount: r.event.goingCount,
+          attendees: r.event.attendees,
           creator: r.event.creator,
           hobbies: r.event.hobbies,
           response: r.response,
@@ -259,6 +262,10 @@ export const CalendarTab: React.FC = () => {
           pointsReward: ev.pointsReward,
           visibility: ev.visibility,
           trustScore: ev.trustScore,
+          ageRange: ev.ageRange,
+          goingCount: ev.goingCount,
+          attendees: ev.attendees,
+          rsvps: ev.rsvps,
           creator: ev.creator,
           hobbies: ev.hobbies,
           role: isHost ? 'hosting' : undefined,
@@ -725,6 +732,35 @@ export const CalendarTab: React.FC = () => {
                       >
                         #{hb.name}
                       </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Going Attendees List */}
+              {selectedEvent.attendees && selectedEvent.attendees.length > 0 && (
+                <div className="space-y-2 p-3 rounded-2xl bg-[#FAF8F5] border border-[#E2DBD0]/60">
+                  <div className="flex items-center justify-between text-xs font-bold text-stone-800">
+                    <span className="flex items-center gap-1.5 text-[#2D5A3D]">
+                      <Users className="w-3.5 h-3.5" />
+                      <span>Going ({selectedEvent.goingCount || selectedEvent.attendees.length})</span>
+                    </span>
+                    <span className="text-[10px] text-stone-500 font-normal">Confirmed Attendees</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 overflow-x-auto py-1">
+                    {selectedEvent.attendees.map((att: any) => (
+                      <div key={att.id} className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-xl border border-[#E2DBD0] shrink-0 shadow-2xs">
+                        <Avatar
+                          name={att.username}
+                          photoUrl={att.photoUrl}
+                          size="xs"
+                          className="w-5 h-5 rounded-full"
+                        />
+                        <span className="text-[11px] font-semibold text-stone-800">@{att.username}</span>
+                        {att.age && (
+                          <span className="text-[9px] text-stone-500 font-medium">{att.age}y</span>
+                        )}
+                      </div>
                     ))}
                   </div>
                 </div>

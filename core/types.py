@@ -305,6 +305,8 @@ class EventType(DjangoObjectType):
     ageRange = graphene.String()
     minAge = graphene.Int()
     maxAge = graphene.Int()
+    goingCount = graphene.Int()
+    attendees = graphene.List(lambda: UserType)
     rsvps = graphene.List(EventRSVPType)
     # Override visibility as plain String to bypass Graphene's auto-enum
     # that rejects the raw CharField values from the DB (e.g. 'friends_only').
@@ -337,6 +339,13 @@ class EventType(DjangoObjectType):
 
     def resolve_maxAge(self, info):
         return self.max_age
+
+    def resolve_goingCount(self, info):
+        return self.rsvps.filter(response='going').count()
+
+    def resolve_attendees(self, info):
+        going_user_ids = self.rsvps.filter(response='going').values_list('user_id', flat=True)
+        return User.objects.filter(id__in=going_user_ids).select_related('profile')
 
     def resolve_rsvps(self, info):
         return self.rsvps.select_related('user', 'user__profile').all()

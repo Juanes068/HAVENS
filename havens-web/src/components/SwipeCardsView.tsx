@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useMutation } from '@apollo/client';
 import { SWIPE_EVENT } from '../graphql/operations';
 import { Avatar } from './Avatar';
-import { Check, HelpCircle, RefreshCw, Compass } from 'lucide-react';
+import { Check, HelpCircle, RefreshCw, Compass, Calendar, MapPin, Sparkles } from 'lucide-react';
 
 export interface EventItem {
   id: string;
@@ -15,12 +15,31 @@ export interface EventItem {
   trustScore?: number;
   imageUrl?: string;
   locationName?: string;
+  scheduledDate?: string;
   ageRange?: string;
+  goingCount?: number;
   creator?: {
     id: string;
     username: string;
     photoUrl?: string;
   };
+  attendees?: {
+    id: string;
+    username: string;
+    photoUrl?: string;
+    age?: number;
+    neighbourhood?: string;
+    cityName?: string;
+  }[];
+  rsvps?: {
+    id: string;
+    response: string;
+    user: {
+      id: string;
+      username: string;
+      photoUrl?: string;
+    };
+  }[];
   hobbies?: {
     id: string;
     name: string;
@@ -40,7 +59,6 @@ interface ToastState {
 }
 
 export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetch }) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
   const [sessionSkippedIds, setSessionSkippedIds] = useState<string[]>([]);
   const [toast, setToast] = useState<ToastState | null>(null);
 
@@ -58,11 +76,14 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
     refetchQueries: ['MyRsvps', 'GetAllEvents'],
   });
 
-  // Active stack filtering out skipped cards
-  const activeEvents = events.filter((e) => !sessionSkippedIds.includes(e.id));
-  const currentEvent = activeEvents[currentIndex];
-  const nextEvent = activeEvents[currentIndex + 1];
-  const thirdEvent = activeEvents[currentIndex + 2];
+  // Active stack filtering out swiped / skipped cards
+  const activeEvents = useMemo(() => {
+    return events.filter((e) => !sessionSkippedIds.includes(String(e.id)));
+  }, [events, sessionSkippedIds]);
+
+  const currentEvent = activeEvents[0];
+  const nextEvent = activeEvents[1];
+  const thirdEvent = activeEvents[2];
 
   const showToast = (msg: string, type: ToastType) => {
     setToast({ msg, type });
@@ -76,12 +97,13 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
   const triggerSwipeRight = async () => {
     if (!currentEvent || isLockedRef.current) return;
     const eventTitle = currentEvent.title;
-    const eventId = currentEvent.id;
+    const eventId = String(currentEvent.id);
     isLockedRef.current = true;
     setExitDirection('right');
 
     setTimeout(async () => {
       try {
+        setSessionSkippedIds((prev) => [...prev, eventId]);
         const res = await swipeEventMutation({
           variables: {
             eventId: parseInt(eventId, 10),
@@ -95,7 +117,6 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
       } catch (err: any) {
         console.error('[Swipe Right Error]', err);
       } finally {
-        setCurrentIndex((prev) => prev + 1);
         setExitDirection(null);
         setDragOffset({ x: 0, y: 0 });
         isLockedRef.current = false;
@@ -107,12 +128,13 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
   const triggerSwipeLeft = async () => {
     if (!currentEvent || isLockedRef.current) return;
     const eventTitle = currentEvent.title;
-    const eventId = currentEvent.id;
+    const eventId = String(currentEvent.id);
     isLockedRef.current = true;
     setExitDirection('left');
 
     setTimeout(async () => {
       try {
+        setSessionSkippedIds((prev) => [...prev, eventId]);
         await swipeEventMutation({
           variables: {
             eventId: parseInt(eventId, 10),
@@ -123,7 +145,6 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
       } catch (err: any) {
         console.error('[Swipe Left Error]', err);
       } finally {
-        setCurrentIndex((prev) => prev + 1);
         setExitDirection(null);
         setDragOffset({ x: 0, y: 0 });
         isLockedRef.current = false;
@@ -135,12 +156,13 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
   const triggerSwipeUp = async () => {
     if (!currentEvent || isLockedRef.current) return;
     const eventTitle = currentEvent.title;
-    const eventId = currentEvent.id;
+    const eventId = String(currentEvent.id);
     isLockedRef.current = true;
     setExitDirection('up');
 
     setTimeout(async () => {
       try {
+        setSessionSkippedIds((prev) => [...prev, eventId]);
         await swipeEventMutation({
           variables: {
             eventId: parseInt(eventId, 10),
@@ -151,7 +173,6 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
       } catch (err: any) {
         console.error('[Swipe Up Error]', err);
       } finally {
-        setCurrentIndex((prev) => prev + 1);
         setExitDirection(null);
         setDragOffset({ x: 0, y: 0 });
         isLockedRef.current = false;
@@ -407,20 +428,67 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
 
             {/* Bottom Event Details Bar */}
             <div className="space-y-3 z-10">
-              {currentEvent.creator && (
-                <div className="flex items-center gap-2.5 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full w-max border border-white/10">
-                  <Avatar
-                    name={currentEvent.creator.username}
-                    photoUrl={currentEvent.creator.photoUrl}
-                    size="sm"
-                    className="w-6 h-6"
-                  />
-                  <span className="text-xs font-semibold text-white/90">
-                    @{currentEvent.creator.username}
-                  </span>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                {currentEvent.creator && (
+                  <div className="flex items-center gap-2.5 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
+                    <Avatar
+                      name={currentEvent.creator.username}
+                      photoUrl={currentEvent.creator.photoUrl}
+                      size="sm"
+                      className="w-6 h-6"
+                    />
+                    <span className="text-xs font-semibold text-white/90">
+                      @{currentEvent.creator.username}
+                    </span>
+                  </div>
+                )}
+
+                {/* Going Attendees Preview & Count */}
+                {((currentEvent.goingCount && currentEvent.goingCount > 0) || (currentEvent.attendees && currentEvent.attendees.length > 0)) && (
+                  <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
+                    <div className="flex items-center -space-x-1.5">
+                      {(currentEvent.attendees || []).slice(0, 3).map((att: any) => (
+                        <Avatar
+                          key={att.id}
+                          name={att.username}
+                          photoUrl={att.photoUrl}
+                          size="xs"
+                          className="w-5 h-5 rounded-full border border-white/40"
+                          title={`@${att.username}`}
+                        />
+                      ))}
+                    </div>
+                    <span className="text-[11px] font-bold text-emerald-300">
+                      👥 {currentEvent.goingCount || currentEvent.attendees?.length || 1} Going
+                    </span>
+                  </div>
+                )}
+              </div>
+
+
+              {/* Prominent Scheduled Date & Time Badge */}
+              {currentEvent.scheduledDate && !isNaN(new Date(currentEvent.scheduledDate).getTime()) && (
+                <div className="flex items-center gap-2 bg-[#2D5A3D]/95 backdrop-blur-md px-3.5 py-1.5 rounded-2xl border border-white/20 w-max shadow-sm">
+                  <Calendar className="w-4 h-4 text-emerald-300 shrink-0" />
+                  <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <span>
+                      {new Intl.DateTimeFormat('en-US', {
+                        weekday: 'short',
+                        month: 'short',
+                        day: 'numeric',
+                      }).format(new Date(currentEvent.scheduledDate))}
+                    </span>
+                    <span className="text-emerald-300">•</span>
+                    <span className="font-normal text-white/90">
+                      {new Intl.DateTimeFormat('en-US', {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true,
+                      }).format(new Date(currentEvent.scheduledDate))}
+                    </span>
+                  </div>
                 </div>
               )}
-
 
               <div>
                 <h2 className="text-2xl font-serif font-bold text-white leading-tight drop-shadow-sm">

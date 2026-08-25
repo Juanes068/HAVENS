@@ -10,7 +10,6 @@ import {
   SWIPE_EVENT,
 } from '../graphql/operations'
 import { useAuth } from '../context/AuthContext'
-import { useApp } from '../context/AppContext'
 import {
   Bookmark,
   Calendar,
@@ -19,16 +18,9 @@ import {
   Clock,
   MapPin,
   Search,
-  Share2,
   Trash2,
   Compass,
   Sparkles,
-  Info,
-  ChevronDown,
-  ChevronUp,
-  X,
-  ExternalLink,
-  ShieldCheck,
 } from 'lucide-react'
 
 const SAVED_KEYS = 'havens_saved_ids'
@@ -64,27 +56,30 @@ interface UnifiedSavedPlan {
 
 export const SavedView: React.FC = () => {
   const { user } = useAuth()
-  const { t } = useApp()
   const navigate = useNavigate()
 
   // Tab & Filter States
   const [activeTab, setActiveTab] = useState<SavedFilterTab>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
-  const [showPolicyBanner, setShowPolicyBanner] = useState(true)
-  const [isPolicyExpanded, setIsPolicyExpanded] = useState(false)
   const [selectedModalPlan, setSelectedModalPlan] = useState<any | null>(null)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
 
-  // Local Storage Bookmarks
+  // Local Storage Bookmarks with safe number normalization
   const [bookmarkedIds, setBookmarkedIds] = useState<number[]>(() => {
     try {
       const saved = localStorage.getItem(SAVED_KEYS)
-      return saved ? JSON.parse(saved) : []
+      if (!saved) return []
+      const parsed = JSON.parse(saved)
+      return Array.isArray(parsed) ? parsed.map((id) => Number(id)).filter((id) => !isNaN(id)) : []
     } catch {
       return []
     }
   })
+
+  const normalizedBookmarkSet = useMemo(() => {
+    return new Set(bookmarkedIds.map((id) => Number(id)))
+  }, [bookmarkedIds])
 
   // Queries
   const {
@@ -120,12 +115,13 @@ export const SavedView: React.FC = () => {
 
   // Toggle local bookmark
   const toggleBookmark = (id: number) => {
+    const targetId = Number(id)
     let updated: number[]
-    if (bookmarkedIds.includes(id)) {
-      updated = bookmarkedIds.filter((x) => x !== id)
+    if (normalizedBookmarkSet.has(targetId)) {
+      updated = Array.from(normalizedBookmarkSet).filter((x) => x !== targetId)
       showToast('Removed from bookmarks')
     } else {
-      updated = [...bookmarkedIds, id]
+      updated = [...Array.from(normalizedBookmarkSet), targetId]
       showToast('Added to bookmarks')
     }
     setBookmarkedIds(updated)
@@ -137,18 +133,18 @@ export const SavedView: React.FC = () => {
     try {
       const res = await swipeEventMutation({
         variables: {
-          eventId,
+          eventId: Number(eventId),
           response: newResponse,
         },
       })
 
       if (res?.data?.swipeEvent?.success) {
         if (newResponse === 'going') {
-          showToast("✓ RSVP updated to Confirmed (Going)!")
+          showToast('✓ RSVP updated to Confirmed (Going)!')
         } else if (newResponse === 'maybe') {
-          showToast("? RSVP updated to Maybe Interested.")
+          showToast('? RSVP updated to Maybe Interested.')
         } else {
-          showToast("RSVP removed.")
+          showToast('RSVP removed.')
         }
       }
     } catch (err: any) {
@@ -164,14 +160,17 @@ export const SavedView: React.FC = () => {
 
     const rsvpMap = new Map<number, { response: string; createdAt?: string }>()
     rawRsvps.forEach((r) => {
-      if (r.event?.id && r.response && r.response !== 'pass') {
-        rsvpMap.set(Number(r.event.id), { response: r.response, createdAt: r.createdAt })
+      if (r.event?.id && r.response && String(r.response).toLowerCase() !== 'pass') {
+        rsvpMap.set(Number(r.event.id), {
+          response: String(r.response).toLowerCase(),
+          createdAt: r.createdAt,
+        })
       }
     })
 
     const allCandidateIds = new Set<number>([
       ...Array.from(rsvpMap.keys()),
-      ...bookmarkedIds,
+      ...Array.from(normalizedBookmarkSet),
     ])
 
     const result: UnifiedSavedPlan[] = []
@@ -199,16 +198,17 @@ export const SavedView: React.FC = () => {
           going: evt.going || 1,
           rsvpStatus: (rsvpInfo?.response as any) || null,
           rsvpCreatedAt: rsvpInfo?.createdAt,
-          isBookmarked: bookmarkedIds.includes(id),
+          isBookmarked: normalizedBookmarkSet.has(id),
         })
       }
     })
 
-    // Also include any RSVPs that might not be in allEvents list
+    // Also include any RSVPs that might not be in allEvents query
     rawRsvps.forEach((r) => {
-      if (r.event?.id && r.response && r.response !== 'pass') {
+      if (r.event?.id && r.response && String(r.response).toLowerCase() !== 'pass') {
         const id = Number(r.event.id)
         if (!result.some((p) => p.id === id)) {
+          const resp = String(r.response).toLowerCase()
           result.push({
             id,
             title: r.event.title || 'Gathering Plan',
@@ -225,20 +225,21 @@ export const SavedView: React.FC = () => {
             ageRange: r.event.ageRange || 'All Ages',
             creator: r.event.creator,
             hobbies: r.event.hobbies,
-            rsvpStatus: r.response as any,
+            rsvpStatus: resp as any,
             rsvpCreatedAt: r.createdAt,
-            isBookmarked: bookmarkedIds.includes(id),
+            isBookmarked: normalizedBookmarkSet.has(id),
           })
         }
       }
     })
 
     return result
-  }, [eventsData, rsvpsData, bookmarkedIds])
+  }, [eventsData, rsvpsData, normalizedBookmarkSet])
 
-  // Categorize counts
-  const now = new Date().getTime()
-  const startOfToday = new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()).getTime()
+  // Date anchor for past events separation
+  const startOfToday = useMemo(() => {
+    return new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()).getTime()
+  }, [])
 
   const counts = useMemo(() => {
     let goingCount = 0
@@ -333,59 +334,6 @@ export const SavedView: React.FC = () => {
         </div>
       </div>
 
-      {/* 30-Day Auto-Retention Policy Banner */}
-      {showPolicyBanner && (
-        <div className="rounded-3xl border border-[#2D5A3D]/25 bg-gradient-to-r from-[#eaf3ed] via-[#F4EEE2] to-[#FAF8F5] p-4 sm:p-5 text-xs text-[#2D5A3D] shadow-2xs transition-all">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-2xl bg-[#2D5A3D] text-white flex items-center justify-center shrink-0 shadow-2xs mt-0.5">
-                <ShieldCheck className="w-5 h-5" />
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h4 className="font-bold font-serif text-stone-900 text-sm">
-                    30-Day Gathering & RSVP Lifecycle Policy
-                  </h4>
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#2D5A3D] text-white">
-                    Auto-Retention
-                  </span>
-                </div>
-                <p className="text-[#5a5450] leading-relaxed text-xs">
-                  To protect member privacy, keep your calendar lightweight, and maintain high platform speed, completed event records and past RSVP states are automatically preserved for <strong>30 days after the gathering concludes</strong>, after which they are safely archived.
-                </p>
-
-                {isPolicyExpanded && (
-                  <div className="pt-2 text-[11px] text-[#6a645d] space-y-1 border-t border-[#E2DBD0]/60 mt-2">
-                    <p>• <strong>Active Upcoming Events:</strong> Retained indefinitely until 30 days post-event date.</p>
-                    <p>• <strong>RSVP Modifications:</strong> You can update your response (Going ↔ Maybe) anytime before the gathering starts.</p>
-                    <p>• <strong>Data Privacy:</strong> Expired event chat threads and location tracks are automatically cleared post-retention window.</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="flex items-center gap-1 shrink-0">
-              <button
-                type="button"
-                onClick={() => setIsPolicyExpanded((prev) => !prev)}
-                className="p-1.5 rounded-xl hover:bg-black/5 text-[#2D5A3D] transition-colors cursor-pointer"
-                title={isPolicyExpanded ? 'Show less' : 'Learn more'}
-              >
-                {isPolicyExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowPolicyBanner(false)}
-                className="p-1.5 rounded-xl hover:bg-black/5 text-stone-400 hover:text-stone-700 transition-colors cursor-pointer"
-                title="Dismiss banner"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Sub-Navigation Tabs */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1">
         {/* Segmented Pill Tabs */}
@@ -396,7 +344,7 @@ export const SavedView: React.FC = () => {
               { key: 'going', label: 'Going', count: counts.going, icon: CheckCircle2 },
               { key: 'maybe', label: 'Maybe', count: counts.maybe, icon: HelpCircle },
               { key: 'bookmarked', label: 'Bookmarks', count: counts.bookmarked, icon: Bookmark },
-              { key: 'past', label: 'Past (30-Day Retention)', count: counts.past, icon: Clock },
+              { key: 'past', label: 'Past Events', count: counts.past, icon: Clock },
             ] as const
           ).map((tab) => {
             const Icon = tab.icon
@@ -491,7 +439,7 @@ export const SavedView: React.FC = () => {
                 : `No plans under "${activeTab}"`}
             </h3>
             <p className="text-xs text-[#8a8278] mt-1.5 leading-relaxed">
-              Explore local gatherings in Discover and swipe right or save to build your personal itinerary!
+              Explore local gatherings in Discover and swipe right or bookmark to build your personal itinerary!
             </p>
           </div>
           <div className="pt-2">
@@ -515,15 +463,8 @@ export const SavedView: React.FC = () => {
             const isMaybe = plan.rsvpStatus === 'maybe'
             const isBookmarked = plan.isBookmarked
 
-            // Calculate Date & 30-day Retention lifecycle
             const eventTime = plan.scheduledDate ? new Date(plan.scheduledDate).getTime() : 0
             const isPast = eventTime > 0 && eventTime < startOfToday
-            let daysUntilArchive: number | null = null
-
-            if (isPast && eventTime > 0) {
-              const diffDays = Math.floor((now - eventTime) / (1000 * 60 * 60 * 24))
-              daysUntilArchive = Math.max(0, 30 - diffDays)
-            }
 
             const formattedDate = plan.scheduledDate
               ? new Date(plan.scheduledDate).toLocaleDateString('en-US', {
@@ -675,19 +616,6 @@ export const SavedView: React.FC = () => {
                           #{hb.name}
                         </span>
                       ))}
-                    </div>
-                  )}
-
-                  {/* 30-Day Auto-Archive Countdown Indicator for Past Gatherings */}
-                  {isPast && daysUntilArchive !== null && (
-                    <div className="p-2 rounded-xl bg-[#F0EAE0]/70 border border-[#E2DBD0] text-[11px] text-stone-600 flex items-center justify-between mb-3">
-                      <span className="flex items-center gap-1 font-medium">
-                        <Clock className="w-3.5 h-3.5 text-[#C47B5A]" />
-                        <span>30-Day Archive:</span>
-                      </span>
-                      <span className="font-bold text-[#C47B5A]">
-                        {daysUntilArchive > 0 ? `${daysUntilArchive} days remaining` : 'Archived soon'}
-                      </span>
                     </div>
                   )}
                 </div>

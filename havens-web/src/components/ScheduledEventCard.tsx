@@ -13,11 +13,30 @@ export interface ScheduledEvent {
   pointsReward?: number
   visibility?: string
   trustScore?: number
+  ageRange?: string
+  goingCount?: number
   creator?: {
     id?: string | number
     username: string
     photoUrl?: string
   }
+  attendees?: {
+    id: string | number
+    username: string
+    photoUrl?: string
+    age?: number
+    neighbourhood?: string
+    cityName?: string
+  }[]
+  rsvps?: {
+    id: string | number
+    response: string
+    user: {
+      id: string | number
+      username: string
+      photoUrl?: string
+    }
+  }[]
   hobbies?: {
     id: string | number
     name: string
@@ -157,6 +176,14 @@ export const ScheduledEventCard: React.FC<ScheduledEventCardProps> = ({
               <span className="shrink-0">{timeFormatted}</span>
               <span>·</span>
               <span className="truncate">📍 {event.locationName || 'Vancouver, BC'}</span>
+              {(event.goingCount !== undefined || (event.attendees && event.attendees.length > 0)) && (
+                <>
+                  <span>·</span>
+                  <span className="text-[#2D5A3D] font-semibold shrink-0">
+                    👥 {event.goingCount || event.attendees?.length || 1} Going
+                  </span>
+                </>
+              )}
             </div>
 
             {/* Hobbies / Passions (Strictly Max 4) */}
@@ -203,13 +230,15 @@ export const ScheduledEventCard: React.FC<ScheduledEventCardProps> = ({
                         const eventIdNum = typeof event.id === 'string' ? parseInt(event.id, 10) : event.id
                         onRsvpChange(eventIdNum, rsvpStatus === 'going' ? 'pass' : 'going')
                       }}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-2xs ${
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs flex items-center gap-1 ${
                         rsvpStatus === 'going'
-                          ? 'bg-[#2D5A3D] text-white hover:bg-[#3d7a55]'
-                          : 'bg-[#eaf3ed] text-[#2D5A3D] hover:bg-[#2D5A3D] hover:text-white border border-[#2D5A3D]/20'
+                          ? 'bg-[#2D5A3D] text-white hover:bg-[#3d7a55] ring-1 ring-[#2D5A3D]/30'
+                          : 'bg-[#eaf3ed] text-[#2D5A3D] hover:bg-[#2D5A3D] hover:text-white border border-[#2D5A3D]/25'
                       }`}
+                      title={rsvpStatus === 'going' ? 'Confirmed (Going) - Click to cancel' : 'Confirm attendance (Going)'}
                     >
-                      {rsvpStatus === 'going' ? '✓ Attending' : "I'm In"}
+                      <Check className="w-3.5 h-3.5" />
+                      <span>{rsvpStatus === 'going' ? 'Going' : 'Confirm'}</span>
                     </button>
 
                     <button
@@ -217,16 +246,17 @@ export const ScheduledEventCard: React.FC<ScheduledEventCardProps> = ({
                       onClick={(e) => {
                         e.stopPropagation()
                         const eventIdNum = typeof event.id === 'string' ? parseInt(event.id, 10) : event.id
-                        onRsvpChange(eventIdNum, 'maybe')
+                        onRsvpChange(eventIdNum, rsvpStatus === 'maybe' ? 'pass' : 'maybe')
                       }}
-                      className={`px-2 py-1.5 rounded-xl text-xs font-medium transition-colors cursor-pointer border flex items-center justify-center ${
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer border flex items-center justify-center gap-1 ${
                         rsvpStatus === 'maybe'
-                          ? 'bg-amber-100 border-amber-300 text-amber-900'
-                          : 'border-[#E2DBD0] bg-white text-stone-600 hover:text-stone-900 hover:bg-[#F4EEE2]'
+                          ? 'bg-amber-100 border-amber-300 text-amber-900 shadow-2xs font-bold'
+                          : 'border-[#E2DBD0] bg-white text-stone-700 hover:text-stone-900 hover:bg-[#FAF8F5]'
                       }`}
-                      title="Mark as Maybe"
+                      title={rsvpStatus === 'maybe' ? 'Marked Maybe - Click to cancel' : 'Mark as Maybe'}
                     >
                       <HelpCircle className="w-3.5 h-3.5" />
+                      <span>Maybe</span>
                     </button>
                   </>
                 )}
