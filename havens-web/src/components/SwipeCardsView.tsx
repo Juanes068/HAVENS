@@ -15,6 +15,7 @@ export interface EventItem {
   trustScore?: number;
   imageUrl?: string;
   locationName?: string;
+  ageRange?: string;
   creator?: {
     id: string;
     username: string;
@@ -52,8 +53,10 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
   const isLockedRef = useRef(false);
   const toastTimeoutRef = useRef<any>(null);
 
-  // GraphQL Swipe Event Mutation
-  const [swipeEventMutation] = useMutation(SWIPE_EVENT);
+  // GraphQL Swipe Event Mutation with cache refetch
+  const [swipeEventMutation] = useMutation(SWIPE_EVENT, {
+    refetchQueries: ['MyRsvps', 'GetAllEvents'],
+  });
 
   // Active stack filtering out skipped cards
   const activeEvents = events.filter((e) => !sessionSkippedIds.includes(e.id));
@@ -73,6 +76,7 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
   const triggerSwipeRight = async () => {
     if (!currentEvent || isLockedRef.current) return;
     const eventTitle = currentEvent.title;
+    const eventId = currentEvent.id;
     isLockedRef.current = true;
     setExitDirection('right');
 
@@ -80,7 +84,7 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
       try {
         const res = await swipeEventMutation({
           variables: {
-            eventId: parseInt(currentEvent.id, 10),
+            eventId: parseInt(eventId, 10),
             response: 'going',
           },
         });
@@ -95,6 +99,7 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
         setExitDirection(null);
         setDragOffset({ x: 0, y: 0 });
         isLockedRef.current = false;
+        if (onRefetch) onRefetch();
       }
     }, 250);
   };
@@ -102,6 +107,7 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
   const triggerSwipeLeft = async () => {
     if (!currentEvent || isLockedRef.current) return;
     const eventTitle = currentEvent.title;
+    const eventId = currentEvent.id;
     isLockedRef.current = true;
     setExitDirection('left');
 
@@ -109,12 +115,11 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
       try {
         await swipeEventMutation({
           variables: {
-            eventId: parseInt(currentEvent.id, 10),
+            eventId: parseInt(eventId, 10),
             response: 'pass',
           },
         });
-        // Non-blocking Toast notification for Pass action
-        showToast(`✕ Passed "${eventTitle}" — You won't see this plan again.`, 'pass');
+        showToast(`✕ Passed "${eventTitle}" — Archived from feed.`, 'pass');
       } catch (err: any) {
         console.error('[Swipe Left Error]', err);
       } finally {
@@ -122,22 +127,36 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
         setExitDirection(null);
         setDragOffset({ x: 0, y: 0 });
         isLockedRef.current = false;
+        if (onRefetch) onRefetch();
       }
     }, 250);
   };
 
-  const triggerSwipeUp = () => {
+  const triggerSwipeUp = async () => {
     if (!currentEvent || isLockedRef.current) return;
     const eventTitle = currentEvent.title;
+    const eventId = currentEvent.id;
     isLockedRef.current = true;
     setExitDirection('up');
 
-    setTimeout(() => {
-      showToast(`Saved "${eventTitle}" for maybe later this session.`, 'maybe');
-      setSessionSkippedIds((prev) => [...prev, currentEvent.id]);
-      setExitDirection(null);
-      setDragOffset({ x: 0, y: 0 });
-      isLockedRef.current = false;
+    setTimeout(async () => {
+      try {
+        await swipeEventMutation({
+          variables: {
+            eventId: parseInt(eventId, 10),
+            response: 'maybe',
+          },
+        });
+        showToast(`? Marked "${eventTitle}" as Maybe — Saved to Calendar.`, 'maybe');
+      } catch (err: any) {
+        console.error('[Swipe Up Error]', err);
+      } finally {
+        setCurrentIndex((prev) => prev + 1);
+        setExitDirection(null);
+        setDragOffset({ x: 0, y: 0 });
+        isLockedRef.current = false;
+        if (onRefetch) onRefetch();
+      }
     }, 250);
   };
 
@@ -365,10 +384,15 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
             
             {/* Top Badges Bar */}
             <div className="flex items-center justify-between z-10">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-white/20 backdrop-blur-md uppercase tracking-wider text-white">
                   {currentEvent.visibility || 'Public'}
                 </span>
+                {currentEvent.ageRange && (
+                  <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-white/20 backdrop-blur-md text-white">
+                    🎂 {currentEvent.ageRange}
+                  </span>
+                )}
                 {currentEvent.pointsReward && (
                   <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-amber-500/80 backdrop-blur-md text-white">
                     ⭐ +{currentEvent.pointsReward} pts

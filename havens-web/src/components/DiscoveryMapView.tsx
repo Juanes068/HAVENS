@@ -7,6 +7,7 @@ import { GOOGLE_MAPS_LIBRARIES } from './LocationInput';
 
 interface DiscoveryMapViewProps {
   events: EventItem[];
+  myRsvps?: Map<string, string>;
   onRefetch?: () => void;
 }
 
@@ -32,7 +33,7 @@ const defaultMapOptions: google.maps.MapOptions = {
   ],
 };
 
-export const DiscoveryMapView: React.FC<DiscoveryMapViewProps> = ({ events }) => {
+export const DiscoveryMapView: React.FC<DiscoveryMapViewProps> = ({ events, myRsvps, onRefetch }) => {
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
   const { isLoaded, loadError } = useLoadScript({
@@ -45,7 +46,9 @@ export const DiscoveryMapView: React.FC<DiscoveryMapViewProps> = ({ events }) =>
   const [rsvpSuccessMsg, setRsvpSuccessMsg] = useState<string>('');
   const [map, setMap] = useState<google.maps.Map | null>(null);
 
-  const [swipeEventMutation, { loading: isRsvping }] = useMutation(SWIPE_EVENT);
+  const [swipeEventMutation, { loading: isRsvping }] = useMutation(SWIPE_EVENT, {
+    refetchQueries: ['MyRsvps', 'GetAllEvents'],
+  });
 
   // Compute map center dynamically based on selected event or first valid event
   const center = useMemo(() => {
@@ -72,19 +75,26 @@ export const DiscoveryMapView: React.FC<DiscoveryMapViewProps> = ({ events }) =>
     }
   };
 
-  const handleRsvpFromMap = async (eventItem: EventItem) => {
+  const handleRsvpFromMap = async (eventItem: EventItem, response: 'going' | 'maybe' | 'pass') => {
     setRsvpSuccessMsg('');
     try {
       const res = await swipeEventMutation({
         variables: {
           eventId: parseInt(eventItem.id, 10),
-          response: 'going',
+          response,
         },
       });
 
       if (res?.data?.swipeEvent?.success) {
-        setRsvpSuccessMsg(`✓ RSVP Confirmed for "${eventItem.title}"!`);
+        if (response === 'going') {
+          setRsvpSuccessMsg(`✓ RSVP Confirmed (Going) for "${eventItem.title}"!`);
+        } else if (response === 'maybe') {
+          setRsvpSuccessMsg(`? Marked "${eventItem.title}" as Maybe.`);
+        } else {
+          setRsvpSuccessMsg(`Removed RSVP for "${eventItem.title}".`);
+        }
         setTimeout(() => setRsvpSuccessMsg(''), 3500);
+        if (onRefetch) onRefetch();
       }
     } catch (err: any) {
       console.error('[Map RSVP Error]', err);
@@ -95,7 +105,7 @@ export const DiscoveryMapView: React.FC<DiscoveryMapViewProps> = ({ events }) =>
     <div className="w-full max-w-5xl mx-auto space-y-6 antialiased">
       {/* RSVP Success Banner */}
       {rsvpSuccessMsg && (
-        <div className="p-3.5 text-xs bg-[#eaf3ed] border border-[#7aaa8a]/40 text-[#2D5A3D] rounded-2xl font-semibold animate-bounce shadow-xs text-center">
+        <div className="p-3.5 text-xs bg-[#eaf3ed] border border-[#7aaa8a]/40 text-[#2D5A3D] rounded-2xl font-semibold shadow-xs text-center animate-in fade-in">
           {rsvpSuccessMsg}
         </div>
       )}
@@ -111,7 +121,7 @@ export const DiscoveryMapView: React.FC<DiscoveryMapViewProps> = ({ events }) =>
                 📍 Map Events ({events.length})
               </h3>
               <span className="text-[10px] bg-[#eaf3ed] text-[#2D5A3D] px-2.5 py-1 rounded-full font-semibold">
-                Google Maps Live
+                Persistent Map Markers
               </span>
             </div>
 
@@ -119,30 +129,61 @@ export const DiscoveryMapView: React.FC<DiscoveryMapViewProps> = ({ events }) =>
             <div className="space-y-2.5 max-h-[280px] overflow-y-auto pr-1">
               {events.map((evt) => {
                 const isSelected = selectedEvent?.id === evt.id;
+                const rsvpStatus = myRsvps?.get(String(evt.id));
+
                 return (
                   <div
                     key={evt.id}
                     onClick={() => handleSelectEvent(evt)}
-                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
+                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-2 ${
                       isSelected
                         ? 'bg-[#2D5A3D] text-white border-[#2D5A3D] shadow-sm'
                         : 'bg-[#F4EEE2]/60 hover:bg-[#F0EAE0] border-[#E2DBD0] text-[#2C2C2C]'
                     }`}
                   >
-                    <div>
-                      <h4 className="text-xs font-serif font-bold line-clamp-1">
-                        {evt.title}
-                      </h4>
-                      <p className={`text-[10px] mt-0.5 ${isSelected ? 'text-white/80' : 'text-[#8a8278]'}`}>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <h4 className="text-xs font-serif font-bold line-clamp-1">
+                          {evt.title}
+                        </h4>
+                        {evt.ageRange && (
+                          <span
+                            className={`text-[9px] font-semibold px-1.5 py-0.2 rounded-md ${
+                              isSelected ? 'bg-white/20 text-white' : 'bg-[#E2DBD0] text-stone-700'
+                            }`}
+                          >
+                            🎂 {evt.ageRange}
+                          </span>
+                        )}
+                      </div>
+                      <p className={`text-[10px] mt-0.5 truncate ${isSelected ? 'text-white/80' : 'text-[#8a8278]'}`}>
                         📍 {evt.locationName || 'Nearby'}
                       </p>
                     </div>
 
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
-                      isSelected ? 'bg-white/20 text-white' : 'bg-white text-[#2D5A3D]'
-                    }`}>
-                      {evt.visibility || 'Public'}
-                    </span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {rsvpStatus === 'going' && (
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          isSelected ? 'bg-emerald-400/30 text-emerald-100 border border-emerald-300/40' : 'bg-[#eaf3ed] text-[#2D5A3D] border border-[#2D5A3D]/30'
+                        }`}>
+                          ✓ Going
+                        </span>
+                      )}
+                      {rsvpStatus === 'maybe' && (
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          isSelected ? 'bg-amber-400/30 text-amber-100 border border-amber-300/40' : 'bg-[#fdf6ed] text-[#C47B5A] border border-[#C47B5A]/30'
+                        }`}>
+                          ? Maybe
+                        </span>
+                      )}
+                      {!rsvpStatus && (
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          isSelected ? 'bg-white/20 text-white' : 'bg-white text-[#2D5A3D]'
+                        }`}>
+                          {evt.visibility || 'Public'}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -159,15 +200,22 @@ export const DiscoveryMapView: React.FC<DiscoveryMapViewProps> = ({ events }) =>
                     alt={selectedEvent.title}
                     className="w-full h-full object-cover"
                     onError={(e) => {
-                      e.currentTarget.style.display = 'none'
+                      e.currentTarget.style.display = 'none';
                     }}
                   />
                 ) : null}
                 <div className={`w-full h-full bg-gradient-to-br from-[#2D5A3D] to-slate-900 flex items-center justify-center text-white font-serif font-bold text-xl ${selectedEvent.imageUrl ? 'hidden' : ''}`}>
                   {selectedEvent.title.charAt(0)}
                 </div>
-                <div className="absolute top-2 right-2 bg-black/50 backdrop-blur-xs text-white text-[10px] font-semibold px-2 py-0.5 rounded-full">
-                  ⭐ +{selectedEvent.pointsReward || 10} pts
+                <div className="absolute top-2 right-2 flex items-center gap-1">
+                  {selectedEvent.ageRange && (
+                    <span className="bg-black/50 backdrop-blur-xs text-white text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                      🎂 {selectedEvent.ageRange}
+                    </span>
+                  )}
+                  <span className="bg-black/50 backdrop-blur-xs text-white text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                    ⭐ +{selectedEvent.pointsReward || 10} pts
+                  </span>
                 </div>
               </div>
 
@@ -183,20 +231,70 @@ export const DiscoveryMapView: React.FC<DiscoveryMapViewProps> = ({ events }) =>
                 </p>
               </div>
 
-              <div className="flex items-center justify-between pt-1">
-                <span className="text-[10px] text-[#8a8278]">
-                  Host: @{selectedEvent.creator?.username || 'member'}
-                </span>
+              {/* RSVP Action Bar */}
+              {(() => {
+                const currentRsvp = myRsvps?.get(String(selectedEvent.id));
 
-                <button
-                  type="button"
-                  disabled={isRsvping}
-                  onClick={() => handleRsvpFromMap(selectedEvent)}
-                  className="px-4 py-1.5 rounded-lg bg-[#2D5A3D] hover:bg-[#3d7a55] text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  {isRsvping ? 'RSVPing...' : "I'm in! (RSVP)"}
-                </button>
-              </div>
+                return (
+                  <div className="pt-2 border-t border-[#E2DBD0]/60 space-y-2">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-stone-500">
+                        Host: @{selectedEvent.creator?.username || 'member'}
+                      </span>
+                      {currentRsvp === 'going' && (
+                        <span className="font-bold text-[#2D5A3D] bg-[#eaf3ed] px-2.5 py-0.5 rounded-full border border-[#2D5A3D]/20">
+                          ✓ Confirmed Going
+                        </span>
+                      )}
+                      {currentRsvp === 'maybe' && (
+                        <span className="font-bold text-[#C47B5A] bg-[#fdf6ed] px-2.5 py-0.5 rounded-full border border-[#C47B5A]/20">
+                          ? Marked Maybe
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={isRsvping}
+                        onClick={() => handleRsvpFromMap(selectedEvent, 'going')}
+                        className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer ${
+                          currentRsvp === 'going'
+                            ? 'bg-[#2D5A3D] text-white shadow-xs'
+                            : 'bg-[#eaf3ed] text-[#2D5A3D] hover:bg-[#2D5A3D] hover:text-white border border-[#2D5A3D]/30'
+                        }`}
+                      >
+                        {currentRsvp === 'going' ? '✓ Attending' : "I'm In! (Going)"}
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isRsvping}
+                        onClick={() => handleRsvpFromMap(selectedEvent, 'maybe')}
+                        className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                          currentRsvp === 'maybe'
+                            ? 'bg-[#C47B5A] text-white shadow-xs'
+                            : 'bg-[#FAF8F5] text-stone-700 hover:bg-[#F0EAE0] border border-[#E2DBD0]'
+                        }`}
+                      >
+                        {currentRsvp === 'maybe' ? '? Maybe' : 'Maybe'}
+                      </button>
+
+                      {currentRsvp && (
+                        <button
+                          type="button"
+                          disabled={isRsvping}
+                          onClick={() => handleRsvpFromMap(selectedEvent, 'pass')}
+                          className="px-2.5 py-2 rounded-xl text-[11px] text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+                          title="Remove RSVP"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>
