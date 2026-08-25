@@ -78,6 +78,52 @@ export const GET_ALL_USERS = gql`
 export const GET_RECOMMENDED_USERS = GET_ALL_USERS;
 
 /**
+ * Query to globally search user profiles across the entire database ignoring location/affinity.
+ */
+export const SEARCH_USERS = gql`
+  query SearchUsers($query: String!, $limit: Int, $offset: Int) {
+    searchUsers(query: $query, limit: $limit, offset: $offset) {
+      id
+      username
+      email
+      bio
+      dateOfBirth
+      age
+      neighbourhood
+      cityName
+      photoUrl
+      distance
+      affinityScore
+      matchPercentage
+      sharedHobbies {
+        id
+        name
+        category {
+          id
+          name
+        }
+      }
+      relatedHobbies {
+        id
+        name
+        category {
+          id
+          name
+        }
+      }
+      hobbies {
+        id
+        name
+        category {
+          id
+          name
+        }
+      }
+    }
+  }
+`;
+
+/**
  * Mutation to update user profile details (bio, dateOfBirth, neighbourhood, photoUrl).
  */
 export const UPDATE_USER_PROFILE = gql`

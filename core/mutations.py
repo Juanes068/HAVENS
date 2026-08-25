@@ -57,6 +57,7 @@ class CreateUser(graphene.Mutation):
         latitude = graphene.Float(description="User latitude coordinate.")
         longitude = graphene.Float(description="User longitude coordinate.")
         photo_url = graphene.String(default_value='', description="Profile image URL (Cloudinary/S3).")
+        date_of_birth = graphene.Date(required=False, description="User date of birth.")
 
     user = graphene.Field(UserType, description="The newly created User entity.")
     success = graphene.Boolean(description="Indicates if account creation succeeded.")
@@ -64,30 +65,19 @@ class CreateUser(graphene.Mutation):
 
     @classmethod
     def mutate(cls, root, info, username, email, password, invitation_code, terms_accepted,
-               bio='', neighbourhood='', city_name='', latitude=None, longitude=None, photo_url=''):
-        """Execute user creation, link profile, mark invite as used, and queue welcome email.
-
-        Args:
-            root: Root GraphQL object.
-            info (graphene.ResolveInfo): Execution context.
-            username (str): Target username.
-            email (str): Target email.
-            password (str): Account password.
-            invitation_code (str): Invitation code to validate and consume.
-            terms_accepted (bool): Explicit user confirmation of Terms & Conditions.
-            bio (str, optional): User biography.
-            neighbourhood (str, optional): Neighborhood description.
-            city_name (str, optional): City name.
-            latitude (float, optional): Latitude coordinate.
-            longitude (float, optional): Longitude coordinate.
-            photo_url (str, optional): Avatar image URL.
-
-        Returns:
-            CreateUser: Mutation payload containing `user`, `success`, and `message`.
-        """
+               bio='', neighbourhood='', city_name='', latitude=None, longitude=None, photo_url='', date_of_birth=None):
+        """Execute user creation, link profile, mark invite as used, and queue welcome email."""
         # 0. Backend Validation: Enforce Terms and Conditions acceptance at the API level
         if not terms_accepted:
             raise GraphQLError("You must accept the Terms and Conditions to create an account.")
+
+        if date_of_birth:
+            today = timezone.now().date()
+            calculated_age = today.year - date_of_birth.year - (
+                (today.month, today.day) < (date_of_birth.month, date_of_birth.day)
+            )
+            if calculated_age < 14:
+                return cls(user=None, success=False, message="You must be at least 14 years old to join Havens.")
 
         try:
             # 1. Validate invitation code existence and ensure it has not been redeemed yet
@@ -111,10 +101,11 @@ class CreateUser(graphene.Mutation):
             invite.used_at = timezone.now()
             invite.save()
 
-            # 5. Create extended profile with location and avatar metadata
+            # 5. Create extended profile with location, DOB, and avatar metadata
             UserProfile.objects.create(
                 user=user,
                 bio=bio,
+                date_of_birth=date_of_birth,
                 neighbourhood=neighbourhood,
                 city_name=city_name,
                 latitude=latitude,
@@ -697,6 +688,9 @@ class CreateCommunity(graphene.Mutation):
         longitude = graphene.Float(required=False, description="Location longitude coordinate.")
         isVirtual = graphene.Boolean(required=False, default_value=False, description="True if circle is a virtual group with no physical coordinates.")
         imageUrl = graphene.String(required=False, default_value="", description="Cloudinary cover image URL.")
+        ageRange = graphene.String(required=False, default_value="All Ages", description="Target age bracket.")
+        minAge = graphene.Int(required=False, description="Minimum recommended age limit.")
+        maxAge = graphene.Int(required=False, description="Maximum recommended age limit.")
         hobbyIds = graphene.List(graphene.Int, required=False, description="List of associated Hobby IDs.")
 
     community = graphene.Field(CommunityType, description="The created Community record.")
@@ -706,7 +700,8 @@ class CreateCommunity(graphene.Mutation):
     @classmethod
     @login_required
     def mutate(cls, root, info, name, subdomain=None, description="", locationName="",
-               latitude=None, longitude=None, isVirtual=False, imageUrl="", hobbyIds=None):
+               latitude=None, longitude=None, isVirtual=False, imageUrl="", ageRange="All Ages",
+               minAge=None, maxAge=None, hobbyIds=None):
         """Create a new circle, set creator, associate hobbies, and auto-join creator."""
         try:
             user = info.context.user
@@ -748,6 +743,9 @@ class CreateCommunity(graphene.Mutation):
                 longitude=final_lng,
                 is_virtual=isVirtual,
                 image_url=imageUrl.strip() if imageUrl else "",
+                age_range=ageRange.strip() if ageRange else "All Ages",
+                min_age=minAge,
+                max_age=maxAge,
                 creator=user if user and user.is_authenticated else None,
             )
 

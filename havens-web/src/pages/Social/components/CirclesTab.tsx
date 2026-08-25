@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
-import { GET_RECOMMENDED_CIRCLES, DELETE_COMMUNITY } from '../../../graphql/operations';
+import { GET_RECOMMENDED_CIRCLES, SEARCH_COMMUNITIES, DELETE_COMMUNITY } from '../../../graphql/operations';
 import { useAuth } from '../../../context/AuthContext';
 import { Circle } from '../types';
 import { CreateCircleWizard } from './CreateCircleWizard';
@@ -62,6 +62,23 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
     fetchPolicy: 'cache-and-network',
   });
 
+  const isSearching = circleSearchQuery.trim().length > 0;
+  const trimmedCircleQuery = circleSearchQuery.trim();
+
+  // Global search query across entire database
+  const {
+    data: searchData,
+    loading: searchLoading,
+  } = useQuery(SEARCH_COMMUNITIES, {
+    variables: {
+      query: trimmedCircleQuery,
+      limit: 50,
+      offset: 0,
+    },
+    skip: !isSearching,
+    fetchPolicy: 'cache-and-network',
+  });
+
   useEffect(() => {
     if (data?.recommendedCircles) {
       const items = data.recommendedCircles || [];
@@ -72,26 +89,13 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
   const [deleteCommunityMutation, { loading: isDeleting }] = useMutation(DELETE_COMMUNITY);
 
   const circles: Circle[] = useMemo(() => {
+    if (isSearching) {
+      return searchData?.searchCommunities || [];
+    }
     return data?.recommendedCircles || [];
-  }, [data]);
+  }, [isSearching, searchData, data]);
 
-  const isSearching = circleSearchQuery.trim().length > 0;
-  const normalizedCircleQuery = circleSearchQuery.trim().toLowerCase();
-
-  const filteredCircles = useMemo(() => {
-    if (!isSearching) return circles;
-    return circles.filter((circle) => {
-      const nameMatch = circle.name?.toLowerCase().includes(normalizedCircleQuery);
-      const descMatch = circle.description?.toLowerCase().includes(normalizedCircleQuery);
-      const locMatch = circle.locationName?.toLowerCase().includes(normalizedCircleQuery);
-      const creatorMatch = circle.creator?.username?.toLowerCase().includes(normalizedCircleQuery);
-      const hobbyMatch = (circle.hobbies || []).some((h: any) =>
-        h.name?.toLowerCase().includes(normalizedCircleQuery)
-      );
-
-      return nameMatch || descMatch || locMatch || creatorMatch || hobbyMatch;
-    });
-  }, [circles, isSearching, normalizedCircleQuery]);
+  const isContentLoading = isSearching ? searchLoading : loading;
 
   const handleLoadMoreCircles = async () => {
     if (loadingMore || !hasMore) return;
@@ -199,7 +203,7 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
               <Target className="w-3.5 h-3.5" />
               <span>
                 {isSearching
-                  ? `${filteredCircles.length} ${filteredCircles.length === 1 ? 'Circle Found' : 'Circles Found'}`
+                  ? `${circles.length} ${circles.length === 1 ? 'Circle Found' : 'Circles Found'}`
                   : `${circles.length} Circles Available`}
               </span>
             </span>
@@ -224,7 +228,7 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
               type="text"
               value={circleSearchQuery}
               onChange={(e) => setCircleSearchQuery(e.target.value)}
-              placeholder="Search circles by name, description, topics, or location..."
+              placeholder="Search circles globally by name, description, topics, or location..."
               className="w-full pl-11 pr-10 py-3 rounded-2xl bg-white border border-[#E2DBD0] hover:border-[#2D5A3D]/40 focus:border-[#2D5A3D] text-xs sm:text-sm text-[#2C2C2C] placeholder:text-[#8a8278]/70 shadow-2xs focus:shadow-xs focus:outline-none transition-all"
             />
             {circleSearchQuery && (
@@ -241,7 +245,7 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
           {isSearching && (
             <div className="flex items-center justify-between mt-2 px-1 text-xs text-[#8a8278]">
               <span>
-                Showing {filteredCircles.length} circle{filteredCircles.length === 1 ? '' : 's'} matching "{circleSearchQuery}"
+                Showing {circles.length} circle{circles.length === 1 ? '' : 's'} matching "{circleSearchQuery}"
               </span>
               <button
                 type="button"
@@ -255,13 +259,13 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
         </div>
 
         {/* ─── Grid of Circles ─── */}
-        {loading && circles.length === 0 ? (
+        {isContentLoading && circles.length === 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {[1, 2, 3, 4].map((i) => (
               <CircleCardSkeleton key={i} />
             ))}
           </div>
-        ) : filteredCircles.length === 0 ? (
+        ) : circles.length === 0 ? (
           isSearching ? (
             <div className="bg-white border border-[#E2DBD0] rounded-2xl p-10 text-center space-y-3">
               <div className="w-14 h-14 rounded-full bg-[#F4EEE2] flex items-center justify-center mx-auto text-[#8a8278]">
@@ -305,7 +309,7 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
           )
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {filteredCircles.map((circle) => {
+            {circles.map((circle) => {
               const isJoined = joinedCircleIds.some((id) => String(id) === String(circle.id));
               const isCreator = Boolean(currentUser && circle.creator && String(circle.creator.id) === String(currentUser.id));
               const affinity = getAffinityPercent(circle);
@@ -428,9 +432,17 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
 
                   {/* Card Actions Footer */}
                   <div className="pt-3 border-t border-[#E2DBD0]/60 flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
-                    <span className="text-xs text-[#8a8278] font-medium truncate">
-                      👥 {membersCount} {membersCount === 1 ? 'member' : 'members'}
-                    </span>
+                    <div className="flex items-center gap-2 text-xs text-[#8a8278] font-medium truncate">
+                      <span>👥 {membersCount} {membersCount === 1 ? 'member' : 'members'}</span>
+                      {circle.ageRange && (
+                        <>
+                          <span>•</span>
+                          <span className="bg-[#FAF8F5] border border-[#E2DBD0] text-stone-700 px-2 py-0.5 rounded-full text-[11px] font-semibold">
+                            🎂 {circle.ageRange}
+                          </span>
+                        </>
+                      )}
+                    </div>
 
                     <div className="flex items-center gap-2 shrink-0">
                       {isCreator && (
@@ -528,11 +540,19 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
                 <h3 className="text-xl font-serif font-semibold text-[#2D5A3D] mt-0.5">
                   {exploringCircle.name}
                 </h3>
-                {exploringCircle.creator && (
-                  <p className="text-[11px] text-[#8a8278]">
-                    Hosted by @{exploringCircle.creator.username}
-                  </p>
-                )}
+                <div className="flex items-center gap-2 mt-0.5 text-[11px] text-[#8a8278]">
+                  {exploringCircle.creator && (
+                    <span>Hosted by @{exploringCircle.creator.username}</span>
+                  )}
+                  {exploringCircle.ageRange && (
+                    <>
+                      <span>•</span>
+                      <span className="font-semibold text-stone-700 bg-[#F4EEE2] px-2 py-0.5 rounded-full border border-[#E2DBD0]">
+                        🎂 {exploringCircle.ageRange}
+                      </span>
+                    </>
+                  )}
+                </div>
               </div>
               <button
                 type="button"

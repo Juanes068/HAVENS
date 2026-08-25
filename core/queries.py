@@ -92,6 +92,13 @@ class Query(graphene.ObjectType):
         id=graphene.Int(required=True),
         description="Look up a specific user account by its primary key ID."
     )
+    search_users = graphene.List(
+        UserType,
+        query=graphene.String(required=True),
+        limit=graphene.Int(required=False, default_value=50),
+        offset=graphene.Int(required=False, default_value=0),
+        description="Global search for user profiles across the entire database ignoring location, radius, and match affinity."
+    )
 
     # ── Communities ─────────────────────────────────────────────────────────────
     all_communities = graphene.List(
@@ -99,6 +106,13 @@ class Query(graphene.ObjectType):
         limit=graphene.Int(required=False, description="Max number of communities to return"),
         offset=graphene.Int(required=False, default_value=0, description="Offset starting index for pagination"),
         description="Retrieve all communities on the Havens platform."
+    )
+    search_communities = graphene.List(
+        CommunityType,
+        query=graphene.String(required=True),
+        limit=graphene.Int(required=False, default_value=50),
+        offset=graphene.Int(required=False, default_value=0),
+        description="Global search for circles/communities across the entire database ignoring location, radius, and match affinity."
     )
     recommended_circles = graphene.List(
         CommunityType,
@@ -373,9 +387,58 @@ class Query(graphene.ObjectType):
         except User.DoesNotExist:
             return None
 
+    def resolve_search_users(self, info, query, limit=50, offset=0):
+        """Global search for user profiles across the entire database ignoring location, radius, and match affinity."""
+        q = (query or '').strip()
+        if not q:
+            return User.objects.none()
+
+        user = info.context.user
+        qs = User.objects.filter(
+            Q(username__icontains=q) |
+            Q(first_name__icontains=q) |
+            Q(last_name__icontains=q) |
+            Q(profile__bio__icontains=q) |
+            Q(profile__neighbourhood__icontains=q) |
+            Q(profile__city_name__icontains=q) |
+            Q(profile__hobbies__name__icontains=q)
+        ).distinct().select_related('profile').prefetch_related(
+            'profile__hobbies__category'
+        )
+
+        if user and user.is_authenticated:
+            qs = qs.exclude(id=user.id)
+
+        qs = qs.order_by('username')
+        if offset:
+            qs = qs[offset:]
+        if limit is not None:
+            qs = qs[:limit]
+        return qs
+
     def resolve_all_communities(self, info, limit=None, offset=0):
         """Retrieve all communities hosted on the platform with pagination support."""
         qs = Community.objects.prefetch_related('hobbies', 'memberships').select_related('creator').all().order_by('-created_at')
+        if offset:
+            qs = qs[offset:]
+        if limit is not None:
+            qs = qs[:limit]
+        return qs
+
+    def resolve_search_communities(self, info, query, limit=50, offset=0):
+        """Global search for circles/communities across the entire database ignoring location, radius, and match affinity."""
+        q = (query or '').strip()
+        if not q:
+            return Community.objects.none()
+
+        qs = Community.objects.filter(
+            Q(name__icontains=q) |
+            Q(description__icontains=q) |
+            Q(location__icontains=q) |
+            Q(creator__username__icontains=q) |
+            Q(hobbies__name__icontains=q)
+        ).distinct().prefetch_related('hobbies', 'memberships').select_related('creator').order_by('-created_at')
+
         if offset:
             qs = qs[offset:]
         if limit is not None:

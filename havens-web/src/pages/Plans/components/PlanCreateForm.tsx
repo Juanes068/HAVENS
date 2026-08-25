@@ -12,6 +12,7 @@ import {
 import { Clock, Calendar } from 'lucide-react'
 import { HavensDatePicker } from '../../../components/ui/HavensDatePicker'
 import { HavensTimePicker } from '../../../components/ui/HavensTimePicker'
+import { AgeRangeSelector } from '../../../components/ui/AgeRangeSelector'
 import {
   SERIF,
   CATEGORIES,
@@ -221,31 +222,13 @@ export const PlanCreateForm: React.FC<PlanCreateFormProps> = ({ onSuccess, onCan
             </div>
           </div>
 
-          {/* Age Range Attribute */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#2C2C2C]">
-                Target Age Range
-              </label>
-              <span className="text-[11px] text-[#8a8278]">Not all ages are suitable for every event</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {ageOptions.map((opt) => (
-                <button
-                  key={opt}
-                  type="button"
-                  onClick={() => setAgeRange(opt)}
-                  className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-150 cursor-pointer flex items-center gap-1.5 ${
-                    ageRange === opt
-                      ? 'bg-[#C47B5A] text-white shadow-xs'
-                      : 'bg-[#FAF8F5] border border-[#E2DBD0] text-stone-700 hover:bg-[#F0EAE0]'
-                  }`}
-                >
-                  <span>{opt}</span>
-                </button>
-              ))}
-            </div>
-          </div>
+          {/* Age Range Restriction */}
+          <AgeRangeSelector
+            value={ageRange}
+            onChange={(val) => setAgeRange(val)}
+            label="Target Age Range"
+            description="Configure age brackets for your plan or choose All Ages"
+          />
 
           {/* Description */}
           <div>

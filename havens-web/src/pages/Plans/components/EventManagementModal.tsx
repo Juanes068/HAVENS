@@ -21,6 +21,7 @@ import {
 } from '../types'
 import { HavensDatePicker } from '../../../components/ui/HavensDatePicker'
 import { HavensTimePicker } from '../../../components/ui/HavensTimePicker'
+import { AgeRangeSelector } from '../../../components/ui/AgeRangeSelector'
 import {
   Users,
   CheckCircle2,
@@ -645,31 +646,13 @@ export const EventManagementModal: React.FC<EventManagementModalProps> = ({
                 </div>
               </div>
 
-              {/* Age Range Configuration Attribute */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-[#2C2C2C]">
-                    Age Range Configuration <span className="text-[#C47B5A]">*</span>
-                  </label>
-                  <span className="text-[11px] text-[#8a8278]">Ensure attendees match the group dynamic</span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {AGE_RANGE_OPTIONS.map((opt) => (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => setAgeRange(opt)}
-                      className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                        ageRange === opt
-                          ? 'bg-[#C47B5A] text-white shadow-xs'
-                          : 'bg-[#FAF8F5] border border-[#E2DBD0] text-stone-700 hover:bg-[#F0EAE0]'
-                      }`}
-                    >
-                      <span>{opt}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
+              {/* Age Range Configuration */}
+              <AgeRangeSelector
+                value={ageRange}
+                onChange={(val) => setAgeRange(val)}
+                label="Age Range Configuration"
+                description="Ensure attendees match the group dynamic or choose All Ages"
+              />
 
               {/* Description */}
               <div>

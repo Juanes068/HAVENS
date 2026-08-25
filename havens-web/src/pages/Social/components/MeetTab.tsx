@@ -1,9 +1,11 @@
 import React, { useState, useMemo } from 'react';
+import { useQuery } from '@apollo/client';
 import { computeAffinity } from '../utils/ignoreStorage';
 import { Avatar } from '../../../components/Avatar';
 import { Zap, Sparkles, Compass, Search } from 'lucide-react';
 import { UserProfileModal } from './UserProfileModal';
 import { useAuth } from '../../../context/AuthContext';
+import { SEARCH_USERS } from '../../../graphql/operations';
 
 interface MeetTabProps {
   loading: boolean;
@@ -264,30 +266,28 @@ export const MeetTab: React.FC<MeetTabProps> = ({
   const [profileSearchQuery, setProfileSearchQuery] = useState('');
 
   const isSearching = profileSearchQuery.trim().length > 0;
-  const normalizedQuery = profileSearchQuery.trim().toLowerCase();
+  const trimmedQuery = profileSearchQuery.trim();
+
+  // ─── Global Search Query across entire database ───
+  const {
+    data: searchData,
+    loading: searchLoading,
+  } = useQuery(SEARCH_USERS, {
+    variables: { query: trimmedQuery, limit: 50, offset: 0 },
+    skip: !isSearching,
+    fetchPolicy: 'cache-and-network',
+  });
 
   // ─── Filter Logic ───
   // Default recommendations: STRICTLY ONLY match percentage > 0.
   // Profiles with match percentage <= 0 are hidden from default view.
-  // When explicitly searching: all matching profiles (including <= 0%) become visible.
+  // When searching globally: queries entire database ignoring location, radius, and affinity thresholds.
   const displayUsers = useMemo(() => {
     if (isSearching) {
-      return suggestedUsers.filter((usr: any) => {
-        const username = usr.username?.toLowerCase() || '';
-        const bio = usr.bio?.toLowerCase() || '';
-        const neighbourhood = usr.neighbourhood?.toLowerCase() || '';
-        const cityName = usr.cityName?.toLowerCase() || '';
-        const hobbyMatch = (usr.hobbies || []).some((h: any) =>
-          h.name?.toLowerCase().includes(normalizedQuery)
-        );
-
-        return (
-          username.includes(normalizedQuery) ||
-          bio.includes(normalizedQuery) ||
-          neighbourhood.includes(normalizedQuery) ||
-          cityName.includes(normalizedQuery) ||
-          hobbyMatch
-        );
+      const results = searchData?.searchUsers || [];
+      return results.filter((usr: any) => {
+        if (usr.id === currentUser?.id || usr.username === currentUser?.username) return false;
+        return true;
       });
     }
 
@@ -296,24 +296,26 @@ export const MeetTab: React.FC<MeetTabProps> = ({
       const affinity = usr.matchPercentage ?? computeAffinity(myHobbies, usr.hobbies);
       return affinity > 0;
     });
-  }, [suggestedUsers, isSearching, normalizedQuery, myHobbies]);
+  }, [suggestedUsers, isSearching, searchData, currentUser, myHobbies]);
+
+  const isContentLoading = isSearching ? searchLoading : loading;
 
   return (
     <div className="space-y-6">
       {/* ── Header Title and Overview ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
-          <h3 className="text-xl font-serif font-semibold text-[#2D5A3D]">Nearby Match Suggestions</h3>
+          <h3 className="text-xl font-serif font-semibold text-[#2D5A3D]">Match Suggestions</h3>
           <p className="text-xs text-[#8a8278] mt-0.5">
-            Strictly location-filtered members ranked by hobby affinity (&gt;0% match). Connect to build genuine bonds.
+            Connect with community members and build genuine bonds based on shared passions.
           </p>
         </div>
-        {!loading && (
+        {!isContentLoading && (
           <span className="text-xs bg-[#eaf3ed] text-[#2D5A3D] px-3 py-1 rounded-full font-semibold self-start sm:self-auto border border-[#7aaa8a]/30">
             {isSearching ? (
               `${displayUsers.length} search ${displayUsers.length === 1 ? 'result' : 'results'}`
             ) : (
-              `${displayUsers.length} ${displayUsers.length === 1 ? 'match' : 'matches'} (>0%)`
+              `${displayUsers.length} ${displayUsers.length === 1 ? 'match' : 'matches'}`
             )}
           </span>
         )}
@@ -327,7 +329,7 @@ export const MeetTab: React.FC<MeetTabProps> = ({
             type="text"
             value={profileSearchQuery}
             onChange={(e) => setProfileSearchQuery(e.target.value)}
-            placeholder="Search profiles by username, bio, city, or hobbies..."
+            placeholder="Search profiles globally by username, bio, city, or hobbies..."
             className="w-full pl-11 pr-10 py-3 rounded-2xl bg-white border border-[#E2DBD0] hover:border-[#2D5A3D]/40 focus:border-[#2D5A3D] text-xs sm:text-sm text-[#2C2C2C] placeholder:text-[#8a8278]/70 shadow-2xs focus:shadow-xs focus:outline-none transition-all"
           />
           {profileSearchQuery && (
@@ -351,13 +353,13 @@ export const MeetTab: React.FC<MeetTabProps> = ({
               onClick={() => setProfileSearchQuery('')}
               className="text-[#2D5A3D] hover:underline font-semibold cursor-pointer"
             >
-              Reset to default recommendations (&gt;0%)
+              Reset search
             </button>
           </div>
         )}
       </div>
 
-      {loading ? (
+      {isContentLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <CardSkeleton key={i} />
@@ -386,9 +388,9 @@ export const MeetTab: React.FC<MeetTabProps> = ({
             <div className="w-16 h-16 rounded-full bg-[#eaf3ed] flex items-center justify-center mx-auto">
               <Compass className="w-8 h-8 text-[#2D5A3D]" />
             </div>
-            <h4 className="text-base font-semibold text-[#2D5A3D]">No matching recommendations found</h4>
+            <h4 className="text-base font-semibold text-[#2D5A3D]">No match suggestions found</h4>
             <p className="text-xs text-[#8a8278] leading-relaxed">
-              There are no unreviewed profiles in your area with a match percentage greater than 0% (&gt;0%). You can search for members directly using the search bar above, or add more hobbies to your profile!
+              You can search for members directly using the search bar above, or add more hobbies to your profile to discover shared connections!
             </p>
           </div>
         )

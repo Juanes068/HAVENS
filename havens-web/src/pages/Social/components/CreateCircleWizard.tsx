@@ -6,6 +6,7 @@ import {
   CREATE_COMMUNITY,
 } from '../../../graphql/operations';
 import { LocationInput, LocationData } from '../../../components/LocationInput';
+import { AgeRangeSelector } from '../../../components/ui/AgeRangeSelector';
 import { Folder, Camera, Lightbulb } from 'lucide-react';
 
 interface CreateCircleWizardProps {
@@ -30,6 +31,7 @@ export const CreateCircleWizard: React.FC<CreateCircleWizardProps> = ({
   const [description, setDescription] = useState('');
   const [isVirtual, setIsVirtual] = useState(false);
   const [locationName, setLocationName] = useState('');
+  const [ageRange, setAgeRange] = useState('All Ages');
   const [coordinates, setCoordinates] = useState<{ latitude: number | null; longitude: number | null }>({
     latitude: null,
     longitude: null,
@@ -55,6 +57,7 @@ export const CreateCircleWizard: React.FC<CreateCircleWizardProps> = ({
     setDescription('');
     setIsVirtual(false);
     setLocationName('');
+    setAgeRange('All Ages');
     setCoordinates({ latitude: null, longitude: null });
     setSelectedCategoryIds([]);
     setSelectedHobbyIds([]);
@@ -267,6 +270,7 @@ export const CreateCircleWizard: React.FC<CreateCircleWizardProps> = ({
           longitude: isVirtual ? null : coordinates.longitude,
           isVirtual: isVirtual,
           imageUrl: finalImageUrl,
+          ageRange: ageRange || 'All Ages',
           hobbyIds: selectedHobbyIds,
         },
       });
@@ -437,6 +441,14 @@ export const CreateCircleWizard: React.FC<CreateCircleWizardProps> = ({
                 className="w-full px-4 py-2.5 rounded-2xl bg-[#F4EEE2]/60 border border-[#E2DBD0] text-xs text-[#2C2C2C] focus:outline-none focus:border-[#2D5A3D] transition-colors resize-none leading-relaxed"
               />
             </div>
+
+            {/* Target Age Range Selector */}
+            <AgeRangeSelector
+              value={ageRange}
+              onChange={(val) => setAgeRange(val)}
+              label="Circle Age Dynamic"
+              description="Target age bracket for circle members or choose All Ages"
+            />
           </div>
         )}
 

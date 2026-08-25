@@ -13,6 +13,7 @@ export const GET_ALL_COMMUNITIES = gql`
       locationName
       isVirtual
       imageUrl
+      ageRange
       memberCount
       latitude
       longitude
@@ -46,6 +47,7 @@ export const GET_RECOMMENDED_CIRCLES = gql`
       locationName
       isVirtual
       imageUrl
+      ageRange
       memberCount
       affinityScore
       distance
@@ -86,6 +88,43 @@ export const GET_RECOMMENDED_CIRCLES = gql`
 `;
 
 /**
+ * Query to globally search circles/communities across the entire database ignoring location/affinity.
+ */
+export const SEARCH_COMMUNITIES = gql`
+  query SearchCommunities($query: String!, $limit: Int, $offset: Int) {
+    searchCommunities(query: $query, limit: $limit, offset: $offset) {
+      id
+      name
+      subdomain
+      description
+      locationName
+      isVirtual
+      imageUrl
+      ageRange
+      memberCount
+      affinityScore
+      distance
+      matchPercentage
+      latitude
+      longitude
+      createdAt
+      creator {
+        id
+        username
+      }
+      hobbies {
+        id
+        name
+        category {
+          id
+          name
+        }
+      }
+    }
+  }
+`;
+
+/**
  * Mutation to create a new circle with taxonomy and cover image.
  */
 export const CREATE_COMMUNITY = gql`
@@ -98,6 +137,7 @@ export const CREATE_COMMUNITY = gql`
     $longitude: Float
     $isVirtual: Boolean
     $imageUrl: String
+    $ageRange: String
     $hobbyIds: [Int]
   ) {
     createCommunity(
@@ -109,6 +149,7 @@ export const CREATE_COMMUNITY = gql`
       longitude: $longitude
       isVirtual: $isVirtual
       imageUrl: $imageUrl
+      ageRange: $ageRange
       hobbyIds: $hobbyIds
     ) {
       success
@@ -121,6 +162,7 @@ export const CREATE_COMMUNITY = gql`
         locationName
         isVirtual
         imageUrl
+        ageRange
         memberCount
         createdAt
         hobbies {

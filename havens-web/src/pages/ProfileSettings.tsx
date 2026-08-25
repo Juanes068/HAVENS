@@ -276,23 +276,6 @@ export const ProfileSettingsView: React.FC = () => {
       return;
     }
 
-    // Validate 14+ minimum age if dateOfBirth is entered
-    if (dateOfBirth) {
-      const dob = new Date(dateOfBirth);
-      if (!isNaN(dob.getTime())) {
-        const today = new Date();
-        let calculatedAge = today.getFullYear() - dob.getFullYear();
-        const m = today.getMonth() - dob.getMonth();
-        if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) {
-          calculatedAge--;
-        }
-        if (calculatedAge < 14) {
-          setErrorMsg('⚠️ Age validation failed: You must be at least 14 years old to join Havens.');
-          return;
-        }
-      }
-    }
-
     try {
       const res = await updateSecurityMutation({
         variables: {
@@ -305,16 +288,13 @@ export const ProfileSettingsView: React.FC = () => {
         },
       });
 
-      // Also persist dateOfBirth and bio to UserProfile
-      if (dateOfBirth) {
-        await updateUserProfileMutation({
-          variables: {
-            bio,
-            neighbourhood,
-            dateOfBirth: dateOfBirth || undefined,
-          },
-        });
-      }
+      // Also persist bio and neighbourhood to UserProfile
+      await updateUserProfileMutation({
+        variables: {
+          bio,
+          neighbourhood,
+        },
+      });
 
       if (res?.data?.updateAccountSecurity?.success) {
         setSuccessMsg('✓ Account and profile details updated successfully!');
@@ -593,21 +573,7 @@ export const ProfileSettingsView: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label htmlFor="profile-dob" className="block text-xs font-medium text-[#8a8278] mb-1">
-                Date of Birth (14+ yrs)
-              </label>
-              <HavensDatePicker
-                id="profile-dob"
-                name="dateOfBirth"
-                value={dateOfBirth}
-                maxDate={maxDobDate}
-                placeholder="Select birth date"
-                onChange={(dateStr) => setDateOfBirth(dateStr)}
-              />
-            </div>
-
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label htmlFor="profile-neighbourhood" className="block text-xs font-medium text-[#8a8278] mb-1">Neighbourhood / Location</label>
               <LocationInput

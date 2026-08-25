@@ -24,6 +24,9 @@ class Community(models.Model):
     location_name = models.CharField(max_length=300, blank=True, default='')
     is_virtual = models.BooleanField(default=False)
     image_url = models.URLField(max_length=500, blank=True, default='')
+    age_range = models.CharField(max_length=100, blank=True, default='All Ages')
+    min_age = models.IntegerField(null=True, blank=True, default=None)
+    max_age = models.IntegerField(null=True, blank=True, default=None)
     hobbies = models.ManyToManyField('Hobby', blank=True, related_name='communities')
     created_at = models.DateTimeField(default=timezone.now)
 

@@ -11,7 +11,11 @@ export interface Circle {
   subdomain?: string;
   description?: string;
   locationName?: string;
+  isVirtual?: boolean;
   imageUrl?: string;
+  ageRange?: string;
+  minAge?: number;
+  maxAge?: number;
   memberCount?: number;
   affinityScore?: number;
   distance?: number;

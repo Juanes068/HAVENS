@@ -210,7 +210,9 @@ class CommunityType(DjangoObjectType):
     memberCount = graphene.Int()
     imageUrl = graphene.String()
     locationName = graphene.String()
-    isVirtual = graphene.Boolean()
+    ageRange = graphene.String()
+    minAge = graphene.Int()
+    maxAge = graphene.Int()
     affinityScore = graphene.Int()
     distance = graphene.Float()
     matchPercentage = graphene.Int()
@@ -222,8 +224,17 @@ class CommunityType(DjangoObjectType):
         fields = (
             "id", "name", "subdomain", "description", "creator",
             "latitude", "longitude", "image_url", "location_name",
-            "is_virtual", "created_at",
+            "is_virtual", "age_range", "min_age", "max_age", "created_at",
         )
+
+    def resolve_ageRange(self, info):
+        return getattr(self, 'age_range', 'All Ages') or 'All Ages'
+
+    def resolve_minAge(self, info):
+        return getattr(self, 'min_age', None)
+
+    def resolve_maxAge(self, info):
+        return getattr(self, 'max_age', None)
 
     def resolve_isVirtual(self, info):
         return getattr(self, 'is_virtual', False)
