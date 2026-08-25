@@ -12,6 +12,12 @@ interface ConnectionsTabProps {
   acceptedFriends: any[];
   currentUser: any;
   myHobbies: any[];
+  hasMoreRequests?: boolean;
+  loadingMoreRequests?: boolean;
+  onLoadMoreRequests?: () => void;
+  hasMoreFriends?: boolean;
+  loadingMoreFriends?: boolean;
+  onLoadMoreFriends?: () => void;
   onRespondRequest: (requestId: string | number, action: 'accepted' | 'rejected') => void;
   onOpenChat?: (userId: string, matchId?: string) => void;
 }
@@ -61,6 +67,12 @@ export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
   acceptedFriends,
   currentUser,
   myHobbies,
+  hasMoreRequests = false,
+  loadingMoreRequests = false,
+  onLoadMoreRequests,
+  hasMoreFriends = false,
+  loadingMoreFriends = false,
+  onLoadMoreFriends,
   onRespondRequest,
   onOpenChat,
 }) => {
@@ -196,63 +208,87 @@ export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
                 return (
                   <div
                     key={req.id}
-                    className={`bg-white border border-[#E2DBD0] rounded-3xl p-5 flex flex-col justify-between shadow-xs hover:border-[#2D5A3D]/40 transition-all duration-300 ${
+                    onClick={() => setExploringUser(sender)}
+                    className={`bg-white border border-[#E2DBD0] hover:border-[#2D5A3D]/50 rounded-2xl p-4 flex flex-col justify-between shadow-2xs hover:shadow-md transition-all duration-200 cursor-pointer ${
                       isFading ? 'opacity-0 scale-95 translate-x-4' : 'opacity-100 scale-100'
                     }`}
                   >
-                    <div
-                      onClick={() => setExploringUser(sender)}
-                      className="flex items-start gap-3.5 mb-4 cursor-pointer group/req"
-                      title="View profile details"
-                    >
+                    <div className="flex items-start gap-3 mb-3">
                       <Avatar
                         name={sender?.username}
                         photoUrl={sender?.photoUrl}
                         color="#C47B5A"
-                        size="lg"
-                        className="w-12 h-12 border-2 border-white shadow-xs rounded-full group-hover/req:ring-2 ring-[#2D5A3D]/30 transition-all"
+                        size="md"
+                        className="w-11 h-11 border-2 border-white shadow-2xs rounded-full ring-1 ring-[#2D5A3D]/20 shrink-0"
                       />
                       <div className="min-w-0 flex-1">
-                        <h4 className="text-sm font-semibold text-[#2C2C2C] truncate group-hover/req:text-[#2D5A3D] transition-colors">
+                        <h4 className="text-sm font-semibold text-[#2C2C2C] truncate group-hover:text-[#2D5A3D]">
                           @{sender?.username || 'member'}
                         </h4>
-                        <p className="text-xs text-[#8a8278] truncate">
-                          {sender?.neighbourhood || sender?.cityName || 'Havens Member'}
+                        <p className="text-[11px] text-[#8a8278] truncate mt-0.5">
+                          📍 {sender?.neighbourhood || sender?.cityName || 'Havens Member'}
                         </p>
                         {req.createdAt && (
-                          <p className="text-[10px] text-[#8a8278]/70 mt-1">
-                            Requested {new Date(req.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                          <p className="text-[10px] text-[#8a8278]/80 mt-0.5">
+                            Sent {new Date(req.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                           </p>
                         )}
                       </div>
                     </div>
 
                     {/* Accept / Decline Action Buttons */}
-                    <div className="flex items-center gap-2 pt-3 border-t border-[#E2DBD0]/50">
+                    <div className="flex items-center gap-2 pt-2.5 border-t border-[#E2DBD0]/60" onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
-                        onClick={() => handleAnimatedRespond(req.id, 'accepted')}
-                        className="flex-1 py-2.5 px-4 rounded-xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white text-xs font-semibold shadow-xs hover:shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAnimatedRespond(req.id, 'accepted');
+                        }}
+                        className="flex-1 py-2 px-3 rounded-xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white text-xs font-semibold shadow-2xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
-                        Accept
+                        <span>Accept</span>
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleAnimatedRespond(req.id, 'rejected')}
-                        className="py-2.5 px-4 rounded-xl border border-[#E2DBD0] hover:bg-rose-50 hover:border-rose-200 text-rose-600 text-xs font-medium transition-all cursor-pointer flex items-center justify-center gap-1"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAnimatedRespond(req.id, 'rejected');
+                        }}
+                        className="py-2 px-3 rounded-xl border border-[#E2DBD0] hover:bg-rose-50 hover:border-rose-200 text-rose-600 text-xs font-medium transition-all cursor-pointer flex items-center justify-center gap-1"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                         </svg>
-                        Decline
+                        <span>Decline</span>
                       </button>
                     </div>
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Load More Requests Pagination */}
+          {!requestsLoading && pendingRequests.length > 0 && hasMoreRequests && onLoadMoreRequests && (
+            <div className="pt-2 flex justify-center">
+              <button
+                type="button"
+                onClick={onLoadMoreRequests}
+                disabled={loadingMoreRequests}
+                className="px-5 py-2 rounded-2xl bg-white border border-[#E2DBD0] hover:border-[#2D5A3D]/50 text-stone-800 text-xs font-bold transition-all shadow-2xs hover:shadow-xs flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {loadingMoreRequests ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-[#2D5A3D] border-t-transparent rounded-full animate-spin" />
+                    <span>Loading more requests...</span>
+                  </>
+                ) : (
+                  <span>Load More Requests ({pendingRequests.length} loaded)</span>
+                )}
+              </button>
             </div>
           )}
         </section>
@@ -323,83 +359,85 @@ export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
               No friends matching "{searchQuery}"
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredFriends.map((friend: any) => {
                 const affinity = friend.matchPercentage ?? computeAffinity(myHobbies, friend.hobbies);
+                const displayHobbies = (friend.hobbies || []).slice(0, 4);
+                const remainingCount = Math.max(0, (friend.hobbies?.length || 0) - 4);
 
                 return (
                   <div
                     key={friend.id}
-                    className="bg-white border border-[#E2DBD0] rounded-3xl p-5 flex flex-col justify-between shadow-xs hover:shadow-md hover:border-[#2D5A3D]/40 transition-all duration-300"
+                    onClick={() => setExploringUser(friend)}
+                    className="bg-white border border-[#E2DBD0] hover:border-[#2D5A3D]/50 rounded-3xl p-5 flex flex-col justify-between shadow-xs hover:shadow-md transition-all duration-200 cursor-pointer"
                   >
                     <div>
                       {/* Header info */}
-                      <div
-                        onClick={() => setExploringUser(friend)}
-                        className="flex items-start gap-3.5 mb-3.5 cursor-pointer group/friend"
-                        title="View full profile"
-                      >
+                      <div className="flex items-start gap-3.5 mb-3.5">
                         <Avatar
                           name={friend.username}
                           photoUrl={friend.photoUrl}
-                          size="lg"
-                          className="w-12 h-12 border-2 border-white shadow-xs rounded-full group-hover/friend:ring-2 ring-[#2D5A3D]/30 transition-all"
+                          size="md"
+                          className="w-13 h-13 border-2 border-white shadow-xs rounded-full ring-1 ring-[#2D5A3D]/20 shrink-0"
                         />
                         <div className="flex-1 min-w-0">
-                          <h4 className="text-sm font-semibold text-[#2C2C2C] truncate group-hover/friend:text-[#2D5A3D] transition-colors">
-                            @{friend.username}
-                          </h4>
-                          <p className="text-xs text-[#8a8278] truncate">
-                            {friend.neighbourhood || friend.cityName || 'Havens Friend'}
+                          <div className="flex items-center gap-1.5">
+                            <h4 className="text-base font-semibold text-[#2C2C2C] truncate">
+                              @{friend.username}
+                            </h4>
+                            {friend.age ? (
+                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#FAF8F5] border border-[#E2DBD0] text-stone-600">
+                                {friend.age} yrs
+                              </span>
+                            ) : null}
+                          </div>
+                          <p className="text-xs text-[#8a8278] truncate mt-0.5">
+                            📍 {friend.neighbourhood || friend.cityName || 'Havens Friend'}
                           </p>
                         </div>
                         {affinity > 0 && (
-                          <span className="shrink-0 text-[10px] font-bold px-2.5 py-1 rounded-full bg-[#2D5A3D]/10 text-[#2D5A3D] border border-[#2D5A3D]/20">
+                          <span className="shrink-0 text-xs font-bold px-2.5 py-0.5 rounded-full bg-[#eaf3ed] text-[#2D5A3D] border border-[#7aaa8a]/30">
                             {affinity}%
                           </span>
                         )}
                       </div>
 
-                      {/* Shared Hobby Tags */}
-                      {friend.hobbies && friend.hobbies.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 mb-4">
-                          {friend.hobbies.slice(0, 4).map((hb: any) => {
+                      {/* Shared Hobby Tags (Strictly Max 4) */}
+                      {displayHobbies.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mb-4 min-h-[28px] items-center">
+                          {displayHobbies.map((hb: any) => {
                             const isShared = myHobbies.some((mh: any) => String(mh.id) === String(hb.id));
                             return (
                               <span
                                 key={hb.id}
-                                className={`text-[10px] px-2 py-0.5 rounded-lg font-medium border ${
+                                className={`text-[11px] px-2.5 py-1 rounded-xl font-medium border ${
                                   isShared
-                                    ? 'bg-[#eaf3ed] text-[#2D5A3D] border-[#7aaa8a]/30'
+                                    ? 'bg-[#eaf3ed] text-[#2D5A3D] border-[#7aaa8a]/30 font-semibold'
                                     : 'bg-[#F4EEE2] text-[#6b645d] border-[#E2DBD0]/60'
                                 }`}
                               >
-                                {isShared && '✦ '}{hb.name}
+                                {isShared && '✦ '}#{hb.name}
                               </span>
                             );
                           })}
-                          {friend.hobbies.length > 4 && (
-                            <span className="text-[10px] text-[#8a8278] px-1 py-0.5">
-                              +{friend.hobbies.length - 4}
+                          {remainingCount > 0 && (
+                            <span className="text-[11px] text-[#8a8278] font-medium px-2 py-0.5 bg-[#F0EAE0] rounded-xl">
+                              +{remainingCount}
                             </span>
                           )}
                         </div>
                       )}
                     </div>
 
-                    {/* Actions: Explore & Direct Chat */}
-                    <div className="flex items-center gap-2 pt-2 border-t border-[#E2DBD0]/50">
+                    {/* Actions: Open Chat */}
+                    <div className="pt-2.5 border-t border-[#E2DBD0]/60 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
-                        onClick={() => setExploringUser(friend)}
-                        className="px-3.5 py-2 rounded-2xl border border-[#E2DBD0] text-xs font-semibold text-[#5a5450] hover:bg-[#F4EEE2] transition-colors cursor-pointer"
-                      >
-                        Explore
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleChat(String(friend.id), friend.matchId)}
-                        className="flex-1 py-2 rounded-2xl bg-[#eaf3ed] text-[#2D5A3D] hover:bg-[#2D5A3D] hover:text-white text-xs font-semibold transition-all shadow-2xs hover:shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleChat(String(friend.id), friend.matchId);
+                        }}
+                        className="w-full py-2 rounded-xl bg-[#eaf3ed] text-[#2D5A3D] hover:bg-[#2D5A3D] hover:text-white text-xs font-semibold transition-all shadow-2xs cursor-pointer flex items-center justify-center gap-1.5"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -410,6 +448,37 @@ export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Load More Friends Pagination */}
+          {!friendsLoading && acceptedFriends.length > 0 && (
+            <div className="pt-4 flex flex-col items-center justify-center gap-2">
+              {hasMoreFriends && onLoadMoreFriends ? (
+                <button
+                  type="button"
+                  onClick={onLoadMoreFriends}
+                  disabled={loadingMoreFriends}
+                  className="px-6 py-2.5 rounded-2xl bg-white border border-[#E2DBD0] hover:border-[#2D5A3D]/50 hover:bg-[#FAF8F5] text-stone-800 text-xs font-bold transition-all shadow-2xs hover:shadow-xs flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {loadingMoreFriends ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-[#2D5A3D] border-t-transparent rounded-full animate-spin" />
+                      <span>Loading more friends...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Users className="w-3.5 h-3.5 text-[#2D5A3D]" />
+                      <span>Load More Friends ({acceptedFriends.length} loaded)</span>
+                    </>
+                  )}
+                </button>
+              ) : (
+                <div className="flex items-center gap-2 text-stone-500 text-xs py-2 px-4 rounded-full bg-[#FAF8F5] border border-[#E2DBD0]/60">
+                  <span>✓</span>
+                  <span>All {acceptedFriends.length} connected friends loaded</span>
+                </div>
+              )}
             </div>
           )}
         </section>

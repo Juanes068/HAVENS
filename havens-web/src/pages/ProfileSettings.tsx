@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -12,6 +12,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { LocationInput } from '../components/LocationInput';
 import { Avatar } from '../components/Avatar';
+import { HavensDatePicker } from '../components/ui/HavensDatePicker';
 import { Clock, Copy, Check, RefreshCw, Pencil, Camera } from 'lucide-react';
 
 interface Hobby {
@@ -29,6 +30,8 @@ interface ProfileData {
   email: string;
   totalPoints: number;
   bio: string;
+  dateOfBirth?: string;
+  age?: number;
   neighbourhood: string;
   photoUrl: string;
   inviteCode: string;
@@ -50,6 +53,7 @@ export const ProfileSettingsView: React.FC = () => {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [bio, setBio] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
   const [neighbourhood, setNeighbourhood] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -77,12 +81,19 @@ export const ProfileSettingsView: React.FC = () => {
   // Account Deletion Modal State
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
+  const maxDobDate = useMemo(() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 14);
+    return d.toISOString().split('T')[0];
+  }, []);
+
   // Populate form defaults when profile data is loaded
   useEffect(() => {
     if (profile) {
       setUsername(profile.username || '');
       setEmail(profile.email || '');
       setBio(profile.bio || '');
+      setDateOfBirth(profile.dateOfBirth || '');
       setNeighbourhood(profile.neighbourhood || '');
       if (!inviteCode && profile.inviteCode) {
         setInviteCode(profile.inviteCode);
@@ -265,6 +276,23 @@ export const ProfileSettingsView: React.FC = () => {
       return;
     }
 
+    // Validate 14+ minimum age if dateOfBirth is entered
+    if (dateOfBirth) {
+      const dob = new Date(dateOfBirth);
+      if (!isNaN(dob.getTime())) {
+        const today = new Date();
+        let calculatedAge = today.getFullYear() - dob.getFullYear();
+        const m = today.getMonth() - dob.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) {
+          calculatedAge--;
+        }
+        if (calculatedAge < 14) {
+          setErrorMsg('⚠️ Age validation failed: You must be at least 14 years old to join Havens.');
+          return;
+        }
+      }
+    }
+
     try {
       const res = await updateSecurityMutation({
         variables: {
@@ -277,8 +305,19 @@ export const ProfileSettingsView: React.FC = () => {
         },
       });
 
+      // Also persist dateOfBirth and bio to UserProfile
+      if (dateOfBirth) {
+        await updateUserProfileMutation({
+          variables: {
+            bio,
+            neighbourhood,
+            dateOfBirth: dateOfBirth || undefined,
+          },
+        });
+      }
+
       if (res?.data?.updateAccountSecurity?.success) {
-        setSuccessMsg('✓ Account and security settings updated successfully!');
+        setSuccessMsg('✓ Account and profile details updated successfully!');
         setNewPassword('');
         setConfirmPassword('');
         setCurrentPassword('');
@@ -380,11 +419,21 @@ export const ProfileSettingsView: React.FC = () => {
             <div>
               <h2 className="text-lg font-serif font-bold text-charcoal flex items-center gap-2">
                 @{profile.username}
+                {profile.age ? (
+                  <span className="text-xs font-sans font-semibold text-stone-700 bg-[#F4EEE2] px-2.5 py-0.5 rounded-full border border-[#E2DBD0]">
+                    {profile.age} yrs
+                  </span>
+                ) : null}
                 <span className="text-xs font-sans font-medium text-[#2D5A3D] bg-[#eaf3ed] px-2.5 py-0.5 rounded-full border border-[#7aaa8a]/30">
                   {profile.totalPoints} Points
                 </span>
               </h2>
               <p className="text-xs text-[#8a8278] mt-0.5">{profile.email}</p>
+              {profile.bio && (
+                <p className="text-xs text-stone-600 italic mt-1.5 bg-[#FAF8F5] p-2.5 rounded-xl border border-[#E2DBD0]/60 max-w-md">
+                  "{profile.bio}"
+                </p>
+              )}
               <div className="flex flex-wrap items-center gap-2 mt-1.5">
                 <span className="text-xs text-[#8a8278] font-mono">
                   📍 {profile.neighbourhood || 'No location set'}
@@ -544,7 +593,21 @@ export const ProfileSettingsView: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label htmlFor="profile-dob" className="block text-xs font-medium text-[#8a8278] mb-1">
+                Date of Birth (14+ yrs)
+              </label>
+              <HavensDatePicker
+                id="profile-dob"
+                name="dateOfBirth"
+                value={dateOfBirth}
+                maxDate={maxDobDate}
+                placeholder="Select birth date"
+                onChange={(dateStr) => setDateOfBirth(dateStr)}
+              />
+            </div>
+
             <div>
               <label htmlFor="profile-neighbourhood" className="block text-xs font-medium text-[#8a8278] mb-1">Neighbourhood / Location</label>
               <LocationInput

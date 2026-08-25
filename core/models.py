@@ -83,6 +83,7 @@ class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     total_points = models.IntegerField(default=0)
     bio = models.TextField(blank=True, default='')
+    date_of_birth = models.DateField(null=True, blank=True)
     neighbourhood = models.CharField(max_length=200, blank=True, default='')
     city_name = models.CharField(max_length=100, blank=True, default='')
     latitude = models.FloatField(null=True, blank=True)
@@ -90,6 +91,15 @@ class UserProfile(models.Model):
     photo_url = models.URLField(blank=True, default='')
     invite_code = models.CharField(max_length=10, unique=True, null=True, blank=True)
     hobbies = models.ManyToManyField(Hobby, blank=True, related_name='profiles')
+
+    @property
+    def age(self):
+        if not self.date_of_birth:
+            return None
+        today = timezone.now().date()
+        return today.year - self.date_of_birth.year - (
+            (today.month, today.day) < (self.date_of_birth.month, self.date_of_birth.day)
+        )
 
     def save(self, *args, **kwargs):
         if not self.invite_code:

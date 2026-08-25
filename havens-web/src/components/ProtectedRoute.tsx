@@ -17,8 +17,8 @@ export const ProtectedRoute: React.FC = () => {
   const { token, user, isLoading, isOnboarded } = useAuth();
   const location = useLocation();
 
-  // 1. Session verification & Profile loading state: Render loading spinner during checks
-  if (isLoading || (token && !user)) {
+  // 1. Session verification & Profile loading state: Render loading spinner during active checks
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-[#F4EEE2] text-[#2C2C2C] flex items-center justify-center font-serif">
         <div className="flex flex-col items-center gap-3">

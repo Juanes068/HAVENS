@@ -86,44 +86,52 @@ export const SuggestionCard: React.FC<{
     return !isExact && catId && myCategoryIds.has(catId);
   });
 
-  const totalMatchingCount = sharedHobbyList.length + relatedHobbyList.length;
+  const matchingHobbies = [...sharedHobbyList, ...relatedHobbyList];
+  const displayHobbies = matchingHobbies.length > 0
+    ? matchingHobbies.slice(0, 4)
+    : (usr.hobbies || []).slice(0, 4);
+  const remainingCount = Math.max(0, (matchingHobbies.length > 0 ? matchingHobbies.length : (usr.hobbies?.length || 0)) - 4);
 
   return (
     <div
-      className={`group bg-white border border-[#E2DBD0] rounded-3xl p-6 flex flex-col justify-between shadow-xs hover:shadow-md hover:border-[#2D5A3D]/40 transition-all duration-300 ${
+      onClick={() => onExplore(usr)}
+      className={`group bg-white border border-[#E2DBD0] hover:border-[#2D5A3D]/50 rounded-3xl p-5 sm:p-5.5 flex flex-col justify-between shadow-xs hover:shadow-md transition-all duration-200 cursor-pointer ${
         isFading ? 'opacity-0 scale-95 translate-y-3' : 'opacity-100 scale-100'
       }`}
     >
       <div>
-        {/* Top Header: Avatar + User Info + % Match Affinity Badge */}
-        <div className="flex items-start justify-between gap-3 mb-4">
-          <div
-            onClick={() => onExplore(usr)}
-            className="flex items-center gap-3.5 min-w-0 cursor-pointer group/user"
-            title="View member profile"
-          >
-            <div className="relative">
+        {/* Header: Avatar + User Info + % Match Pill */}
+        <div className="flex items-start justify-between gap-3 mb-3.5">
+          <div className="flex items-center gap-3.5 min-w-0">
+            <div className="relative shrink-0">
               <Avatar
                 name={usr.username}
                 photoUrl={usr.photoUrl}
-                size="xl"
-                className="w-14 h-14 border-2 border-white shadow-xs rounded-full ring-2 ring-[#2D5A3D]/10 group-hover/user:ring-[#2D5A3D]/40 transition-all"
+                size="lg"
+                className="w-13 h-13 sm:w-14 sm:h-14 border-2 border-white shadow-xs rounded-full ring-1 ring-[#2D5A3D]/20 group-hover:ring-[#2D5A3D]/50 transition-all"
               />
               <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 border-2 border-white rounded-full" />
             </div>
             <div className="min-w-0">
-              <h4 className="text-base font-semibold text-[#2C2C2C] truncate group-hover/user:text-[#2D5A3D] transition-colors">
-                @{usr.username}
-              </h4>
-              {/* Geographic Proximity & Location */}
-              <div className="flex items-center gap-1.5 text-xs text-[#8a8278] mt-0.5">
-                <svg className="w-3.5 h-3.5 text-[#2D5A3D] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <div className="flex items-center gap-2">
+                <h4 className="text-base font-semibold text-[#2C2C2C] truncate group-hover:text-[#2D5A3D] transition-colors">
+                  @{usr.username}
+                </h4>
+                {usr.age ? (
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#FAF8F5] border border-[#E2DBD0] text-stone-600">
+                    {usr.age} yrs
+                  </span>
+                ) : null}
+              </div>
+              {/* Location */}
+              <div className="flex items-center gap-1 text-xs text-[#8a8278] mt-0.5 truncate">
+                <svg className="w-3.5 h-3.5 text-[#C47B5A] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
                 <span className="truncate">
                   {usr.distance !== undefined && usr.distance !== null
-                    ? `${usr.distance} km away • ${usr.neighbourhood || usr.cityName || 'Local'}`
+                    ? `${usr.distance.toFixed(1)} km · ${usr.neighbourhood || usr.cityName || 'Local'}`
                     : usr.neighbourhood || usr.cityName || 'Local Member'}
                 </span>
               </div>
@@ -133,102 +141,75 @@ export const SuggestionCard: React.FC<{
           {/* % Match Affinity Pill */}
           {affinity > 0 && (
             <div
-              className={`shrink-0 flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full shadow-2xs ${
+              className={`shrink-0 flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full shadow-2xs ${
                 affinity >= 70
-                  ? 'bg-gradient-to-r from-[#2D5A3D]/15 to-[#3d7a55]/20 text-[#2D5A3D] border border-[#2D5A3D]/25'
-                  : 'bg-[#C47B5A]/15 text-[#C47B5A] border border-[#C47B5A]/25'
+                  ? 'bg-[#eaf3ed] text-[#2D5A3D] border border-[#7aaa8a]/30'
+                  : 'bg-[#fdf6ed] text-[#C47B5A] border border-[#C47B5A]/25'
               }`}
             >
-              {affinity >= 70 ? <Zap className="w-3 h-3 text-[#2D5A3D]" /> : <Sparkles className="w-3 h-3 text-[#C47B5A]" />}
-              <span>{affinity}% Match</span>
+              {affinity >= 70 ? <Zap className="w-3.5 h-3.5 text-[#2D5A3D]" /> : <Sparkles className="w-3.5 h-3.5 text-[#C47B5A]" />}
+              <span>{affinity}%</span>
             </div>
           )}
         </div>
 
-        {/* Bio */}
-        {usr.bio ? (
-          <p className="text-xs text-[#5a5450] line-clamp-2 mb-4 leading-relaxed bg-[#FDFBF7] p-3 rounded-2xl border border-[#E2DBD0]/40">
-            "{usr.bio}"
-          </p>
-        ) : (
-          <p className="text-xs text-[#8a8278]/80 italic mb-4">
-            Passionate explorer excited to meet like-minded peers.
-          </p>
-        )}
+        {/* Compact Shared Hobbies (Strictly Max 4) */}
+        <div className="flex flex-wrap gap-1.5 mb-4 min-h-[28px] items-center">
+          {displayHobbies.map((hb: any) => {
+            const isExact = myHobbyIds.has(String(hb.id));
+            const isRelated = !isExact && hb.category?.id && myCategoryIds.has(String(hb.category.id));
 
-        {/* Hobbies Badges: Render ONLY Matching & Related Hobbies */}
-        <div className="space-y-2 mb-5">
-          <div className="text-[11px] font-semibold text-[#8a8278] uppercase tracking-wider flex items-center justify-between">
-            <span>Shared Passions</span>
-            {totalMatchingCount > 0 && (
-              <span className="text-[10px] text-[#2D5A3D] font-bold bg-[#eaf3ed] px-2 py-0.5 rounded-md">
-                {totalMatchingCount} {totalMatchingCount === 1 ? 'match' : 'matches'}
-              </span>
-            )}
-          </div>
-          <div className="flex flex-wrap gap-1.5 min-h-[30px] items-center">
-            {/* 1. Exact Shared Hobbies */}
-            {sharedHobbyList.map((hb: any) => (
+            return (
               <span
                 key={`shared-${hb.id}`}
-                className="text-[11px] px-2.5 py-1 rounded-xl font-semibold bg-[#eaf3ed] text-[#2D5A3D] border border-[#7aaa8a]/40 flex items-center gap-1 shadow-2xs"
-                title="Shared exact interest"
+                className={`text-[11px] px-2.5 py-1 rounded-xl font-medium border ${
+                  isExact
+                    ? 'bg-[#eaf3ed] text-[#2D5A3D] border-[#7aaa8a]/30 font-semibold shadow-2xs'
+                    : isRelated
+                    ? 'bg-[#fdf6ed] text-[#C47B5A] border-[#C47B5A]/30'
+                    : 'bg-[#F4EEE2] text-[#6b645d] border-[#E2DBD0]/60'
+                }`}
               >
-                <span>✦</span>
-                <span>{hb.name}</span>
+                {isExact ? '✦ ' : isRelated ? '◈ ' : ''}#{hb.name}
               </span>
-            ))}
+            );
+          })}
 
-            {/* 2. Related Hobbies (Category match) */}
-            {relatedHobbyList.map((hb: any) => (
-              <span
-                key={`related-${hb.id}`}
-                className="text-[11px] px-2.5 py-1 rounded-xl font-medium bg-[#fdf6ed] text-[#C47B5A] border border-[#C47B5A]/30 flex items-center gap-1"
-                title={`Related topic in ${hb.category?.name || 'shared category'}`}
-              >
-                <span className="text-[10px]">◈</span>
-                <span>{hb.name}</span>
-              </span>
-            ))}
+          {remainingCount > 0 && (
+            <span className="text-[11px] text-[#8a8278] font-medium px-2 py-0.5 bg-[#F0EAE0] rounded-xl">
+              +{remainingCount}
+            </span>
+          )}
 
-            {/* Fallback if no specific hobby match */}
-            {totalMatchingCount === 0 && (
-              <span className="text-[11px] px-2.5 py-1 rounded-xl font-normal bg-[#F4EEE2] text-[#8a8278] border border-[#E2DBD0]/60 italic">
-                Local Community Explorer
-              </span>
-            )}
-          </div>
+          {displayHobbies.length === 0 && (
+            <span className="text-xs text-[#8a8278] italic">Community Member</span>
+          )}
         </div>
       </div>
 
-      {/* Card Footer Actions: Ignore, Explore, & Connect */}
-      <div className="flex items-center gap-2 pt-4 border-t border-[#E2DBD0]/60">
+      {/* Card Actions */}
+      <div className="flex items-center gap-2 pt-3 border-t border-[#E2DBD0]/60" onClick={(e) => e.stopPropagation()}>
         <button
           type="button"
-          onClick={() => onIgnore(String(usr.id))}
-          className="p-2.5 rounded-2xl border border-[#E2DBD0] text-[#8a8278] hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50/60 text-xs font-semibold transition-all cursor-pointer flex items-center justify-center shrink-0"
-          title="Hide profile with 24-hour cooldown"
+          onClick={(e) => {
+            e.stopPropagation();
+            onIgnore(String(usr.id));
+          }}
+          className="p-2.5 rounded-xl border border-[#E2DBD0] text-[#8a8278] hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50/60 text-xs font-semibold transition-all cursor-pointer flex items-center justify-center shrink-0"
+          title="Hide profile"
         >
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => onExplore(usr)}
-          className="px-3.5 py-2.5 rounded-2xl border border-[#E2DBD0] text-xs font-semibold text-[#5a5450] hover:bg-[#F4EEE2] transition-colors cursor-pointer"
-        >
-          Explore
         </button>
 
         {isSent ? (
           <button
             type="button"
             disabled
-            className="flex-1 py-2.5 px-3 rounded-2xl bg-[#eaf3ed] text-[#2D5A3D] border border-[#7aaa8a]/40 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-default shadow-xs"
+            className="flex-1 py-2.5 px-3 rounded-xl bg-[#eaf3ed] text-[#2D5A3D] border border-[#7aaa8a]/40 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-default shadow-2xs"
           >
-            <svg className="w-3.5 h-3.5 text-[#2D5A3D]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <svg className="w-4 h-4 text-[#2D5A3D]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
             <span>Sent</span>
@@ -237,20 +218,17 @@ export const SuggestionCard: React.FC<{
           <button
             type="button"
             disabled={isConnecting}
-            onClick={() => onConnect(String(usr.id))}
-            className="flex-1 py-2.5 px-3 rounded-2xl bg-[#2D5A3D] text-white hover:bg-[#3d7a55] text-xs font-semibold transition-all shadow-xs hover:shadow-md cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+            onClick={(e) => {
+              e.stopPropagation();
+              onConnect(String(usr.id));
+            }}
+            className="flex-1 py-2.5 px-3 rounded-xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white text-xs font-semibold shadow-xs hover:shadow transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
           >
             {isConnecting ? (
-              <>
-                <svg className="animate-spin w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                <span>Sending...</span>
-              </>
+              <span>Connecting...</span>
             ) : (
               <>
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                 </svg>
                 <span>Connect</span>

@@ -148,16 +148,27 @@ export const LocationInput: React.FC<LocationInputProps> = ({
       if (window.google.maps.Geocoder) {
         geocoderRef.current = new window.google.maps.Geocoder();
       }
-      if (window.google.maps.places?.AutocompleteService) {
-        autocompleteServiceRef.current = new window.google.maps.places.AutocompleteService();
+      if (window.google.maps.importLibrary) {
+        window.google.maps.importLibrary('places').catch(() => {});
       }
-      if (window.google.maps.places?.PlacesService) {
-        placesServiceRef.current = new window.google.maps.places.PlacesService(document.createElement('div'));
+      try {
+        if (window.google.maps.places?.AutocompleteService) {
+          autocompleteServiceRef.current = new window.google.maps.places.AutocompleteService();
+        }
+      } catch {
+        // Gracefully ignore legacy service init if project uses Places API New
+      }
+      try {
+        if (window.google.maps.places?.PlacesService) {
+          placesServiceRef.current = new window.google.maps.places.PlacesService(document.createElement('div'));
+        }
+      } catch {
+        // Gracefully ignore legacy service init if project uses Places API New
       }
     }
   }, [isLoaded]);
 
-  // Precision Autocomplete Fetcher: Google Places (unrestricted for exact addresses) + Photon Fallback
+  // Precision Autocomplete Fetcher: Modern Places API (New) -> Legacy Autocomplete -> Photon Fallback
   const fetchPredictions = useCallback(async (query: string) => {
     if (!query || query.trim().length < 2) {
       setPredictions([]);
@@ -168,36 +179,73 @@ export const LocationInput: React.FC<LocationInputProps> = ({
 
     setIsLoadingPredictions(true);
 
-    // 1. Primary: Google Places AutocompleteService with UNRESTRICTED types for exact addresses & establishments
-    if (autocompleteServiceRef.current && window.google?.maps?.places) {
-      autocompleteServiceRef.current.getPlacePredictions(
-        {
+    // 1. Primary: Modern Google Places API (New) - AutocompleteSuggestion
+    if (window.google?.maps?.places?.AutocompleteSuggestion) {
+      try {
+        const { suggestions } = await window.google.maps.places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
           input: query,
-          // No types restriction: allows exact street addresses, establishments, venues, etc.
-        },
-        (results, status) => {
-          setIsLoadingPredictions(false);
-          if (status === window.google.maps.places.PlacesServiceStatus.OK && results && results.length > 0) {
-            const list: PlacePrediction[] = results.slice(0, 6).map((p) => ({
-              place_id: p.place_id,
-              description: p.description,
-              main_text: p.structured_formatting?.main_text || p.description,
-              secondary_text: p.structured_formatting?.secondary_text,
-            }));
-            setPredictions(list);
-            setIsDropdownOpen(true);
-            setHighlightedIndex(-1);
-            return;
-          }
+        });
 
-          // Fallback to Photon if Google returns zero results
-          fetchPhotonFallback(query);
+        if (suggestions && suggestions.length > 0) {
+          const list: PlacePrediction[] = suggestions.slice(0, 6).map((s: any) => {
+            const pred = s.placePrediction;
+            const mainText = pred?.mainText?.text || pred?.text?.text || query;
+            const secondaryText = pred?.secondaryText?.text || undefined;
+            const fullDesc = pred?.text?.text || [mainText, secondaryText].filter(Boolean).join(', ') || query;
+
+            return {
+              place_id: pred?.placeId,
+              description: fullDesc,
+              main_text: mainText,
+              secondary_text: secondaryText,
+            };
+          });
+
+          setPredictions(list);
+          setIsDropdownOpen(true);
+          setHighlightedIndex(-1);
+          setIsLoadingPredictions(false);
+          return;
         }
-      );
-      return;
+      } catch (modernErr) {
+        console.warn('[LocationInput] Modern AutocompleteSuggestion error, trying fallback:', modernErr);
+      }
     }
 
-    // 2. Fallback: Photon / OSM Geocoder
+    // 2. Secondary: Legacy Google Places AutocompleteService
+    if (autocompleteServiceRef.current && window.google?.maps?.places) {
+      try {
+        autocompleteServiceRef.current.getPlacePredictions(
+          {
+            input: query,
+          },
+          (results, status) => {
+            if (status === window.google.maps.places.PlacesServiceStatus.OK && results && results.length > 0) {
+              setIsLoadingPredictions(false);
+              const list: PlacePrediction[] = results.slice(0, 6).map((p) => ({
+                place_id: p.place_id,
+                description: p.description,
+                main_text: p.structured_formatting?.main_text || p.description,
+                secondary_text: p.structured_formatting?.secondary_text,
+              }));
+              setPredictions(list);
+              setIsDropdownOpen(true);
+              setHighlightedIndex(-1);
+              return;
+            }
+
+            // Fallback to Photon if Google returns zero results
+            fetchPhotonFallback(query);
+          }
+        );
+        return;
+      } catch {
+        fetchPhotonFallback(query);
+        return;
+      }
+    }
+
+    // 3. Fallback: Photon / OSM Geocoder
     fetchPhotonFallback(query);
   }, []);
 
@@ -304,11 +352,95 @@ export const LocationInput: React.FC<LocationInputProps> = ({
   }, [notifySelectLocation]);
 
   // Handle place selection and extract exact location metrics
-  const handleSelectPrediction = (prediction: PlacePrediction) => {
+  const handleSelectPrediction = async (prediction: PlacePrediction) => {
     setIsLoadingPredictions(true);
     setIsDropdownOpen(false);
 
-    // 1. If Google PlacesService is available with placeId, fetch complete Place details
+    // 1. Primary: Modern Google Places API (New) - Place Class
+    if (window.google?.maps?.places?.Place && prediction.place_id && !prediction.place_id.includes('.')) {
+      try {
+        const place = new window.google.maps.places.Place({ id: prediction.place_id });
+        await place.fetchFields({
+          fields: ['displayName', 'formattedAddress', 'location', 'addressComponents'],
+        });
+
+        if (place.location) {
+          setIsLoadingPredictions(false);
+          const lat = typeof place.location.lat === 'function' ? place.location.lat() : Number(place.location.lat);
+          const lng = typeof place.location.lng === 'function' ? place.location.lng() : Number(place.location.lng);
+          const formatted_address = place.formattedAddress || prediction.description;
+          const displayName = place.displayName || prediction.main_text || formatted_address;
+
+          let streetNumber = '';
+          let route = '';
+          let cityName = '';
+          let neighbourhood = '';
+          let postalCode = '';
+
+          if (place.addressComponents) {
+            for (const comp of place.addressComponents as any[]) {
+              const types = comp.types || [];
+              const longText = comp.longText || comp.long_name || comp.text || '';
+              if (types.includes('street_number')) {
+                streetNumber = longText;
+              }
+              if (types.includes('route')) {
+                route = longText;
+              }
+              if (types.includes('locality') || types.includes('postal_town')) {
+                cityName = longText;
+              } else if (!cityName && types.includes('administrative_area_level_2')) {
+                cityName = longText;
+              }
+              if (
+                types.includes('neighborhood') ||
+                types.includes('sublocality') ||
+                types.includes('sublocality_level_1')
+              ) {
+                neighbourhood = longText;
+              }
+              if (types.includes('postal_code')) {
+                postalCode = longText;
+              }
+            }
+          }
+
+          if (!neighbourhood && streetNumber && route) {
+            neighbourhood = `${streetNumber} ${route}`;
+          } else if (!neighbourhood) {
+            neighbourhood = cityName || displayName;
+          }
+          if (!cityName) {
+            cityName = neighbourhood;
+          }
+
+          const locData: LocationData = {
+            formatted_address,
+            formattedAddress: formatted_address,
+            address: formatted_address,
+            name: displayName,
+            lat,
+            lng,
+            latitude: lat,
+            longitude: lng,
+            cityName,
+            neighbourhood,
+            streetNumber,
+            route,
+            postalCode,
+          };
+
+          setSelectedLocation(locData);
+          setInputValue(formatted_address);
+          notifySelectLocation(locData);
+          return;
+        }
+      } catch (modernPlaceErr) {
+        console.warn('[LocationInput] Modern Place details error, falling back:', modernPlaceErr);
+      }
+    }
+
+    // 2. Secondary: Legacy Google PlacesService Details
     if (placesServiceRef.current && prediction.place_id && !prediction.place_id.includes('.')) {
       placesServiceRef.current.getDetails(
         {

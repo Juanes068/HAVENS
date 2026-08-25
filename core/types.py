@@ -26,9 +26,18 @@ class HobbyCategoryType(DjangoObjectType):
 
 
 class UserProfileType(DjangoObjectType):
+    age = graphene.Int()
+    dateOfBirth = graphene.Date()
+
     class Meta:
         model = UserProfile
-        fields = ("id", "user", "total_points", "bio", "neighbourhood", "city_name", "latitude", "longitude", "photo_url", "invite_code", "hobbies")
+        fields = ("id", "user", "total_points", "bio", "date_of_birth", "neighbourhood", "city_name", "latitude", "longitude", "photo_url", "invite_code", "hobbies")
+
+    def resolve_age(self, info):
+        return self.age
+
+    def resolve_dateOfBirth(self, info):
+        return self.date_of_birth
 
     def resolve_invite_code(self, info):
         user = info.context.user
@@ -53,6 +62,8 @@ class UserType(DjangoObjectType):
     email = graphene.String()
     totalPoints = graphene.Int()
     bio = graphene.String()
+    dateOfBirth = graphene.Date()
+    age = graphene.Int()
     neighbourhood = graphene.String()
     cityName = graphene.String()
     latitude = graphene.Float()
@@ -91,6 +102,20 @@ class UserType(DjangoObjectType):
             return profile.bio
         except UserProfile.DoesNotExist:
             return ""
+
+    def resolve_dateOfBirth(self, info):
+        try:
+            profile = getattr(self, 'profile', None) or UserProfile.objects.get(user=self)
+            return profile.date_of_birth
+        except UserProfile.DoesNotExist:
+            return None
+
+    def resolve_age(self, info):
+        try:
+            profile = getattr(self, 'profile', None) or UserProfile.objects.get(user=self)
+            return profile.age
+        except UserProfile.DoesNotExist:
+            return None
 
     def resolve_neighbourhood(self, info):
         try:

@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react'
 import { useAuth } from '../../../context/AuthContext'
 import { useApp } from '../../../context/AppContext'
-import { Calendar, Sparkles } from 'lucide-react'
+import { Calendar, Sparkles, MapPin, Clock, Trash2 } from 'lucide-react'
+import { EventDetailModal } from '../../../components/EventDetailModal'
 import {
   SERIF,
   PlanItem,
@@ -26,6 +27,7 @@ export const PlanCardGrid: React.FC<PlanCardGridProps> = ({
   const { user } = useAuth()
   const { t } = useApp()
   const [statusFilter, setStatusFilter] = useState<'all' | 'upcoming' | 'past'>('all')
+  const [exploringPlan, setExploringPlan] = useState<PlanItem | null>(null)
 
   // Strict creator filter logic
   const myCreatedPlans = useMemo(() => {
@@ -65,7 +67,7 @@ export const PlanCardGrid: React.FC<PlanCardGridProps> = ({
           <span className="text-xs font-bold font-serif text-[#2C2C2C]">
             Showing {myCreatedPlans.length} Created {myCreatedPlans.length === 1 ? 'Plan' : 'Plans'}
           </span>
-          <span className="text-[11px] text-stone-500 bg-[#eaf3ed] text-[#2D5A3D] font-semibold px-2.5 py-0.5 rounded-full">
+          <span className="text-[11px] bg-[#eaf3ed] text-[#2D5A3D] font-semibold px-2.5 py-0.5 rounded-full">
             Strict Creator Filter: {user?.username || 'Authenticated User'}
           </span>
         </div>
@@ -101,118 +103,144 @@ export const PlanCardGrid: React.FC<PlanCardGridProps> = ({
           {myCreatedPlans.map((plan) => {
             const { label, time, badge } = formatEventDisplayDate(plan.scheduledDate)
             const isPast = badge === 'Past'
+            const displayHobbies = (plan.hobbies || []).slice(0, 4)
+            const remainingCount = Math.max(0, (plan.hobbies?.length || 0) - 4)
 
             return (
               <div
                 key={plan.id}
-                className={`rounded-3xl border transition-all duration-200 bg-white group overflow-hidden flex flex-col shadow-2xs hover:shadow-sm ${
-                  isPast ? 'border-[#E2DBD0] opacity-85' : 'border-[#E2DBD0] hover:border-[#b5cebe]'
+                onClick={() => setExploringPlan(plan)}
+                className={`rounded-3xl border transition-all duration-200 bg-white group overflow-hidden flex flex-col p-5 sm:p-5.5 shadow-xs hover:shadow-md cursor-pointer justify-between ${
+                  isPast ? 'border-[#E2DBD0] opacity-85' : 'border-[#E2DBD0] hover:border-[#2D5A3D]/50'
                 }`}
               >
-                {/* Event Photo Header */}
-                <div className="h-44 relative overflow-hidden bg-[#E2DBD0]">
+                <div>
+                  {/* Optional Plan Cover Image Banner */}
                   {plan.imageUrl ? (
-                    <img
-                      src={plan.imageUrl}
-                      alt={plan.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none'
-                      }}
-                    />
-                  ) : null}
-                  <div className={`w-full h-full bg-gradient-to-br from-[#eaf3ed] to-[#F0EAE0] flex items-center justify-center ${plan.imageUrl ? 'hidden' : ''}`}>
-                    <Calendar className="w-12 h-12 text-[#2D5A3D]/40" />
-                  </div>
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
-
-                  {/* Badges */}
-                  <div className="absolute top-3 left-3 flex items-center gap-1.5">
-                    <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-white/95 text-[#2D5A3D] backdrop-blur-md shadow-xs flex items-center gap-1.5">
-                      <Calendar className="w-3 h-3 text-[#2D5A3D]" />
-                      <span>{plan.category || 'Gathering'}</span>
-                    </span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#2D5A3D] text-white shadow-xs">
-                      Hosting
-                    </span>
-                  </div>
-
-                  {badge && (
-                    <div className="absolute top-3 right-3">
-                      <span
-                        className={`text-[10px] font-bold px-2.5 py-1 rounded-full shadow-xs ${
-                          isPast ? 'bg-[#fdf0eb] text-[#C47B5A]' : 'bg-[#eaf3ed] text-[#2D5A3D]'
-                        }`}
-                      >
-                        {badge}
+                    <div className="relative w-full h-40 sm:h-44 rounded-2xl overflow-hidden mb-4 border border-[#E2DBD0]/60 bg-gradient-to-tr from-[#2D5A3D]/15 via-[#F4EEE2] to-[#C47B5A]/15 shrink-0">
+                      <img
+                        src={plan.imageUrl}
+                        alt={plan.title}
+                        className="w-full h-full object-cover group-hover:scale-103 transition-transform duration-300"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none'
+                        }}
+                      />
+                      <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none">
+                        <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-white/95 backdrop-blur-xs text-[#2D5A3D] shadow-2xs">
+                          {plan.category || 'Gathering'}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-[#2D5A3D] text-white shadow-2xs">
+                            Hosting
+                          </span>
+                          {badge && (
+                            <span
+                              className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full backdrop-blur-xs shadow-2xs ${
+                                isPast ? 'bg-[#fdf0eb]/95 text-[#C47B5A]' : 'bg-white/95 text-[#2D5A3D]'
+                              }`}
+                            >
+                              {badge}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Top Badges for Card without Image */
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-[#eaf3ed] text-[#2D5A3D]">
+                        {plan.category || 'Gathering'}
                       </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-[#2D5A3D] text-white shadow-2xs">
+                          Hosting
+                        </span>
+                        {badge && (
+                          <span
+                            className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                              isPast ? 'bg-[#fdf0eb] text-[#C47B5A]' : 'bg-[#eaf3ed] text-[#2D5A3D]'
+                            }`}
+                          >
+                            {badge}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   )}
 
-                  {/* Host Label */}
-                  <div className="absolute bottom-3 left-3 flex items-center gap-2 bg-white/95 backdrop-blur-md rounded-xl px-2.5 py-1 shadow-xs">
-                    <div className="w-4 h-4 rounded-full bg-[#2D5A3D] flex items-center justify-center text-[9px] text-white font-bold">
-                      {user?.username ? user.username.charAt(0).toUpperCase() : 'U'}
+                  {/* Title */}
+                  <h3
+                    className="text-lg sm:text-xl font-bold text-stone-900 mb-2 leading-snug truncate group-hover:text-[#2D5A3D] transition-colors"
+                    style={{ fontFamily: SERIF }}
+                  >
+                    {plan.title}
+                  </h3>
+
+                  {/* Optional Description Preview */}
+                  {plan.description && (
+                    <p className="text-xs text-[#6b645d] line-clamp-2 mb-3 leading-relaxed">
+                      {plan.description}
+                    </p>
+                  )}
+
+                  {/* Date, Time & Location */}
+                  <div className="space-y-1.5 text-xs text-stone-500 mb-3.5">
+                    <div className="flex items-center gap-2 font-medium text-stone-700">
+                      <Clock className="w-4 h-4 text-[#2D5A3D] shrink-0" />
+                      <span>{label}</span>
+                      {time && (
+                        <>
+                          <span>·</span>
+                          <span>{time}</span>
+                        </>
+                      )}
                     </div>
-                    <span className="text-[11px] font-bold text-[#2C2C2C]">Created by you</span>
+
+                    <div className="flex items-center gap-2 truncate">
+                      <MapPin className="w-4 h-4 text-[#C47B5A] shrink-0" />
+                      <span className="truncate">{plan.locationName || 'Location specified'}</span>
+                    </div>
                   </div>
+
+                  {/* Hobbies (Strictly Max 4) */}
+                  {displayHobbies.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-4 items-center">
+                      {displayHobbies.map((h: any) => (
+                        <span
+                          key={h.id}
+                          className="text-[11px] font-medium px-2.5 py-1 rounded-xl bg-[#FAF8F5] text-stone-600 border border-[#E2DBD0]/70"
+                        >
+                          #{h.name}
+                        </span>
+                      ))}
+                      {remainingCount > 0 && (
+                        <span className="text-[11px] text-stone-500 font-medium px-2 py-0.5 bg-[#F0EAE0] rounded-xl">
+                          +{remainingCount}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                {/* Event Details */}
-                <div className="p-5 flex-1 flex flex-col justify-between">
-                  <div>
-                    <h3 className="text-base font-bold text-[#2C2C2C] mb-1.5 leading-snug line-clamp-1" style={{ fontFamily: SERIF }}>
-                      {plan.title}
-                    </h3>
-                    <p className="text-xs text-stone-600 line-clamp-2 mb-3 leading-relaxed">
-                      {plan.description || 'Intimate gathering hosted on Havens.'}
-                    </p>
+                {/* Footer with Guest count and Delete Button */}
+                <div className="flex items-center justify-between pt-3 border-t border-[#E2DBD0]/60" onClick={(e) => e.stopPropagation()}>
+                  <span className="text-xs font-semibold text-stone-700">
+                    👥 {plan.going || 1} {plan.going === 1 ? 'guest' : 'guests'}
+                  </span>
 
-                    <div className="space-y-1.5 text-xs text-stone-500 mb-4">
-                      <div className="flex items-center gap-2 font-semibold text-[#2C2C2C]">
-                        <svg className="w-3.5 h-3.5 text-[#2D5A3D] shrink-0" viewBox="0 0 16 16" fill="none">
-                          <rect x="2" y="3" width="12" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
-                          <path d="M5 1v4M11 1v4M2 7h12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-                        </svg>
-                        <span>{label}</span>
-                        {time && (
-                          <>
-                            <span>·</span>
-                            <span>{time}</span>
-                          </>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-2 truncate">
-                        <svg className="w-3.5 h-3.5 text-stone-400 shrink-0" viewBox="0 0 16 16" fill="none">
-                          <path d="M8 1.5C5.79 1.5 4 3.29 4 5.5c0 3 4 9 4 9s4-6 4-9c0-2.21-1.79-4-4-4z" stroke="currentColor" strokeWidth="1.4" />
-                          <circle cx="8" cy="5.5" r="1.5" stroke="currentColor" strokeWidth="1.4" />
-                        </svg>
-                        <span className="truncate">{plan.locationName || 'Location specified'}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Manage Actions with Delete Event Button */}
-                  <div className="flex items-center justify-between pt-3 border-t border-[#E2DBD0]/60">
-                    <span className="text-xs font-semibold text-stone-700">
-                      {plan.going || 1} confirmed guests
-                    </span>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => onDeletePlan(plan)}
-                        className="px-3.5 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold transition-colors cursor-pointer border border-red-200 flex items-center gap-1.5 shadow-2xs"
-                        title="Delete this plan"
-                      >
-                        <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
-                          <path d="M2 4h12M5 4V2.5A1.5 1.5 0 016.5 1h3A1.5 1.5 0 0111 2.5V4M13.5 4v9.5a1.5 1.5 0 01-1.5 1.5h-8a1.5 1.5 0 01-1.5-1.5V4" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                        <span>{t('deleteEvent')}</span>
-                      </button>
-                    </div>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onDeletePlan(plan)
+                    }}
+                    className="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold transition-colors cursor-pointer border border-rose-200 flex items-center gap-1 shadow-2xs"
+                    title="Delete this plan"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>{t('deleteEvent')}</span>
+                  </button>
                 </div>
               </div>
             )
@@ -250,6 +278,21 @@ export const PlanCardGrid: React.FC<PlanCardGridProps> = ({
           </div>
         </div>
       )}
+
+      {/* Expanded Event Detail Modal */}
+      {exploringPlan && (
+        <EventDetailModal
+          event={exploringPlan}
+          onClose={() => setExploringPlan(null)}
+          onDeletePlan={(p) => {
+            setExploringPlan(null)
+            onDeletePlan(p)
+          }}
+          currentUsername={user?.username}
+        />
+      )}
     </div>
   )
 }
+
+export default PlanCardGrid

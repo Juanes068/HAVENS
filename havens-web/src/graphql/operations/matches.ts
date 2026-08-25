@@ -59,8 +59,8 @@ export const RESPOND_CONNECT_REQUEST = gql`
  * Query to fetch pending incoming connection requests.
  */
 export const PENDING_CONNECTION_REQUESTS = gql`
-  query PendingConnectionRequests {
-    pendingConnectionRequests {
+  query PendingConnectionRequests($limit: Int, $offset: Int) {
+    pendingConnectionRequests(limit: $limit, offset: $offset) {
       id
       status
       createdAt
@@ -95,11 +95,11 @@ export const PENDING_CONNECTION_REQUESTS = gql`
 `;
 
 /**
- * Query to fetch user matches (optionally filtered by status, e.g., 'accepted').
+ * Query to fetch user matches (optionally filtered by status, e.g., 'accepted') with pagination.
  */
 export const MY_MATCHES = gql`
-  query MyMatches($status: String) {
-    myMatches(status: $status) {
+  query MyMatches($status: String, $limit: Int, $offset: Int) {
+    myMatches(status: $status, limit: $limit, offset: $offset) {
       id
       status
       createdAt

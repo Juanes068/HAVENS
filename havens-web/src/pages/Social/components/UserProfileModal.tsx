@@ -59,32 +59,39 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   const isSelf = currentUser && String(currentUser.id) === String(user.id);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
-      <div className="bg-white border border-[#E2DBD0] rounded-3xl p-6 max-w-lg w-full shadow-xl space-y-4 animate-in zoom-in-95 duration-150 max-h-[85vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-150">
+      <div className="bg-white border border-[#E2DBD0] rounded-3xl p-6 sm:p-8 max-w-xl w-full shadow-2xl space-y-5 animate-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
         
         {/* Cover / Avatar Header Bar */}
-        <div className="relative flex items-start justify-between pb-3 border-b border-[#E2DBD0]/60">
-          <div className="flex items-center gap-4 min-w-0">
-            <div className="relative">
+        <div className="relative flex items-start justify-between pb-4 border-b border-[#E2DBD0]/60">
+          <div className="flex items-center gap-4.5 min-w-0">
+            <div className="relative shrink-0">
               <Avatar
                 name={user.username}
                 photoUrl={user.photoUrl}
                 size="xl"
-                className="w-16 h-16 border-2 border-white shadow-xs rounded-full ring-2 ring-[#2D5A3D]/20"
+                className="w-18 h-18 sm:w-20 sm:h-20 text-2xl sm:text-3xl border-2 border-white shadow-md rounded-full ring-2 ring-[#2D5A3D]/20"
               />
-              <span className="absolute bottom-0 right-0 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full" />
+              <span className="absolute bottom-0 right-0 w-4.5 h-4.5 bg-emerald-500 border-2 border-white rounded-full" />
             </div>
 
             <div className="min-w-0">
-              <span className="text-[10px] font-bold text-[#C47B5A] uppercase tracking-wider block">
+              <span className="text-xs font-bold text-[#C47B5A] uppercase tracking-wider block">
                 📍 {user.neighbourhood || user.cityName || 'Local Community Member'}
                 {user.distance !== undefined && user.distance !== null ? ` • ${user.distance.toFixed(1)} km away` : ''}
               </span>
-              <h3 className="text-xl font-serif font-semibold text-[#2D5A3D] mt-0.5 truncate">
-                @{user.username}
-              </h3>
+              <div className="flex flex-wrap items-center gap-2 mt-1">
+                <h3 className="text-xl sm:text-2xl font-serif font-bold text-[#2D5A3D] truncate">
+                  @{user.username}
+                </h3>
+                {user.age ? (
+                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#FAF8F5] border border-[#E2DBD0] text-stone-700 shadow-2xs">
+                    {user.age} years old
+                  </span>
+                ) : null}
+              </div>
               {user.totalPoints !== undefined && (
-                <p className="text-[11px] text-[#8a8278] font-medium">
+                <p className="text-xs text-[#8a8278] font-medium mt-0.5">
                   ⭐ {user.totalPoints} Havens Points
                 </p>
               )}
@@ -94,7 +101,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="text-xs font-bold text-[#8a8278] hover:text-[#2C2C2C] bg-[#F4EEE2] p-1.5 rounded-full cursor-pointer transition-colors shrink-0"
+            className="text-stone-400 hover:text-stone-700 hover:bg-[#F4EEE2] p-2 rounded-full cursor-pointer transition-colors shrink-0"
             title="Close"
           >
             ✕
@@ -102,32 +109,43 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
         </div>
 
         {/* Bio Section */}
-        <div>
-          <h4 className="text-xs font-semibold text-[#2C2C2C] mb-1">About</h4>
-          <p className="text-xs text-[#5a5450] leading-relaxed bg-[#FDFBF7] p-3.5 rounded-2xl border border-[#E2DBD0]/60">
-            {user.bio ? `"${user.bio}"` : 'Passionate member looking to meet like-minded peers and explore local gatherings.'}
-          </p>
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-stone-700">About</h4>
+            {user.dateOfBirth && (
+              <span className="text-[11px] text-stone-400">
+                Born {new Date(user.dateOfBirth).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+              </span>
+            )}
+          </div>
+          <div className="text-sm text-stone-700 leading-relaxed bg-[#FAF8F5] p-4 sm:p-5 rounded-2xl border border-[#E2DBD0]/70 font-normal">
+            {user.bio ? (
+              <p className="italic leading-relaxed whitespace-pre-wrap">"{user.bio}"</p>
+            ) : (
+              <p className="text-stone-400 italic">Passionate member looking to meet like-minded peers and explore local gatherings.</p>
+            )}
+          </div>
         </div>
 
         {/* Passions and Interests Taxonomy */}
         {user.hobbies && user.hobbies.length > 0 && (
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-[#2C2C2C]">Member Passions & Topics:</span>
-              <span className="text-[10px] text-[#8a8278] font-medium">
-                {user.hobbies.length} {user.hobbies.length === 1 ? 'topic' : 'topics'}
+              <span className="text-xs font-bold uppercase tracking-wider text-stone-700">Member Passions & Topics</span>
+              <span className="text-xs text-[#8a8278] font-medium">
+                {user.hobbies.length} {user.hobbies.length === 1 ? 'interest' : 'interests'}
               </span>
             </div>
 
-            <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
+            <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto pr-1">
               {/* 1. Exact shared hobbies */}
               {sharedHobbyList.map((hb: any) => (
                 <span
                   key={`modal-shared-${hb.id}`}
-                  className="text-[11px] px-2.5 py-1 rounded-md font-semibold bg-[#eaf3ed] text-[#2D5A3D] border border-[#7aaa8a]/40 shadow-2xs flex items-center gap-1"
+                  className="text-xs px-3 py-1.5 rounded-xl font-semibold bg-[#eaf3ed] text-[#2D5A3D] border border-[#7aaa8a]/40 shadow-2xs flex items-center gap-1.5"
                   title="Shared exact interest"
                 >
-                  <span>✦</span>
+                  <span className="text-emerald-700">✦</span>
                   <span>#{hb.name}</span>
                 </span>
               ))}
@@ -136,7 +154,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               {relatedHobbyList.map((hb: any) => (
                 <span
                   key={`modal-related-${hb.id}`}
-                  className="text-[11px] px-2.5 py-1 rounded-md font-medium bg-[#fdf6ed] text-[#C47B5A] border border-[#C47B5A]/30 flex items-center gap-1"
+                  className="text-xs px-3 py-1.5 rounded-xl font-medium bg-[#fdf6ed] text-[#C47B5A] border border-[#C47B5A]/30 flex items-center gap-1.5"
                   title={`Related topic in ${hb.category?.name || 'shared category'}`}
                 >
                   <span className="text-[10px]">◈</span>
@@ -148,7 +166,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               {otherHobbies.map((hb: any) => (
                 <span
                   key={`modal-other-${hb.id}`}
-                  className="text-[11px] px-2.5 py-1 rounded-md font-normal bg-[#F4EEE2] text-[#5a5450] border border-[#E2DBD0]/60"
+                  className="text-xs px-3 py-1.5 rounded-xl font-normal bg-[#F4EEE2] text-[#5a5450] border border-[#E2DBD0]/60"
                 >
                   #{hb.name}
                 </span>
@@ -158,20 +176,20 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
         )}
 
         {/* Affinity Score Banner */}
-        <div className="p-3 bg-[#F0EAE0]/70 rounded-2xl flex items-center justify-between text-xs text-[#5a5450]">
-          <span className="flex items-center gap-1.5 font-medium">
-            {affinity >= 70 ? <Zap className="w-3.5 h-3.5 text-[#2D5A3D]" /> : <Sparkles className="w-3.5 h-3.5 text-[#C47B5A]" />}
-            Community Compatibility
+        <div className="p-3.5 bg-[#FAF8F5] border border-[#E2DBD0] rounded-2xl flex items-center justify-between text-xs text-stone-700">
+          <span className="flex items-center gap-2 font-medium">
+            {affinity >= 70 ? <Zap className="w-4 h-4 text-[#2D5A3D]" /> : <Sparkles className="w-4 h-4 text-[#C47B5A]" />}
+            <span>Community Affinity Score</span>
           </span>
-          <span className="font-bold text-[#2D5A3D]">{affinity}% Match</span>
+          <span className="font-bold text-sm text-[#2D5A3D]">{affinity}% Match</span>
         </div>
 
         {/* Action Buttons Footer */}
-        <div className="pt-2 flex items-center justify-end gap-2.5 border-t border-[#E2DBD0]/60">
+        <div className="pt-3 flex items-center justify-end gap-3 border-t border-[#E2DBD0]/60">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl border border-[#E2DBD0] text-xs font-semibold text-[#5a5450] hover:bg-[#F4EEE2] transition-colors cursor-pointer"
+            className="px-5 py-2.5 rounded-xl border border-[#E2DBD0] text-xs font-semibold text-stone-600 hover:bg-[#F4EEE2] transition-colors cursor-pointer"
           >
             Close
           </button>
@@ -186,16 +204,16 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     onOpenChat(String(user.id), user.matchId);
                   }
                 }}
-                className="px-5 py-2 rounded-xl bg-[#2D5A3D] text-white text-xs font-semibold hover:bg-[#3d7a55] transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                className="px-6 py-2.5 rounded-xl bg-[#2D5A3D] text-white text-xs font-bold hover:bg-[#3d7a55] transition-all shadow-xs cursor-pointer flex items-center gap-2"
               >
-                <MessageSquare className="w-3.5 h-3.5" />
+                <MessageSquare className="w-4 h-4" />
                 <span>Open Chat</span>
               </button>
             ) : isSent ? (
               <button
                 type="button"
                 disabled
-                className="px-5 py-2 rounded-xl bg-[#eaf3ed] text-[#2D5A3D] border border-[#7aaa8a]/40 text-xs font-semibold cursor-default"
+                className="px-6 py-2.5 rounded-xl bg-[#eaf3ed] text-[#2D5A3D] border border-[#7aaa8a]/40 text-xs font-bold cursor-default shadow-2xs"
               >
                 ✓ Request Sent
               </button>
@@ -209,13 +227,13 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   }
                   onClose();
                 }}
-                className="px-5 py-2 rounded-xl bg-[#2D5A3D] text-white text-xs font-semibold hover:bg-[#3d7a55] transition-all shadow-xs cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                className="px-6 py-2.5 rounded-xl bg-[#2D5A3D] text-white text-xs font-bold hover:bg-[#3d7a55] transition-all shadow-xs cursor-pointer disabled:opacity-50 flex items-center gap-2"
               >
                 {isConnecting ? (
                   <span>Sending...</span>
                 ) : (
                   <>
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                     </svg>
                     <span>Connect Now</span>
@@ -225,7 +243,6 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             )
           )}
         </div>
-
       </div>
     </div>
   );

@@ -11,7 +11,10 @@ export const MY_PROFILE = gql`
       email
       totalPoints
       bio
+      dateOfBirth
+      age
       neighbourhood
+      cityName
       photoUrl
       inviteCode
       hobbies {
@@ -36,6 +39,8 @@ export const GET_ALL_USERS = gql`
       username
       email
       bio
+      dateOfBirth
+      age
       neighbourhood
       cityName
       photoUrl
@@ -73,18 +78,33 @@ export const GET_ALL_USERS = gql`
 export const GET_RECOMMENDED_USERS = GET_ALL_USERS;
 
 /**
- * Mutation to update user profile details (bio, neighbourhood, photoUrl).
+ * Mutation to update user profile details (bio, dateOfBirth, neighbourhood, photoUrl).
  */
 export const UPDATE_USER_PROFILE = gql`
-  mutation UpdateUserProfile($bio: String, $neighbourhood: String, $photoUrl: String) {
-    updateUserProfile(bio: $bio, neighbourhood: $neighbourhood, photoUrl: $photoUrl) {
+  mutation UpdateUserProfile(
+    $bio: String
+    $neighbourhood: String
+    $cityName: String
+    $photoUrl: String
+    $dateOfBirth: Date
+  ) {
+    updateUserProfile(
+      bio: $bio
+      neighbourhood: $neighbourhood
+      cityName: $cityName
+      photoUrl: $photoUrl
+      dateOfBirth: $dateOfBirth
+    ) {
       success
       message
       profile {
         id
         username
         bio
+        dateOfBirth
+        age
         neighbourhood
+        cityName
         photoUrl
       }
     }

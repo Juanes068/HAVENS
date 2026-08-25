@@ -96,6 +96,8 @@ class Query(graphene.ObjectType):
     # ── Communities ─────────────────────────────────────────────────────────────
     all_communities = graphene.List(
         CommunityType,
+        limit=graphene.Int(required=False, description="Max number of communities to return"),
+        offset=graphene.Int(required=False, default_value=0, description="Offset starting index for pagination"),
         description="Retrieve all communities on the Havens platform."
     )
     recommended_circles = graphene.List(
@@ -103,6 +105,8 @@ class Query(graphene.ObjectType):
         radius_km=graphene.Float(required=False, default_value=50.0),
         latitude=graphene.Float(required=False),
         longitude=graphene.Float(required=False),
+        limit=graphene.Int(required=False, description="Max number of circles to return"),
+        offset=graphene.Int(required=False, default_value=0, description="Offset starting index for pagination"),
         description="Retrieve recommended circles/communities scored by hobby affinity & distance."
     )
     get_recommended_circles = graphene.List(
@@ -110,6 +114,8 @@ class Query(graphene.ObjectType):
         radius_km=graphene.Float(required=False, default_value=50.0),
         latitude=graphene.Float(required=False),
         longitude=graphene.Float(required=False),
+        limit=graphene.Int(required=False, description="Max number of circles to return"),
+        offset=graphene.Int(required=False, default_value=0, description="Offset starting index for pagination"),
         description="Location-first recommended circles with Haversine radius filtering for physical circles and bypass for virtual circles."
     )
     community_by_id = graphene.Field(
@@ -124,6 +130,8 @@ class Query(graphene.ObjectType):
     )
     my_communities = graphene.List(
         CommunityMembershipType,
+        limit=graphene.Int(required=False, description="Max number of memberships to return"),
+        offset=graphene.Int(required=False, default_value=0, description="Offset starting index for pagination"),
         description="Retrieve all community memberships belonging to the authenticated user."
     )
 
@@ -208,14 +216,20 @@ class Query(graphene.ObjectType):
     # ── Feature 3: Friendships ──────────────────────────────────────────────────
     my_friends = graphene.List(
         UserType,
+        limit=graphene.Int(required=False, description="Max number of friends to return"),
+        offset=graphene.Int(required=False, default_value=0, description="Offset starting index for pagination"),
         description="Retrieve the list of confirmed friends (accepted friendship in either direction)."
     )
     my_friend_requests = graphene.List(
         FriendshipType,
+        limit=graphene.Int(required=False, description="Max number of requests to return"),
+        offset=graphene.Int(required=False, default_value=0, description="Offset starting index for pagination"),
         description="Retrieve incoming pending friend requests addressed to the authenticated user."
     )
     pending_friend_requests = graphene.List(
         FriendshipType,
+        limit=graphene.Int(required=False, description="Max number of requests to return"),
+        offset=graphene.Int(required=False, default_value=0, description="Offset starting index for pagination"),
         description="Alias to retrieve pending friend requests received by the authenticated user."
     )
 
@@ -234,14 +248,20 @@ class Query(graphene.ObjectType):
     my_matches = graphene.List(
         MatchType,
         status=graphene.String(required=False),
+        limit=graphene.Int(required=False, description="Max number of matches to return"),
+        offset=graphene.Int(required=False, default_value=0, description="Offset starting index for pagination"),
         description="Retrieve all matches involving the authenticated user with optional status filter ('pending', 'accepted', 'rejected')."
     )
     pending_connection_requests = graphene.List(
         MatchType,
+        limit=graphene.Int(required=False, description="Max number of requests to return"),
+        offset=graphene.Int(required=False, default_value=0, description="Offset starting index for pagination"),
         description="Retrieve incoming pending connection/match requests addressed to the authenticated user."
     )
     my_connection_requests = graphene.List(
         MatchType,
+        limit=graphene.Int(required=False, description="Max number of requests to return"),
+        offset=graphene.Int(required=False, default_value=0, description="Offset starting index for pagination"),
         description="Alias to retrieve incoming pending connection/match requests for the authenticated user."
     )
     messages_by_match = graphene.List(
@@ -353,38 +373,44 @@ class Query(graphene.ObjectType):
         except User.DoesNotExist:
             return None
 
-    def resolve_all_communities(self, info):
-        """Retrieve all communities hosted on the platform.
+    def resolve_all_communities(self, info, limit=None, offset=0):
+        """Retrieve all communities hosted on the platform with pagination support."""
+        qs = Community.objects.prefetch_related('hobbies', 'memberships').select_related('creator').all().order_by('-created_at')
+        if offset:
+            qs = qs[offset:]
+        if limit is not None:
+            qs = qs[:limit]
+        return qs
 
-        Args:
-            info (graphene.ResolveInfo): Execution context.
-
-        Returns:
-            django.db.models.QuerySet[Community]: All Community records.
-        """
-        return Community.objects.prefetch_related('hobbies', 'memberships').select_related('creator').all()
-
-    def resolve_recommended_circles(self, info, radius_km=50.0, latitude=None, longitude=None):
-        """Retrieve recommended circles/communities for the authenticated user,
-        scored and ordered by shared hobby affinity and geographic distance.
-        """
+    def resolve_recommended_circles(self, info, radius_km=50.0, latitude=None, longitude=None, limit=None, offset=0):
+        """Retrieve recommended circles/communities with limit/offset pagination."""
         user = info.context.user
-        return calculate_circle_recommendations(
+        results = calculate_circle_recommendations(
             user=user,
             latitude=latitude,
             longitude=longitude,
             radius_km=radius_km
         )
+        if offset:
+            results = results[offset:]
+        if limit is not None:
+            results = results[:limit]
+        return results
 
-    def resolve_get_recommended_circles(self, info, radius_km=50.0, latitude=None, longitude=None):
-        """Location-first recommendation resolver filtering physical circles by radius and ranking by affinity score."""
+    def resolve_get_recommended_circles(self, info, radius_km=50.0, latitude=None, longitude=None, limit=None, offset=0):
+        """Location-first recommendation resolver with limit/offset pagination."""
         user = info.context.user
-        return calculate_circle_recommendations(
+        results = calculate_circle_recommendations(
             user=user,
             latitude=latitude,
             longitude=longitude,
             radius_km=radius_km
         )
+        if offset:
+            results = results[offset:]
+        if limit is not None:
+            results = results[:limit]
+        return results
 
     def resolve_community_by_id(self, info, id):
         """Retrieve a single community by primary key.
@@ -417,17 +443,15 @@ class Query(graphene.ObjectType):
             return None
 
     @login_required
-    def resolve_my_communities(self, info):
-        """Retrieve all community memberships for the authenticated user.
-
-        Args:
-            info (graphene.ResolveInfo): Execution context with authenticated user.
-
-        Returns:
-            django.db.models.QuerySet[CommunityMembership]: Memberships linked to the caller.
-        """
+    def resolve_my_communities(self, info, limit=None, offset=0):
+        """Retrieve all community memberships for the authenticated user with pagination support."""
         user = info.context.user
-        return CommunityMembership.objects.filter(user=user).select_related('community')
+        qs = CommunityMembership.objects.filter(user=user).select_related('community').order_by('-joined_at')
+        if offset:
+            qs = qs[offset:]
+        if limit is not None:
+            qs = qs[:limit]
+        return qs
 
     @login_required
     def resolve_discovery_events(
@@ -848,65 +872,57 @@ class Query(graphene.ObjectType):
 
     # ── Feature 3: Friendships ──────────────────────────────────────────────────
     @login_required
-    def resolve_my_friends(self, info):
-        """Retrieve all confirmed friends for the authenticated user.
-
-        Computes the union of accepted friendships in both directions
-        (from_user -> to_user and to_user -> from_user).
-
-        Args:
-            info (graphene.ResolveInfo): Execution context.
-
-        Returns:
-            django.db.models.QuerySet[User]: QuerySet of confirmed friend User entities.
-        """
+    @login_required
+    def resolve_my_friends(self, info, limit=None, offset=0):
+        """Retrieve confirmed friends for the authenticated user with pagination support."""
         user = info.context.user
         # Collect IDs of friends where the current user sent the accepted request
         sent = Friendship.objects.filter(from_user=user, status='accepted').values_list('to_user_id', flat=True)
         # Collect IDs of friends where the current user received and accepted the request
         received = Friendship.objects.filter(to_user=user, status='accepted').values_list('from_user_id', flat=True)
         friend_ids = set(sent) | set(received)
-        return User.objects.filter(id__in=friend_ids).select_related('profile').prefetch_related('profile__hobbies__category')
+        qs = User.objects.filter(id__in=friend_ids).select_related('profile').prefetch_related('profile__hobbies__category').order_by('username')
+        if offset:
+            qs = qs[offset:]
+        if limit is not None:
+            qs = qs[:limit]
+        return qs
 
     @login_required
-    def resolve_my_friend_requests(self, info):
-        """Retrieve incoming pending friend requests addressed to the caller.
-
-        Args:
-            info (graphene.ResolveInfo): Execution context.
-
-        Returns:
-            django.db.models.QuerySet[Friendship]: Pending friendships awaiting action by the caller.
-        """
+    def resolve_my_friend_requests(self, info, limit=None, offset=0):
+        """Retrieve incoming pending friend requests addressed to the caller with pagination."""
         user = info.context.user
-        return Friendship.objects.filter(
+        qs = Friendship.objects.filter(
             to_user=user,
             status='pending'
         ).select_related(
             'from_user', 'from_user__profile'
         ).prefetch_related(
             'from_user__profile__hobbies__category'
-        )
+        ).order_by('-created_at')
+        if offset:
+            qs = qs[offset:]
+        if limit is not None:
+            qs = qs[:limit]
+        return qs
 
     @login_required
-    def resolve_pending_friend_requests(self, info):
-        """Retrieve pending friend requests for the caller (convenience alias).
-
-        Args:
-            info (graphene.ResolveInfo): Execution context.
-
-        Returns:
-            django.db.models.QuerySet[Friendship]: Pending incoming friendships.
-        """
+    def resolve_pending_friend_requests(self, info, limit=None, offset=0):
+        """Retrieve pending friend requests for the caller with pagination."""
         user = info.context.user
-        return Friendship.objects.filter(
+        qs = Friendship.objects.filter(
             to_user=user,
             status='pending'
         ).select_related(
             'from_user', 'from_user__profile'
         ).prefetch_related(
             'from_user__profile__hobbies__category'
-        )
+        ).order_by('-created_at')
+        if offset:
+            qs = qs[offset:]
+        if limit is not None:
+            qs = qs[:limit]
+        return qs
 
     # ── Feature 4: Event RSVPs ──────────────────────────────────────────────────
     @login_required
@@ -937,10 +953,8 @@ class Query(graphene.ObjectType):
 
     # ── Feature 5: Matches & Messages ───────────────────────────────────────────
     @login_required
-    def resolve_my_matches(self, info, status=None):
-        """Retrieve matches involving the authenticated user.
-        Optional status filter ('pending', 'accepted', 'rejected').
-        """
+    def resolve_my_matches(self, info, status=None, limit=None, offset=0):
+        """Retrieve matches involving the authenticated user with pagination."""
         user = info.context.user
         qs = Match.objects.filter(
             django_models.Q(user1=user) | django_models.Q(user2=user)
@@ -950,16 +964,20 @@ class Query(graphene.ObjectType):
             'user1__profile__hobbies__category',
             'user2__profile__hobbies__category',
             'initiator__profile__hobbies__category'
-        )
+        ).order_by('-updated_at')
         if status:
             qs = qs.filter(status=status.lower())
+        if offset:
+            qs = qs[offset:]
+        if limit is not None:
+            qs = qs[:limit]
         return qs
 
     @login_required
-    def resolve_pending_connection_requests(self, info):
-        """Retrieve incoming pending connection requests for the authenticated user."""
+    def resolve_pending_connection_requests(self, info, limit=None, offset=0):
+        """Retrieve incoming pending connection requests for the authenticated user with pagination."""
         user = info.context.user
-        return Match.objects.filter(
+        qs = Match.objects.filter(
             django_models.Q(user1=user) | django_models.Q(user2=user),
             status='pending'
         ).exclude(initiator=user).select_related(
@@ -968,13 +986,18 @@ class Query(graphene.ObjectType):
             'user1__profile__hobbies__category',
             'user2__profile__hobbies__category',
             'initiator__profile__hobbies__category'
-        )
+        ).order_by('-created_at')
+        if offset:
+            qs = qs[offset:]
+        if limit is not None:
+            qs = qs[:limit]
+        return qs
 
     @login_required
-    def resolve_my_connection_requests(self, info):
-        """Alias for incoming pending connection requests."""
+    def resolve_my_connection_requests(self, info, limit=None, offset=0):
+        """Alias for incoming pending connection requests with pagination."""
         user = info.context.user
-        return Match.objects.filter(
+        qs = Match.objects.filter(
             django_models.Q(user1=user) | django_models.Q(user2=user),
             status='pending'
         ).exclude(initiator=user).select_related(
@@ -983,7 +1006,12 @@ class Query(graphene.ObjectType):
             'user1__profile__hobbies__category',
             'user2__profile__hobbies__category',
             'initiator__profile__hobbies__category'
-        )
+        ).order_by('-created_at')
+        if offset:
+            qs = qs[offset:]
+        if limit is not None:
+            qs = qs[:limit]
+        return qs
 
     @login_required
     def resolve_messages_by_match(self, info, match_id):

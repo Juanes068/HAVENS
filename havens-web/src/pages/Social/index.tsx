@@ -90,21 +90,120 @@ export const SocialView: React.FC = () => {
     }
   };
 
-  const { data: matchesData, refetch: refetchMatches } = useQuery(MY_MATCHES, {
-    variables: { status: 'accepted' },
+  // ─── Pagination State for Connections & Friends ───
+  const CONNECTIONS_PAGE_SIZE = 10;
+  const [hasMoreRequests, setHasMoreRequests] = useState(true);
+  const [loadingMoreRequests, setLoadingMoreRequests] = useState(false);
+  const [hasMoreFriends, setHasMoreFriends] = useState(true);
+  const [loadingMoreFriends, setLoadingMoreFriends] = useState(false);
+
+  const {
+    data: matchesData,
+    refetch: refetchMatches,
+    fetchMore: fetchMoreMatches,
+  } = useQuery(MY_MATCHES, {
+    variables: { status: 'accepted', limit: CONNECTIONS_PAGE_SIZE, offset: 0 },
     fetchPolicy: 'cache-and-network',
     skip: !currentUser,
   });
 
-  const { data: pendingData, loading: requestsLoading, refetch: refetchPending } = useQuery(PENDING_CONNECTION_REQUESTS, {
+  const {
+    data: pendingData,
+    loading: requestsLoading,
+    refetch: refetchPending,
+    fetchMore: fetchMorePending,
+  } = useQuery(PENDING_CONNECTION_REQUESTS, {
+    variables: { limit: CONNECTIONS_PAGE_SIZE, offset: 0 },
     fetchPolicy: 'cache-and-network',
     skip: !currentUser,
   });
 
-  const { data: friendsData, loading: friendsLoading, refetch: refetchFriends } = useQuery(MY_FRIENDS, {
+  useEffect(() => {
+    if (pendingData?.pendingConnectionRequests) {
+      const items = pendingData.pendingConnectionRequests || [];
+      setHasMoreRequests(items.length >= CONNECTIONS_PAGE_SIZE);
+    }
+  }, [pendingData]);
+
+  const {
+    data: friendsData,
+    loading: friendsLoading,
+    refetch: refetchFriends,
+    fetchMore: fetchMoreFriends,
+  } = useQuery(MY_FRIENDS, {
+    variables: { limit: CONNECTIONS_PAGE_SIZE, offset: 0 },
     fetchPolicy: 'cache-and-network',
     skip: !currentUser,
   });
+
+  useEffect(() => {
+    if (friendsData?.myFriends) {
+      const items = friendsData.myFriends || [];
+      setHasMoreFriends(items.length >= CONNECTIONS_PAGE_SIZE);
+    }
+  }, [friendsData]);
+
+  const handleLoadMoreRequests = async () => {
+    if (loadingMoreRequests || !hasMoreRequests) return;
+    setLoadingMoreRequests(true);
+    try {
+      const currentOffset = pendingData?.pendingConnectionRequests?.length || 0;
+      await fetchMorePending({
+        variables: {
+          offset: currentOffset,
+          limit: CONNECTIONS_PAGE_SIZE,
+        },
+        updateQuery: (prev: any, { fetchMoreResult }: any) => {
+          if (!fetchMoreResult || !fetchMoreResult.pendingConnectionRequests || fetchMoreResult.pendingConnectionRequests.length === 0) {
+            setHasMoreRequests(false);
+            return prev;
+          }
+          if (fetchMoreResult.pendingConnectionRequests.length < CONNECTIONS_PAGE_SIZE) {
+            setHasMoreRequests(false);
+          }
+          return {
+            ...prev,
+            pendingConnectionRequests: [...(prev.pendingConnectionRequests || []), ...fetchMoreResult.pendingConnectionRequests],
+          };
+        },
+      });
+    } catch (err) {
+      console.error('Failed to load more connection requests', err);
+    } finally {
+      setLoadingMoreRequests(false);
+    }
+  };
+
+  const handleLoadMoreFriends = async () => {
+    if (loadingMoreFriends || !hasMoreFriends) return;
+    setLoadingMoreFriends(true);
+    try {
+      const currentOffset = friendsData?.myFriends?.length || 0;
+      await fetchMoreFriends({
+        variables: {
+          offset: currentOffset,
+          limit: CONNECTIONS_PAGE_SIZE,
+        },
+        updateQuery: (prev: any, { fetchMoreResult }: any) => {
+          if (!fetchMoreResult || !fetchMoreResult.myFriends || fetchMoreResult.myFriends.length === 0) {
+            setHasMoreFriends(false);
+            return prev;
+          }
+          if (fetchMoreResult.myFriends.length < CONNECTIONS_PAGE_SIZE) {
+            setHasMoreFriends(false);
+          }
+          return {
+            ...prev,
+            myFriends: [...(prev.myFriends || []), ...fetchMoreResult.myFriends],
+          };
+        },
+      });
+    } catch (err) {
+      console.error('Failed to load more friends', err);
+    } finally {
+      setLoadingMoreFriends(false);
+    }
+  };
 
   const { refetch: refetchAllCommunities } = useQuery(GET_ALL_COMMUNITIES, {
     fetchPolicy: 'cache-and-network',
@@ -347,12 +446,18 @@ export const SocialView: React.FC = () => {
       {/* TAB 2: CONNECTIONS */}
       {activeTab === 'connections' && (
         <ConnectionsTab
-          requestsLoading={requestsLoading}
+          requestsLoading={requestsLoading && !loadingMoreRequests}
           pendingRequests={pendingRequests}
-          friendsLoading={friendsLoading}
+          friendsLoading={friendsLoading && !loadingMoreFriends}
           acceptedFriends={allFriends}
           currentUser={currentUser}
           myHobbies={myHobbies}
+          hasMoreRequests={hasMoreRequests}
+          loadingMoreRequests={loadingMoreRequests}
+          onLoadMoreRequests={handleLoadMoreRequests}
+          hasMoreFriends={hasMoreFriends}
+          loadingMoreFriends={loadingMoreFriends}
+          onLoadMoreFriends={handleLoadMoreFriends}
           onRespondRequest={handleRespondRequest}
           onOpenChat={handleOpenChat}
         />

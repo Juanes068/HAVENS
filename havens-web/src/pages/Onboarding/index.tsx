@@ -9,6 +9,7 @@ import {
   MAX_SUB_HOBBIES_PER_CATEGORY,
 } from './types';
 import { Step1Account } from './components/Step1Account';
+import { StepBioAge } from './components/StepBioAge';
 import { Step2Categories } from './components/Step2Categories';
 import { Step3Hobbies } from './components/Step3Hobbies';
 import { Step4ProfilePhoto } from './components/Step4ProfilePhoto';
@@ -24,8 +25,8 @@ export const OnboardingView: React.FC = () => {
     (currentUser?.hobbies && currentUser.hobbies.length > 0)
   );
 
-  // Wizard Step (1: Account, 2: Main Categories, 3: Sub-categories, 4: Photo)
-  const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(() => (token ? 2 : 1));
+  // Wizard Step (1: Account, 2: Bio & Age, 3: Main Categories, 4: Sub-categories, 5: Photo)
+  const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4 | 5>(() => (token ? (isEditMode ? 3 : 2) : 1));
 
   // Selection States
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
@@ -96,14 +97,14 @@ export const OnboardingView: React.FC = () => {
     }
   };
 
-  const handleStep2Next = () => {
+  const handleStep3Next = () => {
     if (selectedCategoryIds.length === 0) {
       setErrorMsg('Please select at least 1 main category to continue.');
       return;
     }
     setWarningMsg('');
     setErrorMsg('');
-    setWizardStep(3);
+    setWizardStep(4);
   };
 
   const handleToggleHobby = (category: HobbyCategory, hobbyIdRaw: string | number) => {
@@ -148,7 +149,7 @@ export const OnboardingView: React.FC = () => {
       if (res?.data?.updateUserHobbies?.success) {
         await refetchUser().catch((err) => console.warn('refetchUser notice:', err));
         if (goToPhoto) {
-          setWizardStep(4);
+          setWizardStep(5);
         } else {
           navigate('/profile');
         }
@@ -166,7 +167,7 @@ export const OnboardingView: React.FC = () => {
         {/* Wizard Progress Header */}
         <div className="text-center">
           <div className="flex items-center justify-center gap-2 mb-3">
-            {[1, 2, 3, 4].map((stepNum) => (
+            {[1, 2, 3, 4, 5].map((stepNum) => (
               <div
                 key={stepNum}
                 className={`h-2 rounded-full transition-all duration-300 ${
@@ -182,23 +183,25 @@ export const OnboardingView: React.FC = () => {
 
           <span className="text-xs font-semibold tracking-wider text-[#C47B5A] uppercase">
             {isEditMode
-              ? `Profile Settings • Edit Hobbies Taxonomy (Step ${wizardStep === 2 ? '1' : wizardStep === 3 ? '2' : '3'} of 3)`
+              ? `Profile Settings • Edit Taxonomy & Profile (Step ${wizardStep === 3 ? '1' : wizardStep === 4 ? '2' : '3'} of 3)`
               : token
-              ? `Step ${wizardStep - 1} of 3 • Profile Setup`
-              : `Step ${wizardStep} of 4 • Havens Onboarding`}
+              ? `Step ${wizardStep} of 5 • Profile Setup`
+              : `Step ${wizardStep} of 5 • Havens Onboarding`}
           </span>
 
           <h1 className="text-3xl md:text-4xl font-serif font-semibold tracking-tight text-[#2D5A3D] mt-1 lowercase">
             {wizardStep === 1 && 'create your account'}
-            {wizardStep === 2 && 'choose main categories'}
-            {wizardStep === 3 && 'select sub-categories'}
-            {wizardStep === 4 && 'upload profile photo'}
+            {wizardStep === 2 && 'about you & age verification'}
+            {wizardStep === 3 && 'choose main categories'}
+            {wizardStep === 4 && 'select sub-categories'}
+            {wizardStep === 5 && 'upload profile photo'}
           </h1>
           <p className="text-sm text-[#8a8278] font-normal mt-1.5 max-w-lg mx-auto">
             {wizardStep === 1 && 'Enter your details, 6-character invitation code, and location.'}
-            {wizardStep === 2 && `Select up to ${MAX_PRIMARY_CATEGORIES} main categories that interest you.`}
-            {wizardStep === 3 && `Select up to ${MAX_SUB_HOBBIES_PER_CATEGORY} sub-hobbies per category.`}
-            {wizardStep === 4 && 'Add an optional profile picture or finish to enter your dashboard.'}
+            {wizardStep === 2 && 'Tell future friends about yourself and confirm you are at least 14 years old.'}
+            {wizardStep === 3 && `Select up to ${MAX_PRIMARY_CATEGORIES} main categories that interest you.`}
+            {wizardStep === 4 && `Select up to ${MAX_SUB_HOBBIES_PER_CATEGORY} sub-hobbies per category.`}
+            {wizardStep === 5 && 'Add an optional profile picture or finish to enter your dashboard.'}
           </p>
         </div>
 
@@ -227,19 +230,18 @@ export const OnboardingView: React.FC = () => {
           />
         )}
 
-        {/* STEP 2: MAIN CATEGORIES */}
+        {/* STEP 2: BIO & AGE VALIDATION */}
         {wizardStep === 2 && (
-          <Step2Categories
-            categories={categories}
-            selectedCategoryIds={selectedCategoryIds}
-            loadingTaxonomy={loadingTaxonomy}
-            taxonomyError={taxonomyError}
-            token={token}
+          <StepBioAge
+            currentUser={currentUser}
+            refetchUser={refetchUser}
             isEditMode={isEditMode}
-            onToggleCategory={handleToggleCategory}
-            onNext={handleStep2Next}
+            onNext={() => {
+              setErrorMsg('');
+              setWizardStep(3);
+            }}
             onBack={() => {
-              if (isEditMode) {
+              if (token) {
                 navigate('/profile');
               } else {
                 setWizardStep(1);
@@ -248,8 +250,29 @@ export const OnboardingView: React.FC = () => {
           />
         )}
 
-        {/* STEP 3: SUB-CATEGORIES */}
+        {/* STEP 3: MAIN CATEGORIES */}
         {wizardStep === 3 && (
+          <Step2Categories
+            categories={categories}
+            selectedCategoryIds={selectedCategoryIds}
+            loadingTaxonomy={loadingTaxonomy}
+            taxonomyError={taxonomyError}
+            token={token}
+            isEditMode={isEditMode}
+            onToggleCategory={handleToggleCategory}
+            onNext={handleStep3Next}
+            onBack={() => {
+              if (isEditMode) {
+                navigate('/profile');
+              } else {
+                setWizardStep(2);
+              }
+            }}
+          />
+        )}
+
+        {/* STEP 4: SUB-CATEGORIES */}
+        {wizardStep === 4 && (
           <Step3Hobbies
             activeCategories={activeCategories}
             selectedHobbyIds={selectedHobbyIds}
@@ -258,17 +281,17 @@ export const OnboardingView: React.FC = () => {
             onToggleHobby={handleToggleHobby}
             onNext={() => handleSaveHobbies(true)}
             onSaveAndExit={() => handleSaveHobbies(false)}
-            onBack={() => setWizardStep(2)}
+            onBack={() => setWizardStep(3)}
           />
         )}
 
-        {/* STEP 4: PROFILE PHOTO */}
-        {wizardStep === 4 && (
+        {/* STEP 5: PROFILE PHOTO */}
+        {wizardStep === 5 && (
           <Step4ProfilePhoto
             currentUser={currentUser}
             refetchUser={refetchUser}
             isEditMode={isEditMode}
-            onBack={() => setWizardStep(3)}
+            onBack={() => setWizardStep(4)}
           />
         )}
       </div>

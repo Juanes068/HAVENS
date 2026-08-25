@@ -18,84 +18,113 @@ interface EventCardProps {
   plan: DiscoverPlan
   isSaved: boolean
   onToggleSave: (id: number) => void
+  onSelect?: (plan: DiscoverPlan) => void
 }
 
-export const EventCard: React.FC<EventCardProps> = ({ plan, isSaved, onToggleSave }) => {
-  return (
-    <div className="rounded-xl overflow-hidden border border-border bg-white group cursor-pointer hover:shadow-md transition-shadow duration-200">
-      <div className="h-40 relative overflow-hidden bg-sand">
-        {plan.img ? (
-          <img
-            src={plan.img}
-            alt={plan.title}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none'
-            }}
-          />
-        ) : null}
-        <div className={`w-full h-full bg-[#E2DBD0] ${plan.img ? 'hidden' : ''}`} />
+export const EventCard: React.FC<EventCardProps> = ({ plan, isSaved, onToggleSave, onSelect }) => {
+  const displayTags = (plan.tags || []).slice(0, 4)
+  const remainingTags = Math.max(0, (plan.tags?.length || 0) - 4)
 
-        <div className="absolute top-3 right-3">
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onToggleSave(plan.id)
-            }}
-            className={`p-1.5 rounded-lg backdrop-blur-sm transition-colors ${
-              isSaved ? 'bg-white/90' : 'bg-black/20 hover:bg-black/30'
-            }`}
-          >
-            <svg
-              className="w-3.5 h-3.5"
-              viewBox="0 0 16 16"
-              fill={isSaved ? '#2D5A3D' : 'none'}
-              stroke={isSaved ? '#2D5A3D' : 'white'}
-              strokeWidth="1.4"
-            >
-              <path d="M3 2h10v12l-5-3-5 3V2z" />
-            </svg>
-          </button>
-        </div>
-        {plan.mutualsFriends > 0 && (
-          <div className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-white/90 backdrop-blur-sm rounded-lg px-2 py-1">
-            <div className="flex -space-x-1">
-              {['#2D5A3D', '#7aaa8a']
-                .slice(0, plan.mutualsFriends > 1 ? 2 : 1)
-                .map((c, i) => (
-                  <div
-                    key={i}
-                    className="w-4 h-4 rounded-full border border-white"
-                    style={{ backgroundColor: c }}
-                  />
-                ))}
+  return (
+    <div
+      onClick={() => onSelect && onSelect(plan)}
+      className="rounded-3xl overflow-hidden border border-[#E2DBD0] hover:border-[#2D5A3D]/50 bg-white group cursor-pointer hover:shadow-md transition-all duration-200 p-5 sm:p-5.5 flex flex-col justify-between shadow-xs"
+    >
+      <div>
+        {/* Optional Cover Image */}
+        {plan.img && (
+          <div className="relative w-full h-36 sm:h-40 rounded-2xl overflow-hidden mb-3.5 border border-[#E2DBD0]/60 bg-gradient-to-tr from-[#2D5A3D]/15 via-[#F4EEE2] to-[#C47B5A]/15 shrink-0">
+            <img
+              src={plan.img}
+              alt={plan.title}
+              className="w-full h-full object-cover group-hover:scale-103 transition-transform duration-300"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none'
+              }}
+            />
+            <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none">
+              <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-white/95 backdrop-blur-xs text-[#2D5A3D] shadow-2xs">
+                {plan.category || 'Gathering'}
+              </span>
             </div>
-            <span className="text-[10px] font-medium text-charcoal">
-              {plan.mutualsFriends} friends going
+          </div>
+        )}
+
+        {/* Header badges (if no image) */}
+        {!plan.img && (
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-[#eaf3ed] text-[#2D5A3D]">
+              {plan.category || 'Gathering'}
             </span>
+
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onToggleSave(plan.id)
+              }}
+              className={`p-2 rounded-xl border transition-colors cursor-pointer ${
+                isSaved ? 'bg-[#eaf3ed] border-[#2D5A3D]/30 text-[#2D5A3D]' : 'bg-[#FAF8F5] border-[#E2DBD0] text-stone-400 hover:text-stone-700'
+              }`}
+            >
+              <svg
+                className="w-3.5 h-3.5"
+                viewBox="0 0 16 16"
+                fill={isSaved ? '#2D5A3D' : 'none'}
+                stroke="currentColor"
+                strokeWidth="1.4"
+              >
+                <path d="M3 2h10v12l-5-3-5 3V2z" />
+              </svg>
+            </button>
+          </div>
+        )}
+
+        {/* Title */}
+        <h3 className="text-base sm:text-lg font-bold text-stone-900 mb-1.5 leading-snug font-serif truncate group-hover:text-[#2D5A3D] transition-colors">
+          {plan.title}
+        </h3>
+
+        {/* Date & Location */}
+        <div className="flex items-center gap-2 text-xs text-stone-500 mb-3.5 truncate">
+          <span className="shrink-0 font-medium text-stone-700">{plan.date || plan.time}</span>
+          <span>·</span>
+          <span className="truncate">📍 {plan.location || 'Vancouver, BC'}</span>
+        </div>
+
+        {/* Tags (Strictly Max 4) */}
+        {displayTags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-4 items-center">
+            {displayTags.map((t, idx) => (
+              <span
+                key={idx}
+                className="text-[11px] font-medium px-2.5 py-1 rounded-xl bg-[#FAF8F5] text-stone-600 border border-[#E2DBD0]/70"
+              >
+                #{t}
+              </span>
+            ))}
+            {remainingTags > 0 && (
+              <span className="text-[11px] text-stone-500 font-medium px-2 py-0.5 bg-[#F0EAE0] rounded-xl">
+                +{remainingTags}
+              </span>
+            )}
           </div>
         )}
       </div>
-      <div className="p-4">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-sand text-[#5a5450]">
-            {plan.category}
-          </span>
-        </div>
-        <h3 className="text-sm font-semibold text-charcoal mb-1.5 leading-snug font-serif">
-          {plan.title}
-        </h3>
-        <div className="flex items-center gap-3 text-xs text-muted mb-3">
-          <span>{plan.date}</span>
-          <span>·</span>
-          <span>{plan.location}</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-muted">{plan.going} going</span>
-          <button className="px-3 py-1.5 rounded-lg bg-forest text-white text-xs font-medium hover:bg-forest-light transition-colors">
-            I'm in
-          </button>
-        </div>
+
+      {/* Footer */}
+      <div className="flex items-center justify-between pt-3 border-t border-[#E2DBD0]/60" onClick={(e) => e.stopPropagation()}>
+        <span className="text-xs text-stone-600 font-medium">👥 {plan.going || 1} going</span>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            if (onSelect) onSelect(plan)
+          }}
+          className="px-4 py-2 rounded-xl bg-[#2D5A3D] text-white text-xs font-bold hover:bg-[#3d7a55] transition-colors shadow-2xs hover:shadow-xs cursor-pointer"
+        >
+          View Details
+        </button>
       </div>
     </div>
   )

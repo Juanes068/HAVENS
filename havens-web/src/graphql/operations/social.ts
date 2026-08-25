@@ -4,8 +4,8 @@ import { gql } from '@apollo/client';
  * Query to fetch pending incoming friend requests.
  */
 export const MY_FRIEND_REQUESTS = gql`
-  query MyFriendRequests {
-    myFriendRequests {
+  query MyFriendRequests($limit: Int, $offset: Int) {
+    myFriendRequests(limit: $limit, offset: $offset) {
       id
       status
       createdAt
@@ -20,11 +20,11 @@ export const MY_FRIEND_REQUESTS = gql`
 `;
 
 /**
- * Query to fetch accepted friends (mutual connections).
+ * Query to fetch accepted friends (mutual connections) with pagination.
  */
 export const MY_FRIENDS = gql`
-  query MyFriends {
-    myFriends {
+  query MyFriends($limit: Int, $offset: Int) {
+    myFriends(limit: $limit, offset: $offset) {
       id
       username
       photoUrl

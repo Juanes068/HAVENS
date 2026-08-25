@@ -4,8 +4,8 @@ import { gql } from '@apollo/client';
  * Query to fetch all micro-communities / circles.
  */
 export const GET_ALL_COMMUNITIES = gql`
-  query GetAllCommunities {
-    allCommunities {
+  query GetAllCommunities($limit: Int, $offset: Int) {
+    allCommunities(limit: $limit, offset: $offset) {
       id
       name
       subdomain
@@ -34,11 +34,11 @@ export const GET_ALL_COMMUNITIES = gql`
 `;
 
 /**
- * Query to fetch recommended circles scored by user hobby affinity and proximity.
+ * Query to fetch recommended circles scored by user hobby affinity and proximity with pagination.
  */
 export const GET_RECOMMENDED_CIRCLES = gql`
-  query GetRecommendedCircles($radiusKm: Float, $latitude: Float, $longitude: Float) {
-    recommendedCircles(radiusKm: $radiusKm, latitude: $latitude, longitude: $longitude) {
+  query GetRecommendedCircles($radiusKm: Float, $latitude: Float, $longitude: Float, $limit: Int, $offset: Int) {
+    recommendedCircles(radiusKm: $radiusKm, latitude: $latitude, longitude: $longitude, limit: $limit, offset: $offset) {
       id
       name
       subdomain

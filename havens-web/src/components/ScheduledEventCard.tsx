@@ -1,6 +1,6 @@
 import React from 'react'
 import { Avatar } from './Avatar'
-import { HelpCircle, Clock, Crown, Check } from 'lucide-react'
+import { HelpCircle, Clock, Crown, Check, Share2 } from 'lucide-react'
 
 export interface ScheduledEvent {
   id: string | number
@@ -72,40 +72,43 @@ export const ScheduledEventCard: React.FC<ScheduledEventCardProps> = ({
 
   const rsvpStatus = event.response || (isHost ? 'hosting' : undefined)
 
+  const displayHobbies = (event.hobbies || []).slice(0, 4)
+  const remainingHobbiesCount = Math.max(0, (event.hobbies?.length || 0) - 4)
+
   return (
     <div
       onClick={onSelect}
-      className={`p-5 rounded-2xl border transition-all duration-200 bg-white ${
+      className={`p-4 rounded-2xl border transition-all duration-200 bg-white ${
         onSelect ? 'cursor-pointer' : ''
       } ${
         isSelected
           ? 'border-[#2D5A3D] ring-2 ring-[#2D5A3D]/20 shadow-md bg-[#FAFDFB]'
           : isPast
-          ? 'border-border/70 opacity-85 hover:border-border hover:opacity-100 hover:shadow-xs'
-          : 'border-border hover:border-[#b5cebe] hover:shadow-md'
+          ? 'border-[#E2DBD0] opacity-85 hover:opacity-100 hover:shadow-xs'
+          : 'border-[#E2DBD0] hover:border-[#2D5A3D]/50 hover:shadow-md'
       }`}
     >
-      <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
+      <div className="flex flex-col sm:flex-row items-start justify-between gap-3">
         {/* Left section: Date badge & Event details */}
-        <div className="flex items-start gap-4 flex-1 min-w-0 w-full">
+        <div className="flex items-start gap-3.5 flex-1 min-w-0 w-full">
           
           {/* Dynamic Date Chip */}
           <div
-            className={`shrink-0 w-16 sm:w-18 flex flex-col items-center justify-center rounded-xl border py-2.5 px-1 text-center transition-colors ${
+            className={`shrink-0 w-14 sm:w-16 flex flex-col items-center justify-center rounded-xl border py-2 px-1 text-center transition-colors ${
               isPast
-                ? 'bg-[#F5F2EC] border-[#E2DBD0] text-muted'
+                ? 'bg-[#F5F2EC] border-[#E2DBD0] text-stone-500'
                 : isSelected
                 ? 'bg-[#eaf3ed] border-[#2D5A3D]/40 text-[#2D5A3D]'
-                : 'bg-cream border-border text-charcoal'
+                : 'bg-[#FAF8F5] border-[#E2DBD0] text-stone-800'
             }`}
           >
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted">
+            <span className="text-[9px] font-bold uppercase tracking-wider text-stone-500">
               {monthShort}
             </span>
-            <span className="text-2xl font-bold font-serif leading-none my-0.5">
+            <span className="text-xl font-bold font-serif leading-none my-0.5">
               {dayNum}
             </span>
-            <span className="text-[10px] font-medium text-muted">
+            <span className="text-[9px] font-medium text-stone-500">
               {weekdayShort}
             </span>
           </div>
@@ -113,132 +116,83 @@ export const ScheduledEventCard: React.FC<ScheduledEventCardProps> = ({
           {/* Event Content Details */}
           <div className="flex-1 min-w-0">
             {/* Header badges */}
-            <div className="flex flex-wrap items-center gap-2 mb-1.5">
-              <h3 className="text-base font-semibold text-charcoal font-serif truncate">
+            <div className="flex flex-wrap items-center gap-1.5 mb-1">
+              <h3 className="text-sm font-bold text-stone-900 font-serif truncate">
                 {event.title}
               </h3>
 
               {isHost && (
-                <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-[#eaf3ed] text-[#2D5A3D] border border-[#2D5A3D]/20 flex items-center gap-1">
-                  <Crown className="w-3 h-3 text-[#2D5A3D]" />
-                  <span>Hosting</span>
+                <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-[#eaf3ed] text-[#2D5A3D] border border-[#2D5A3D]/20 flex items-center gap-1">
+                  <Crown className="w-2.5 h-2.5 text-[#2D5A3D]" />
+                  <span>Host</span>
                 </span>
               )}
 
               {isPast ? (
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#fdf0eb] text-[#C47B5A] border border-[#C47B5A]/20 flex items-center gap-1">
-                  <Clock className="w-3 h-3 text-[#C47B5A]" />
-                  <span>Past Event</span>
+                <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-[#fdf0eb] text-[#C47B5A] border border-[#C47B5A]/20 flex items-center gap-1">
+                  <Clock className="w-2.5 h-2.5 text-[#C47B5A]" />
+                  <span>Past</span>
                 </span>
               ) : rsvpStatus === 'going' ? (
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#eaf3ed] text-[#2D5A3D] flex items-center gap-1">
-                  <Check className="w-3 h-3 text-[#2D5A3D]" />
+                <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-[#eaf3ed] text-[#2D5A3D] flex items-center gap-1">
+                  <Check className="w-2.5 h-2.5 text-[#2D5A3D]" />
                   <span>Going</span>
                 </span>
               ) : rsvpStatus === 'maybe' ? (
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#fef9ee] text-[#b87e28] flex items-center gap-1">
-                  <HelpCircle className="w-3 h-3 text-[#b87e28]" />
+                <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-[#fef9ee] text-[#b87e28] flex items-center gap-1">
+                  <HelpCircle className="w-2.5 h-2.5 text-[#b87e28]" />
                   <span>Maybe</span>
                 </span>
               ) : null}
 
-              {event.visibility && (
-                <span className="text-[10px] text-muted capitalize px-2 py-0.5 rounded-md bg-sand/60">
-                  {event.visibility.replace('_', ' ')}
+              {event.pointsReward ? (
+                <span className="text-[9px] font-bold text-amber-800 bg-amber-50 border border-amber-200/60 px-2 py-0.5 rounded-full">
+                  ⭐ +{event.pointsReward} pts
                 </span>
-              )}
+              ) : null}
             </div>
 
-            {/* Date, Time & Location row */}
-            <div className="flex flex-wrap items-center gap-y-1 gap-x-3 text-xs text-muted mb-2.5">
-              <span className="flex items-center gap-1">
-                <svg className="w-3.5 h-3.5 text-muted" viewBox="0 0 16 16" fill="none">
-                  <circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.3" />
-                  <path d="M8 5v3.5l2 1.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-                </svg>
-                {timeFormatted}
-              </span>
+            {/* Time & Location */}
+            <div className="flex items-center gap-2 text-[11px] text-stone-500 mb-2 truncate">
+              <span className="shrink-0">{timeFormatted}</span>
               <span>·</span>
-              <span className="flex items-center gap-1 truncate max-w-[260px]" title={event.locationName || 'Location TBD'}>
-                <svg className="w-3.5 h-3.5 text-muted shrink-0" viewBox="0 0 16 16" fill="none">
-                  <path
-                    d="M8 1.5C5.79 1.5 4 3.29 4 5.5c0 3 4 9 4 9s4-6 4-9c0-2.21-1.79-4-4-4z"
-                    stroke="currentColor"
-                    strokeWidth="1.3"
-                  />
-                  <circle cx="8" cy="5.5" r="1.5" stroke="currentColor" strokeWidth="1.3" />
-                </svg>
-                {event.locationName || 'Vancouver, BC'}
-              </span>
-              <span>·</span>
-              <span className="text-muted">{fullDateFormatted}</span>
+              <span className="truncate">📍 {event.locationName || 'Vancouver, BC'}</span>
             </div>
 
-            {/* Description Snippet */}
-            {event.description && (
-              <p className="text-xs text-[#5a5450] line-clamp-2 leading-relaxed mb-3">
-                {event.description}
-              </p>
-            )}
-
-            {/* Host & Tags Row */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-border/40">
-              <div className="flex items-center gap-2">
-                {event.creator && (
-                  <div className="flex items-center gap-1.5">
-                    <Avatar
-                      name={event.creator.username || 'Havens Member'}
-                      photoUrl={event.creator.photoUrl}
-                      color="#2D5A3D"
-                      size="sm"
-                    />
-                    <span className="text-xs text-charcoal font-medium">
-                      @{event.creator.username}
-                    </span>
-                  </div>
-                )}
-                {event.pointsReward ? (
-                  <span className="text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200/60 px-2 py-0.5 rounded-full ml-1">
-                    ⭐ +{event.pointsReward} pts
+            {/* Hobbies / Passions (Strictly Max 4) */}
+            {displayHobbies.length > 0 && (
+              <div className="flex flex-wrap gap-1 items-center">
+                {displayHobbies.map((h) => (
+                  <span
+                    key={h.id}
+                    className="text-[10px] font-medium px-2 py-0.5 rounded-lg bg-[#FAF8F5] text-stone-600 border border-[#E2DBD0]/60"
+                  >
+                    #{h.name}
                   </span>
-                ) : null}
+                ))}
+                {remainingHobbiesCount > 0 && (
+                  <span className="text-[10px] text-stone-500 font-medium px-1.5 py-0.5 bg-[#F0EAE0] rounded-md">
+                    +{remainingHobbiesCount}
+                  </span>
+                )}
               </div>
-
-              {event.hobbies && event.hobbies.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {event.hobbies.slice(0, 3).map((h) => (
-                    <span
-                      key={h.id}
-                      className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-sand text-[#5a5450]"
-                    >
-                      #{h.name}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
+            )}
           </div>
         </div>
 
         {/* Right Section: Action buttons / Read-only state */}
         {showActions && (
-          <div className="flex sm:flex-col items-center sm:items-end justify-between gap-2 shrink-0 self-stretch sm:self-auto border-t sm:border-t-0 pt-3 sm:pt-0 border-border/60">
+          <div className="flex sm:flex-col items-center sm:items-end justify-between gap-1.5 shrink-0 self-stretch sm:self-auto border-t sm:border-t-0 pt-2 sm:pt-0 border-border/60" onClick={(e) => e.stopPropagation()}>
             {isPast ? (
-              /* STRICTLY READ-ONLY FOR PAST EVENTS */
-              <div className="flex sm:flex-col items-center sm:items-end gap-1.5 w-full sm:w-auto">
+              <div className="flex sm:flex-col items-center sm:items-end gap-1 w-full sm:w-auto">
                 <span
                   title="Past events are archived and strictly read-only"
-                  className="px-3 py-1.5 rounded-lg bg-sand/70 text-[#8a8278] text-xs font-medium cursor-not-allowed border border-border inline-flex items-center gap-1.5 select-none"
+                  className="px-2.5 py-1 rounded-lg bg-stone-100 text-stone-500 text-[11px] font-medium cursor-not-allowed border border-stone-200 inline-flex items-center gap-1 select-none"
                 >
-                  <svg className="w-3.5 h-3.5 text-[#8a8278]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
-                  Archived / Read-Only
+                  Read-Only
                 </span>
-                <span className="text-[10px] text-muted">RSVP Closed</span>
               </div>
             ) : (
-              /* DYNAMIC ACTION CONTROLS FOR UPCOMING EVENTS */
               <div className="flex items-center gap-1.5">
                 {onRsvpChange && (
                   <>
@@ -249,10 +203,10 @@ export const ScheduledEventCard: React.FC<ScheduledEventCardProps> = ({
                         const eventIdNum = typeof event.id === 'string' ? parseInt(event.id, 10) : event.id
                         onRsvpChange(eventIdNum, rsvpStatus === 'going' ? 'pass' : 'going')
                       }}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-xs ${
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-2xs ${
                         rsvpStatus === 'going'
                           ? 'bg-[#2D5A3D] text-white hover:bg-[#3d7a55]'
-                          : 'bg-sand hover:bg-[#e4dcd2] text-charcoal border border-border'
+                          : 'bg-[#eaf3ed] text-[#2D5A3D] hover:bg-[#2D5A3D] hover:text-white border border-[#2D5A3D]/20'
                       }`}
                     >
                       {rsvpStatus === 'going' ? '✓ Attending' : "I'm In"}
@@ -265,10 +219,10 @@ export const ScheduledEventCard: React.FC<ScheduledEventCardProps> = ({
                         const eventIdNum = typeof event.id === 'string' ? parseInt(event.id, 10) : event.id
                         onRsvpChange(eventIdNum, 'maybe')
                       }}
-                      className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer border flex items-center justify-center ${
+                      className={`px-2 py-1.5 rounded-xl text-xs font-medium transition-colors cursor-pointer border flex items-center justify-center ${
                         rsvpStatus === 'maybe'
                           ? 'bg-amber-100 border-amber-300 text-amber-900'
-                          : 'border-border bg-white text-muted hover:text-charcoal hover:border-[#b5cebe]'
+                          : 'border-[#E2DBD0] bg-white text-stone-600 hover:text-stone-900 hover:bg-[#F4EEE2]'
                       }`}
                       title="Mark as Maybe"
                     >
@@ -289,18 +243,13 @@ export const ScheduledEventCard: React.FC<ScheduledEventCardProps> = ({
                       }).catch(() => {})
                     } else {
                       navigator.clipboard?.writeText(window.location.href)
-                      alert('Event link copied to clipboard!')
+                      alert('✓ Event link copied to clipboard!')
                     }
                   }}
-                  className="p-1.5 rounded-lg border border-border text-muted hover:text-charcoal hover:border-[#b5cebe] transition-colors cursor-pointer"
+                  className="p-1.5 rounded-xl border border-[#E2DBD0] text-stone-500 hover:text-stone-900 hover:bg-[#F4EEE2] transition-colors cursor-pointer"
                   title="Share event"
                 >
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
-                    <circle cx="12.5" cy="3.5" r="2" />
-                    <circle cx="3.5" cy="8" r="2" />
-                    <circle cx="12.5" cy="12.5" r="2" />
-                    <path d="M5.3 9l5.4 2.5M10.7 4.5L5.3 7" strokeLinecap="round" />
-                  </svg>
+                  <Share2 className="w-3.5 h-3.5" />
                 </button>
               </div>
             )}

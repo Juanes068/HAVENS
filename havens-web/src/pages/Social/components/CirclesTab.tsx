@@ -1,10 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_RECOMMENDED_CIRCLES, DELETE_COMMUNITY } from '../../../graphql/operations';
 import { useAuth } from '../../../context/AuthContext';
 import { Circle } from '../types';
 import { CreateCircleWizard } from './CreateCircleWizard';
-import { Target, Users, Crown, Trash2 } from 'lucide-react';
+import { Target, Users, Crown, Trash2, Sparkles } from 'lucide-react';
 
 interface CirclesTabProps {
   joinedCircleIds: (number | string)[];
@@ -37,6 +37,8 @@ const CircleCardSkeleton: React.FC = () => (
   </div>
 );
 
+const CIRCLES_PAGE_SIZE = 8;
+
 export const CirclesTab: React.FC<CirclesTabProps> = ({
   joinedCircleIds,
   onJoinCircle,
@@ -47,17 +49,61 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
   const [exploringCircle, setExploringCircle] = useState<Circle | null>(null);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [circleToDelete, setCircleToDelete] = useState<Circle | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
 
-  // GraphQL query for real circles
-  const { data, loading, refetch } = useQuery(GET_RECOMMENDED_CIRCLES, {
+  // GraphQL query for real circles with pagination support
+  const { data, loading, refetch, fetchMore } = useQuery(GET_RECOMMENDED_CIRCLES, {
+    variables: {
+      limit: CIRCLES_PAGE_SIZE,
+      offset: 0,
+    },
     fetchPolicy: 'cache-and-network',
   });
+
+  useEffect(() => {
+    if (data?.recommendedCircles) {
+      const items = data.recommendedCircles || [];
+      setHasMore(items.length >= CIRCLES_PAGE_SIZE);
+    }
+  }, [data]);
 
   const [deleteCommunityMutation, { loading: isDeleting }] = useMutation(DELETE_COMMUNITY);
 
   const circles: Circle[] = useMemo(() => {
     return data?.recommendedCircles || [];
   }, [data]);
+
+  const handleLoadMoreCircles = async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      await fetchMore({
+        variables: {
+          offset: circles.length,
+          limit: CIRCLES_PAGE_SIZE,
+        },
+        updateQuery: (prev, { fetchMoreResult }) => {
+          if (!fetchMoreResult || !fetchMoreResult.recommendedCircles) {
+            setHasMore(false);
+            return prev;
+          }
+          const newItems = fetchMoreResult.recommendedCircles;
+          if (newItems.length < CIRCLES_PAGE_SIZE) {
+            setHasMore(false);
+          }
+          return {
+            ...prev,
+            recommendedCircles: [...(prev.recommendedCircles || []), ...newItems],
+          };
+        },
+      });
+    } catch (err) {
+      console.error('Error loading more circles:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const handleCircleCreated = (message: string) => {
     refetch();
@@ -178,9 +224,10 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {circles.map((circle) => {
               const isJoined = joinedCircleIds.some((id) => String(id) === String(circle.id));
+              const isCreator = Boolean(currentUser && circle.creator && String(circle.creator.id) === String(currentUser.id));
               const affinity = getAffinityPercent(circle);
               const membersCount = circle.memberCount || 1;
 
@@ -202,142 +249,135 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
                 return !isExact && catId && myCategoryIds.has(catId);
               });
 
-              const totalCircleMatches = sharedList.length + relatedList.length;
-
-              const isCreator = Boolean(
-                currentUser &&
-                circle.creator &&
-                (String(currentUser.id) === String(circle.creator.id) || currentUser.id === circle.creator.id)
-              );
+              const matchingHobbies = [...sharedList, ...relatedList];
+              const displayHobbies = matchingHobbies.length > 0
+                ? matchingHobbies.slice(0, 4)
+                : (circle.hobbies || []).slice(0, 4);
+              const remainingCount = Math.max(0, (matchingHobbies.length > 0 ? matchingHobbies.length : (circle.hobbies?.length || 0)) - 4);
 
               return (
                 <div
                   key={circle.id}
-                  className="bg-white border border-[#E2DBD0] hover:border-[#2D5A3D] rounded-2xl p-5 flex flex-col justify-between shadow-xs transition-all duration-200"
+                  onClick={() => setExploringCircle(circle)}
+                  className="group bg-white border border-[#E2DBD0] hover:border-[#2D5A3D]/50 rounded-3xl p-5 sm:p-5.5 flex flex-col justify-between shadow-xs hover:shadow-md transition-all duration-200 cursor-pointer"
                 >
                   <div>
-                    {/* Circle Cover Banner if available */}
-                    {circle.imageUrl ? (
-                      <div className="w-full h-36 rounded-xl overflow-hidden mb-3 border border-[#E2DBD0]/60 bg-gradient-to-r from-[#2D5A3D]/10 via-[#F4EEE2] to-[#C47B5A]/10">
+                    {/* Circle Image Banner */}
+                    <div className="relative w-full h-40 sm:h-44 rounded-2xl overflow-hidden mb-4 border border-[#E2DBD0]/60 bg-gradient-to-tr from-[#2D5A3D]/15 via-[#F4EEE2] to-[#C47B5A]/15 shrink-0">
+                      {circle.imageUrl ? (
                         <img
                           src={circle.imageUrl}
                           alt={circle.name}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover group-hover:scale-103 transition-transform duration-300"
                           onError={(e) => {
                             e.currentTarget.style.display = 'none';
                           }}
                         />
-                      </div>
-                    ) : (
-                      <div className="w-full h-20 rounded-xl bg-gradient-to-r from-[#2D5A3D]/10 via-[#F4EEE2] to-[#C47B5A]/10 flex items-center justify-center mb-3 border border-[#E2DBD0]/60">
-                        <Users className="w-8 h-8 text-[#2D5A3D]/40" />
-                      </div>
-                    )}
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center text-[#2D5A3D]/40">
+                          <Users className="w-10 h-10 mb-1 opacity-60" />
+                          <span className="text-[11px] font-serif tracking-wider font-semibold text-[#8a8278]">Havens Circle</span>
+                        </div>
+                      )}
 
-                    {/* Circle Header Metadata */}
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                      <span className="text-[11px] font-semibold text-[#2D5A3D] bg-[#eaf3ed] px-2.5 py-1 rounded-full truncate">
-                        {circle.isVirtual ? '🌐 Virtual Group' : `📍 ${circle.locationName || 'Local'}`}
-                        {!circle.isVirtual && circle.distance !== undefined && circle.distance !== null ? ` • ${circle.distance.toFixed(1)} km away` : ''}
-                      </span>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {isCreator && (
-                          <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full flex items-center gap-1">
-                            <Crown className="w-3 h-3 text-amber-700" />
-                            <span>Host</span>
-                          </span>
-                        )}
-                        {affinity > 0 && (
-                          <span className="text-[11px] font-bold text-[#C47B5A] bg-[#C47B5A]/10 px-2.5 py-1 rounded-full">
-                            {affinity}% Match
-                          </span>
-                        )}
+                      {/* Floating Badges Overlay */}
+                      <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-1.5 pointer-events-none">
+                        <span className="text-[11px] font-semibold text-[#2D5A3D] bg-white/95 backdrop-blur-xs px-2.5 py-1 rounded-full shadow-2xs truncate">
+                          {circle.isVirtual ? '🌐 Virtual Group' : `📍 ${circle.locationName || 'Local'}`}
+                          {!circle.isVirtual && circle.distance !== undefined && circle.distance !== null ? ` • ${circle.distance.toFixed(1)} km` : ''}
+                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {isCreator && (
+                            <span className="text-[10px] font-bold text-amber-800 bg-amber-50/95 backdrop-blur-xs border border-amber-200 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
+                              <Crown className="w-3 h-3 text-amber-700" />
+                              <span>Host</span>
+                            </span>
+                          )}
+                          {affinity > 0 && (
+                            <span className="text-[10px] font-bold text-[#C47B5A] bg-white/95 backdrop-blur-xs border border-[#C47B5A]/25 px-2 py-0.5 rounded-full shadow-2xs">
+                              {affinity}% Match
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
 
-                    <h4 className="text-base font-semibold text-charcoal mb-1">{circle.name}</h4>
-                    <p className="text-xs text-[#8a8278] mb-3 line-clamp-2 leading-relaxed">
-                      {circle.description || 'A community of passionate members connecting around shared interests.'}
-                    </p>
+                    <h4 className="text-lg font-serif font-bold text-stone-900 mb-1.5 truncate group-hover:text-[#2D5A3D] transition-colors">
+                      {circle.name}
+                    </h4>
 
-                    {/* Filtered Matching Hobbies ONLY */}
-                    <div className="space-y-1.5 mb-4">
-                      <div className="text-[10px] font-semibold text-[#8a8278] uppercase tracking-wider flex items-center justify-between">
-                        <span>Matching Topics</span>
-                        {totalCircleMatches > 0 && (
-                          <span className="text-[9px] text-[#2D5A3D] font-bold bg-[#eaf3ed] px-1.5 py-0.5 rounded">
-                            {totalCircleMatches} {totalCircleMatches === 1 ? 'topic' : 'topics'}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-1.5 min-h-[26px] items-center">
-                        {/* 1. Exact shared hobbies */}
-                        {sharedList.map((h: any) => (
+                    {circle.description && (
+                      <p className="text-xs text-[#6b645d] line-clamp-2 mb-3 leading-relaxed">
+                        {circle.description}
+                      </p>
+                    )}
+
+                    {/* Matching Topics (Strictly Max 4) */}
+                    <div className="flex flex-wrap gap-1.5 mb-4 min-h-[28px] items-center">
+                      {displayHobbies.map((h: any) => {
+                        const isExact = myHobbyIds.has(String(h.id));
+                        const isRelated = !isExact && h.category?.id && myCategoryIds.has(String(h.category.id));
+
+                        return (
                           <span
-                            key={`circle-shared-${h.id}`}
-                            className="text-[11px] px-2.5 py-1 rounded-md font-semibold bg-[#eaf3ed] text-[#2D5A3D] border border-[#7aaa8a]/30 shadow-2xs"
-                            title="Shared exact interest"
+                            key={`circle-topic-${h.id}`}
+                            className={`text-[11px] px-2.5 py-1 rounded-xl font-medium border ${
+                              isExact
+                                ? 'bg-[#eaf3ed] text-[#2D5A3D] border-[#7aaa8a]/30 font-semibold'
+                                : isRelated
+                                ? 'bg-[#fdf6ed] text-[#C47B5A] border-[#C47B5A]/30'
+                                : 'bg-[#F4EEE2] text-[#6b645d] border-[#E2DBD0]/60'
+                            }`}
                           >
-                            ✦ #{h.name}
+                            {isExact ? '✦ ' : isRelated ? '◈ ' : ''}#{h.name}
                           </span>
-                        ))}
+                        );
+                      })}
 
-                        {/* 2. Related category hobbies */}
-                        {relatedList.map((h: any) => (
-                          <span
-                            key={`circle-related-${h.id}`}
-                            className="text-[11px] px-2.5 py-1 rounded-md font-medium bg-[#fdf6ed] text-[#C47B5A] border border-[#C47B5A]/30"
-                            title={`Related topic in ${h.category?.name || 'shared category'}`}
-                          >
-                            ◈ #{h.name}
-                          </span>
-                        ))}
+                      {remainingCount > 0 && (
+                        <span className="text-[11px] text-[#8a8278] font-medium px-2 py-0.5 bg-[#F0EAE0] rounded-xl">
+                          +{remainingCount}
+                        </span>
+                      )}
 
-                        {/* Fallback when no direct hobby match */}
-                        {totalCircleMatches === 0 && (
-                          <span className="text-[11px] px-2.5 py-1 rounded-md font-normal bg-[#F4EEE2] text-[#8a8278] border border-[#E2DBD0]/60 italic">
-                            Open Community Circle
-                          </span>
-                        )}
-                      </div>
+                      {displayHobbies.length === 0 && (
+                        <span className="text-xs text-[#8a8278] italic">Community Circle</span>
+                      )}
                     </div>
                   </div>
 
                   {/* Card Actions Footer */}
-                  <div className="pt-4 border-t border-[#E2DBD0]/60 flex items-center justify-between gap-2">
+                  <div className="pt-3 border-t border-[#E2DBD0]/60 flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
                     <span className="text-xs text-[#8a8278] font-medium truncate">
                       👥 {membersCount} {membersCount === 1 ? 'member' : 'members'}
                     </span>
 
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex items-center gap-2 shrink-0">
                       {isCreator && (
                         <button
                           type="button"
-                          onClick={() => setCircleToDelete(circle)}
-                          className="px-2.5 py-1.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCircleToDelete(circle);
+                          }}
+                          className="px-3 py-2 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
                           title="Delete your circle"
                         >
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
+                          <Trash2 className="w-3.5 h-3.5" />
                           <span className="hidden sm:inline">Delete</span>
                         </button>
                       )}
                       <button
                         type="button"
-                        onClick={() => setExploringCircle(circle)}
-                        className="px-3 py-1.5 rounded-xl border border-[#E2DBD0] text-xs font-semibold text-[#5a5450] hover:bg-[#F4EEE2] transition-colors cursor-pointer"
-                      >
-                        Explore
-                      </button>
-                      <button
-                        type="button"
                         disabled={isJoined}
-                        onClick={() => onJoinCircle(Number(circle.id))}
-                        className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onJoinCircle(Number(circle.id));
+                        }}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                           isJoined
                             ? 'bg-[#eaf3ed] text-[#2D5A3D] border border-[#7aaa8a]/40 cursor-default'
-                            : 'bg-[#2D5A3D] text-white hover:bg-[#3d7a55] shadow-xs'
+                            : 'bg-[#2D5A3D] text-white hover:bg-[#3d7a55] shadow-2xs hover:shadow-xs'
                         }`}
                       >
                         {isJoined ? '✓ Joined' : 'Join Circle'}
@@ -347,6 +387,37 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Pagination Load More Controls */}
+        {!loading && circles.length > 0 && (
+          <div className="mt-8 flex flex-col items-center justify-center gap-3">
+            {hasMore ? (
+              <button
+                type="button"
+                onClick={handleLoadMoreCircles}
+                disabled={loadingMore}
+                className="px-6 py-2.5 rounded-2xl bg-white border border-[#E2DBD0] hover:border-[#2D5A3D]/50 hover:bg-[#FAF8F5] text-stone-800 text-xs font-bold transition-all shadow-2xs hover:shadow-xs flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loadingMore ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-[#2D5A3D] border-t-transparent rounded-full animate-spin" />
+                    <span>Loading more circles...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5 text-[#2D5A3D]" />
+                    <span>Load More Circles ({circles.length} loaded)</span>
+                  </>
+                )}
+              </button>
+            ) : (
+              <div className="flex items-center gap-2 text-stone-600 text-xs py-2 px-4 rounded-full bg-[#FAF8F5] border border-[#E2DBD0]/60">
+                <span>✓</span>
+                <span>All {circles.length} local circles loaded</span>
+              </div>
+            )}
           </div>
         )}
       </div>

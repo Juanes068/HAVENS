@@ -10,6 +10,8 @@ import {
   GENERATE_CLOUDINARY_SIGNATURE,
 } from '../../../graphql/operations'
 import { Clock, Calendar } from 'lucide-react'
+import { HavensDatePicker } from '../../../components/ui/HavensDatePicker'
+import { HavensTimePicker } from '../../../components/ui/HavensTimePicker'
 import {
   SERIF,
   CATEGORIES,
@@ -228,28 +230,24 @@ export const PlanCreateForm: React.FC<PlanCreateFormProps> = ({ onSuccess, onCan
             />
           </div>
 
-          {/* Date & Time */}
+          {/* Date & Time with Modern Havens Pickers */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider mb-2 text-[#2C2C2C]">
-                Date <span className="text-[#C47B5A]">*</span>
-              </label>
-              <input
-                type="date"
+              <HavensDatePicker
+                label="Date"
+                required
                 value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-[#E2DBD0] bg-white text-[#2C2C2C] text-sm focus:outline-none focus:border-[#2D5A3D] transition-colors shadow-2xs"
+                minDate={new Date()}
+                placeholder="Choose event date"
+                onChange={(dateStr) => setDate(dateStr)}
               />
             </div>
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider mb-2 text-[#2C2C2C]">
-                Time
-              </label>
-              <input
-                type="time"
+              <HavensTimePicker
+                label="Time"
                 value={time}
-                onChange={(e) => setTime(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-[#E2DBD0] bg-white text-[#2C2C2C] text-sm focus:outline-none focus:border-[#2D5A3D] transition-colors shadow-2xs"
+                placeholder="Choose start time"
+                onChange={(time24) => setTime(time24)}
               />
             </div>
           </div>

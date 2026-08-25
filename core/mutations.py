@@ -628,12 +628,17 @@ class PresignedURL(graphene.Mutation):
 # Feature 7: Update User Profile
 # ─────────────────────────────────────────────────────────────────────────────
 class UpdateUserProfile(graphene.Mutation):
-    """Update profile bio, neighbourhood, and avatar URL for the authenticated user."""
+    """Update profile bio, date of birth, neighbourhood, and avatar URL for the authenticated user."""
 
     class Arguments:
         bio = graphene.String(description="User bio text.")
         neighbourhood = graphene.String(description="Neighborhood name.")
+        city_name = graphene.String(description="City name.")
+        cityName = graphene.String(description="City name camelCase alias.")
         photo_url = graphene.String(description="Profile avatar image URL.")
+        photoUrl = graphene.String(description="Profile avatar image URL camelCase alias.")
+        date_of_birth = graphene.Date(description="Date of birth.")
+        dateOfBirth = graphene.Date(description="Date of birth camelCase alias.")
 
     profile = graphene.Field(UserType, description="Updated User entity.")
     success = graphene.Boolean(description="Indicates success.")
@@ -641,29 +646,35 @@ class UpdateUserProfile(graphene.Mutation):
 
     @classmethod
     @login_required
-    def mutate(cls, root, info, bio=None, neighbourhood=None, photo_url=None):
-        """Update UserProfile fields.
-
-        Args:
-            root: Root GraphQL object.
-            info (graphene.ResolveInfo): Execution context.
-            bio (str, optional): Biography text.
-            neighbourhood (str, optional): Neighborhood description.
-            photo_url (str, optional): Avatar image URL.
-
-        Returns:
-            UpdateUserProfile: Mutation payload.
-        """
+    def mutate(cls, root, info, bio=None, neighbourhood=None, city_name=None, cityName=None,
+               photo_url=None, photoUrl=None, date_of_birth=None, dateOfBirth=None):
+        """Update UserProfile fields with 14+ age validation."""
         try:
             user = info.context.user
             profile, _ = UserProfile.objects.get_or_create(user=user)
 
+            dob = date_of_birth if date_of_birth is not None else dateOfBirth
+            if dob is not None:
+                today = timezone.now().date()
+                age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+                if age < 14:
+                    return cls(
+                        profile=None,
+                        success=False,
+                        message="Age validation failed: You must be at least 14 years old to join Havens."
+                    )
+                profile.date_of_birth = dob
+
             if bio is not None:
-                profile.bio = bio
+                profile.bio = bio.strip()
             if neighbourhood is not None:
-                profile.neighbourhood = neighbourhood
-            if photo_url is not None:
-                profile.photo_url = photo_url
+                profile.neighbourhood = neighbourhood.strip()
+            city = city_name if city_name is not None else cityName
+            if city is not None:
+                profile.city_name = city.strip()
+            avatar = photo_url if photo_url is not None else photoUrl
+            if avatar is not None:
+                profile.photo_url = avatar.strip()
 
             profile.save()
             return cls(profile=user, success=True, message="Profile updated successfully")

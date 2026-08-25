@@ -119,12 +119,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
       } catch (err: any) {
         console.warn('[AuthContext] Session fetch error:', err?.message || err);
-        const msg = (err?.message || '').toLowerCase();
-        if (msg.includes('authentication required') || msg.includes('jwt') || msg.includes('signature')) {
-          clearSession();
-        } else {
-          setNetworkError('Cannot connect to server. Please check your connection.');
-        }
+        clearSession();
         return null;
       }
     },
@@ -133,21 +128,37 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Automatically validate token and fetch profile on first render / page refresh
   useEffect(() => {
+    let isMounted = true;
+
     const initAuth = async () => {
       const stored = getStoredToken();
       if (stored) {
         setToken(stored);
         setIsLoading(true);
-        await loadUserProfile(stored);
+        try {
+          const profile = await loadUserProfile(stored);
+          if (!profile && isMounted) {
+            clearSession();
+          }
+        } catch {
+          if (isMounted) clearSession();
+        }
       } else {
-        setToken(null);
-        setUser(null);
+        if (isMounted) {
+          clearSession();
+        }
       }
-      setIsLoading(false);
+      if (isMounted) {
+        setIsLoading(false);
+      }
     };
 
     initAuth();
-  }, [loadUserProfile]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [loadUserProfile, clearSession]);
 
   /**
    * Saves new JWT token in sessionStorage and populates user profile before resolving.
