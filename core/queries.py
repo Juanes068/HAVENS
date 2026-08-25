@@ -148,6 +148,11 @@ class Query(graphene.ObjectType):
         offset=graphene.Int(required=False, default_value=0, description="Offset starting index for pagination"),
         description="Retrieve all community memberships belonging to the authenticated user."
     )
+    community_members = graphene.List(
+        CommunityMembershipType,
+        community_id=graphene.Int(required=True, description="Primary key ID of the circle"),
+        description="Retrieve all joined members for a specific circle / community."
+    )
 
     # ── Events & Discovery Feed ──────────────────────────────────────────────────
     discovery_events = graphene.List(
@@ -515,6 +520,16 @@ class Query(graphene.ObjectType):
         if limit is not None:
             qs = qs[:limit]
         return qs
+
+    def resolve_community_members(self, info, community_id):
+        """Retrieve all joined members of a specific circle with user and profile data."""
+        return (
+            CommunityMembership.objects
+            .filter(community_id=community_id)
+            .select_related('user', 'user__profile')
+            .prefetch_related('user__profile__hobbies')
+            .order_by('-joined_at')
+        )
 
     @login_required
     def resolve_discovery_events(

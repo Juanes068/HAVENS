@@ -223,10 +223,92 @@ export const MY_COMMUNITIES = gql`
         locationName
         isVirtual
         imageUrl
+        ageRange
         memberCount
         creator {
           id
           username
+        }
+      }
+    }
+  }
+`;
+
+/**
+ * Query to fetch all joined members for a specific circle / community.
+ */
+export const GET_COMMUNITY_MEMBERS = gql`
+  query GetCommunityMembers($communityId: Int!) {
+    communityMembers(communityId: $communityId) {
+      id
+      joinedAt
+      user {
+        id
+        username
+        age
+        bio
+        photoUrl
+        neighbourhood
+        cityName
+        hobbies {
+          id
+          name
+        }
+      }
+    }
+  }
+`;
+
+/**
+ * Mutation to update an existing circle owned by the caller.
+ */
+export const UPDATE_COMMUNITY = gql`
+  mutation UpdateCommunity(
+    $id: Int
+    $communityId: Int
+    $name: String
+    $description: String
+    $locationName: String
+    $latitude: Float
+    $longitude: Float
+    $isVirtual: Boolean
+    $imageUrl: String
+    $ageRange: String
+    $minAge: Int
+    $maxAge: Int
+    $hobbyIds: [Int]
+  ) {
+    updateCommunity(
+      id: $id
+      communityId: $communityId
+      name: $name
+      description: $description
+      locationName: $locationName
+      latitude: $latitude
+      longitude: $longitude
+      isVirtual: $isVirtual
+      imageUrl: $imageUrl
+      ageRange: $ageRange
+      minAge: $minAge
+      maxAge: $maxAge
+      hobbyIds: $hobbyIds
+    ) {
+      success
+      message
+      community {
+        id
+        name
+        subdomain
+        description
+        locationName
+        isVirtual
+        imageUrl
+        ageRange
+        memberCount
+        createdAt
+        hobbies {
+          id
+          name
         }
       }
     }

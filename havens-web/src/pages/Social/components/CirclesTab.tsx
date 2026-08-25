@@ -4,7 +4,8 @@ import { GET_RECOMMENDED_CIRCLES, SEARCH_COMMUNITIES, DELETE_COMMUNITY } from '.
 import { useAuth } from '../../../context/AuthContext';
 import { Circle } from '../types';
 import { CreateCircleWizard } from './CreateCircleWizard';
-import { Target, Users, Crown, Trash2, Sparkles, Search } from 'lucide-react';
+import { CircleManagementModal } from './CircleManagementModal';
+import { Target, Users, Crown, Trash2, Sparkles, Search, Settings } from 'lucide-react';
 
 interface CirclesTabProps {
   joinedCircleIds: (number | string)[];
@@ -47,6 +48,7 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
 }) => {
   const { user: currentUser } = useAuth();
   const [exploringCircle, setExploringCircle] = useState<Circle | null>(null);
+  const [managingCircle, setManagingCircle] = useState<Circle | null>(null);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [circleToDelete, setCircleToDelete] = useState<Circle | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -445,35 +447,36 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
-                      {isCreator && (
+                      {isCreator ? (
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setCircleToDelete(circle);
+                            setManagingCircle(circle);
                           }}
-                          className="px-3 py-2 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
-                          title="Delete your circle"
+                          className="px-3.5 py-2 rounded-xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs hover:shadow-xs"
+                          title="Manage circle & monitor members"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span className="hidden sm:inline">Delete</span>
+                          <Settings className="w-3.5 h-3.5" />
+                          <span>Manage</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={isJoined}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onJoinCircle(Number(circle.id));
+                          }}
+                          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                            isJoined
+                              ? 'bg-[#eaf3ed] text-[#2D5A3D] border border-[#7aaa8a]/40 cursor-default'
+                              : 'bg-[#2D5A3D] text-white hover:bg-[#3d7a55] shadow-2xs hover:shadow-xs'
+                          }`}
+                        >
+                          {isJoined ? '✓ Joined' : 'Join Circle'}
                         </button>
                       )}
-                      <button
-                        type="button"
-                        disabled={isJoined}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onJoinCircle(Number(circle.id));
-                        }}
-                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                          isJoined
-                            ? 'bg-[#eaf3ed] text-[#2D5A3D] border border-[#7aaa8a]/40 cursor-default'
-                            : 'bg-[#2D5A3D] text-white hover:bg-[#3d7a55] shadow-2xs hover:shadow-xs'
-                        }`}
-                      >
-                        {isJoined ? '✓ Joined' : 'Join Circle'}
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -605,23 +608,26 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
               <span>Affinity Match: <strong>{getAffinityPercent(exploringCircle)}%</strong></span>
             </div>
 
-            <div className="pt-2 flex items-center justify-between gap-3">
-              {currentUser && exploringCircle.creator && String(currentUser.id) === String(exploringCircle.creator.id) && (
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-2 w-full sm:w-auto">
                 <button
                   type="button"
                   onClick={() => {
-                    setCircleToDelete(exploringCircle);
+                    setManagingCircle(exploringCircle);
+                    setExploringCircle(null);
                   }}
-                  className="px-3.5 py-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5"
+                  className="px-4 py-2 rounded-xl bg-[#eaf3ed] hover:bg-[#d9ecde] border border-[#2D5A3D]/30 text-[#2D5A3D] text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
                 >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                  Delete Circle
+                  <Settings className="w-3.5 h-3.5" />
+                  <span>
+                    {currentUser && exploringCircle.creator && String(currentUser.id) === String(exploringCircle.creator.id)
+                      ? 'Manage & Monitor Members'
+                      : 'View Joined Members'}
+                  </span>
                 </button>
-              )}
+              </div>
 
-              <div className="flex items-center gap-2 ml-auto">
+              <div className="flex items-center gap-2 ml-auto w-full sm:w-auto justify-end">
                 <button
                   type="button"
                   onClick={() => setExploringCircle(null)}
@@ -645,6 +651,23 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
           </div>
         </div>
       )}
+
+      {/* ─── Circle Management & Member Monitoring Modal ─── */}
+      <CircleManagementModal
+        isOpen={Boolean(managingCircle)}
+        circle={managingCircle}
+        onClose={() => setManagingCircle(null)}
+        onCircleUpdated={(msg) => {
+          if (onActionStatus) onActionStatus(msg);
+          refetch();
+        }}
+        onCircleDeleted={(msg) => {
+          if (onActionStatus) onActionStatus(msg);
+          setManagingCircle(null);
+          setExploringCircle(null);
+          refetch();
+        }}
+      />
 
       {/* ─── Delete Circle Confirmation Modal ─── */}
       {circleToDelete && (

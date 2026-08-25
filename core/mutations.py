@@ -808,6 +808,105 @@ class DeleteCommunity(graphene.Mutation):
             return cls(success=False, message=str(e), deletedCircleId=None)
 
 
+class UpdateCommunity(graphene.Mutation):
+    """Update circle details (name, description, location, virtual status, image, age range, hobbies).
+    Allowed only for the creator of the circle or staff."""
+
+    class Arguments:
+        id = graphene.Int(required=False, description="Circle database ID.")
+        communityId = graphene.Int(required=False, description="Alias for id.")
+        name = graphene.String(required=False, description="Updated circle title.")
+        description = graphene.String(required=False, description="Updated circle description.")
+        locationName = graphene.String(required=False, description="Updated location name.")
+        latitude = graphene.Float(required=False, description="Updated latitude.")
+        longitude = graphene.Float(required=False, description="Updated longitude.")
+        isVirtual = graphene.Boolean(required=False, description="Updated virtual flag.")
+        imageUrl = graphene.String(required=False, description="Updated cover photo URL.")
+        ageRange = graphene.String(required=False, description="Updated age range.")
+        minAge = graphene.Int(required=False, description="Updated min age.")
+        maxAge = graphene.Int(required=False, description="Updated max age.")
+        hobbyIds = graphene.List(graphene.Int, required=False, description="Updated hobby IDs.")
+
+    community = graphene.Field(CommunityType, description="The updated Community record.")
+    success = graphene.Boolean(description="Indicates success.")
+    message = graphene.String(description="Status message.")
+
+    @classmethod
+    @login_required
+    def mutate(cls, root, info, id=None, communityId=None, name=None, description=None,
+               locationName=None, latitude=None, longitude=None, isVirtual=None, imageUrl=None,
+               ageRange=None, minAge=None, maxAge=None, hobbyIds=None):
+        target_id = id if id is not None else communityId
+        if not target_id:
+            return cls(community=None, success=False, message="Circle ID is required.")
+
+        try:
+            user = info.context.user
+            community = Community.objects.get(id=target_id)
+
+            # Security check: Caller must be the circle's creator or staff
+            if community.creator != user and not user.is_staff:
+                return cls(
+                    community=None,
+                    success=False,
+                    message="Permission denied. You can only edit circles that you created."
+                )
+
+            if name is not None and name.strip():
+                community.name = name.strip()
+
+            if description is not None:
+                community.description = description.strip()
+
+            if isVirtual is not None:
+                community.is_virtual = isVirtual
+                if isVirtual:
+                    community.latitude = None
+                    community.longitude = None
+                    community.location_name = "Virtual Group"
+                else:
+                    if latitude is not None:
+                        community.latitude = latitude
+                    if longitude is not None:
+                        community.longitude = longitude
+                    if locationName is not None and locationName.strip():
+                        community.location_name = locationName.strip()
+            else:
+                if latitude is not None:
+                    community.latitude = latitude
+                if longitude is not None:
+                    community.longitude = longitude
+                if locationName is not None and locationName.strip():
+                    community.location_name = locationName.strip()
+
+            if imageUrl is not None:
+                community.image_url = imageUrl.strip()
+
+            if ageRange is not None:
+                community.age_range = ageRange.strip() if ageRange.strip() else "All Ages"
+
+            if minAge is not None:
+                community.min_age = minAge
+            if maxAge is not None:
+                community.max_age = maxAge
+
+            community.save()
+
+            if hobbyIds is not None:
+                hobbies = Hobby.objects.filter(id__in=hobbyIds)
+                community.hobbies.set(hobbies)
+
+            return cls(
+                community=community,
+                success=True,
+                message=f"Circle '{community.name}' updated successfully!"
+            )
+        except Community.DoesNotExist:
+            return cls(community=None, success=False, message="Circle not found.")
+        except Exception as e:
+            return cls(community=None, success=False, message=str(e))
+
+
 class CreateEvent(graphene.Mutation):
     """Create a new event/meetup on the Havens platform."""
 
@@ -1288,6 +1387,7 @@ class Mutation(graphene.ObjectType):
 
     # ── Communities ─────────────────────────────────────────────────────────
     create_community = CreateCommunity.Field(description="Create a new white-label community.")
+    update_community = UpdateCommunity.Field(description="Update circle details owned by the caller.")
     delete_community = DeleteCommunity.Field(description="Delete a circle created by the caller.")
     join_community = JoinCommunity.Field(description="Join an existing community as a member.")
 

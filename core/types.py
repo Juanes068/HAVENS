@@ -208,6 +208,7 @@ class CommunityType(DjangoObjectType):
     hobbies = graphene.List(HobbyType)
     creator = graphene.Field(UserType)
     memberCount = graphene.Int()
+    memberships = graphene.List(CommunityMembershipType)
     imageUrl = graphene.String()
     locationName = graphene.String()
     ageRange = graphene.String()
@@ -250,6 +251,9 @@ class CommunityType(DjangoObjectType):
 
     def resolve_memberCount(self, info):
         return self.memberships.count()
+
+    def resolve_memberships(self, info):
+        return self.memberships.select_related('user', 'user__profile').prefetch_related('user__profile__hobbies').order_by('-joined_at')
 
     def resolve_imageUrl(self, info):
         return self.image_url
