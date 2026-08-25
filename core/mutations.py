@@ -824,6 +824,10 @@ class CreateEvent(graphene.Mutation):
         imageUrl = graphene.String(description="Cover image URL.")
         locationName = graphene.String(description="Human-readable venue name or address.")
         scheduledDate = graphene.DateTime(description="ISO-8601 scheduled start timestamp.")
+        ageRange = graphene.String(required=False, default_value='All Ages', description="Allowed age range (e.g. '18-25', '21+', 'All Ages').")
+        minAge = graphene.Int(required=False, description="Minimum age allowed.")
+        maxAge = graphene.Int(required=False, description="Maximum age allowed.")
+        hobbyIds = graphene.List(graphene.Int, required=False, description="Array of associated Hobby IDs.")
 
     event = graphene.Field(EventType, description="The created Event entity.")
     success = graphene.Boolean(description="Indicates success.")
@@ -836,26 +840,9 @@ class CreateEvent(graphene.Mutation):
     @login_required
     def mutate(cls, root, info, title, description, latitude, longitude,
                communityId=None, pointsReward=10, visibility='public',
-               imageUrl=None, locationName=None, scheduledDate=None):
-        """Validate input parameters and create Event record.
-
-        Args:
-            root: Root GraphQL object.
-            info (graphene.ResolveInfo): Execution context.
-            title (str): Event title.
-            description (str): Description text.
-            latitude (float): Latitude coordinate.
-            longitude (float): Longitude coordinate.
-            communityId (int, optional): Associated community ID.
-            pointsReward (int, optional): Points reward value.
-            visibility (str, optional): Visibility level.
-            imageUrl (str, optional): Cover image URL.
-            locationName (str, optional): Venue name.
-            scheduledDate (datetime, optional): Scheduled timestamp.
-
-        Returns:
-            CreateEvent: Mutation payload.
-        """
+               imageUrl=None, locationName=None, scheduledDate=None,
+               ageRange='All Ages', minAge=None, maxAge=None, hobbyIds=None):
+        """Validate input parameters and create Event record."""
         try:
             # Validate visibility choice against model constraints
             if visibility not in cls.VALID_VISIBILITY:
@@ -871,21 +858,107 @@ class CreateEvent(graphene.Mutation):
             user = info.context.user
             community = Community.objects.get(id=communityId) if communityId else None
             event = Event.objects.create(
-                title=title,
-                description=description,
+                title=title.strip(),
+                description=description.strip() if description else '',
                 latitude=latitude,
                 longitude=longitude,
                 community=community,
                 creator=user,
                 points_reward=pointsReward,
                 visibility=visibility,
-                image_url=imageUrl,
+                image_url=imageUrl.strip() if imageUrl else None,
                 location_name=locationName or '',
                 scheduled_date=event_date,
+                age_range=ageRange.strip() if ageRange else 'All Ages',
+                min_age=minAge,
+                max_age=maxAge,
             )
+
+            if hobbyIds:
+                hobbies = Hobby.objects.filter(id__in=hobbyIds)
+                event.hobbies.set(hobbies)
+
             return cls(event=event, success=True, message="Event created successfully")
         except Community.DoesNotExist:
             return cls(event=None, success=False, message="Community not found")
+        except Exception as e:
+            return cls(event=None, success=False, message=str(e))
+
+
+class UpdateEvent(graphene.Mutation):
+    """Modify details of an event created by the authenticated user."""
+
+    class Arguments:
+        id = graphene.Int(required=True, description="Primary key ID of the event to edit.")
+        title = graphene.String(required=False, description="Event title.")
+        description = graphene.String(required=False, description="Event description.")
+        latitude = graphene.Float(required=False, description="Location latitude.")
+        longitude = graphene.Float(required=False, description="Location longitude.")
+        locationName = graphene.String(required=False, description="Venue or location name.")
+        scheduledDate = graphene.DateTime(required=False, description="Scheduled start time.")
+        visibility = graphene.String(required=False, description="Event visibility.")
+        imageUrl = graphene.String(required=False, description="Event cover image URL.")
+        ageRange = graphene.String(required=False, description="Allowed age range (e.g. '18-25', '21+', 'All Ages').")
+        minAge = graphene.Int(required=False, description="Minimum age.")
+        maxAge = graphene.Int(required=False, description="Maximum age.")
+        pointsReward = graphene.Int(required=False, description="Reward points.")
+        communityId = graphene.Int(required=False, description="Community ID.")
+        hobbyIds = graphene.List(graphene.Int, required=False, description="Hobby tag IDs.")
+
+    event = graphene.Field(EventType, description="The updated Event entity.")
+    success = graphene.Boolean(description="Indicates success.")
+    message = graphene.String(description="Status or error message.")
+
+    @classmethod
+    @login_required
+    def mutate(cls, root, info, id, title=None, description=None, latitude=None, longitude=None,
+               locationName=None, scheduledDate=None, visibility=None, imageUrl=None,
+               ageRange=None, minAge=None, maxAge=None, pointsReward=None, communityId=None, hobbyIds=None):
+        """Update existing event details after verifying ownership."""
+        try:
+            user = info.context.user
+            event = Event.objects.get(id=id)
+
+            # Security check: creator or staff only
+            if event.creator != user and not user.is_staff:
+                return cls(event=None, success=False, message="Permission denied. You can only modify events you created.")
+
+            if title is not None and title.strip():
+                event.title = title.strip()
+            if description is not None:
+                event.description = description.strip()
+            if latitude is not None:
+                event.latitude = latitude
+            if longitude is not None:
+                event.longitude = longitude
+            if locationName is not None:
+                event.location_name = locationName.strip()
+            if scheduledDate is not None:
+                event.scheduled_date = scheduledDate
+            if visibility is not None and visibility in {v[0] for v in Event.VISIBILITY_CHOICES}:
+                event.visibility = visibility
+            if imageUrl is not None:
+                event.image_url = imageUrl.strip() if imageUrl else None
+            if ageRange is not None:
+                event.age_range = ageRange.strip() or 'All Ages'
+            if minAge is not None:
+                event.min_age = minAge
+            if maxAge is not None:
+                event.max_age = maxAge
+            if pointsReward is not None:
+                event.points_reward = pointsReward
+            if communityId is not None:
+                event.community = Community.objects.filter(id=communityId).first()
+
+            event.save()
+
+            if hobbyIds is not None:
+                hobbies = Hobby.objects.filter(id__in=hobbyIds)
+                event.hobbies.set(hobbies)
+
+            return cls(event=event, success=True, message="Event updated successfully.")
+        except Event.DoesNotExist:
+            return cls(event=None, success=False, message="Event not found.")
         except Exception as e:
             return cls(event=None, success=False, message=str(e))
 
@@ -902,16 +975,7 @@ class DeleteEvent(graphene.Mutation):
     @classmethod
     @login_required
     def mutate(cls, root, info, id):
-        """Verify event ownership and delete record.
-
-        Args:
-            root: Root GraphQL object.
-            info (graphene.ResolveInfo): Execution context.
-            id (int): Primary key of event.
-
-        Returns:
-            DeleteEvent: Mutation payload.
-        """
+        """Verify event ownership and delete record."""
         try:
             user = info.context.user
             # Ensure only the event creator can delete the event
@@ -1231,6 +1295,7 @@ class Mutation(graphene.ObjectType):
 
     # ── Events & RSVP ───────────────────────────────────────────────────────
     create_event = CreateEvent.Field(description="Create a new event.")
+    update_event = UpdateEvent.Field(description="Modify an existing event owned by the caller.")
     delete_event = DeleteEvent.Field(description="Delete an existing event owned by the caller.")
     confirm_attendance = ConfirmAttendance.Field(description="Confirm attendance, issue ticket, and claim reward points.")
     swipe_event = SwipeEvent.Field(description="Submit RSVP swipe choice ('going', 'maybe', 'pass').")

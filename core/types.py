@@ -269,15 +269,28 @@ class InvitationCodeType(DjangoObjectType):
 
 
 class EventRSVPType(DjangoObjectType):
+    user = graphene.Field(UserType)
+    event = graphene.Field(lambda: EventType)
+
     class Meta:
         model = EventRSVP
         fields = ("id", "user", "event", "response", "created_at", "updated_at")
+
+    def resolve_user(self, info):
+        return self.user
+
+    def resolve_event(self, info):
+        return self.event
 
 
 class EventType(DjangoObjectType):
     trustScore = graphene.Int()
     imageUrl = graphene.String()
     locationName = graphene.String()
+    ageRange = graphene.String()
+    minAge = graphene.Int()
+    maxAge = graphene.Int()
+    rsvps = graphene.List(EventRSVPType)
     # Override visibility as plain String to bypass Graphene's auto-enum
     # that rejects the raw CharField values from the DB (e.g. 'friends_only').
     visibility = graphene.String()
@@ -289,6 +302,7 @@ class EventType(DjangoObjectType):
             "id", "community", "creator", "title", "description",
             "latitude", "longitude", "points_reward", "visibility",
             "image_url", "location_name", "scheduled_date", "created_at",
+            "age_range", "min_age", "max_age",
         )
 
     def resolve_visibility(self, info):
@@ -299,6 +313,18 @@ class EventType(DjangoObjectType):
 
     def resolve_locationName(self, info):
         return self.location_name
+
+    def resolve_ageRange(self, info):
+        return self.age_range or 'All Ages'
+
+    def resolve_minAge(self, info):
+        return self.min_age
+
+    def resolve_maxAge(self, info):
+        return self.max_age
+
+    def resolve_rsvps(self, info):
+        return self.rsvps.select_related('user', 'user__profile').all()
 
     def resolve_hobbies(self, info):
         return self.hobbies.all()

@@ -8,6 +8,7 @@ export interface DiscoverPlan {
   time: string
   location: string
   category: string
+  ageRange?: string
   going: number
   mutualsFriends: number
   img: string
@@ -46,6 +47,11 @@ export const EventCard: React.FC<EventCardProps> = ({ plan, isSaved, onToggleSav
               <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-white/95 backdrop-blur-xs text-[#2D5A3D] shadow-2xs">
                 {plan.category || 'Gathering'}
               </span>
+              {plan.ageRange && (
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/90 backdrop-blur-xs text-stone-700 shadow-2xs">
+                  🎂 {plan.ageRange}
+                </span>
+              )}
             </div>
           </div>
         )}
@@ -53,9 +59,16 @@ export const EventCard: React.FC<EventCardProps> = ({ plan, isSaved, onToggleSav
         {/* Header badges (if no image) */}
         {!plan.img && (
           <div className="flex items-center justify-between gap-2 mb-3">
-            <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-[#eaf3ed] text-[#2D5A3D]">
-              {plan.category || 'Gathering'}
-            </span>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-[#eaf3ed] text-[#2D5A3D]">
+                {plan.category || 'Gathering'}
+              </span>
+              {plan.ageRange && (
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#FAF8F5] border border-[#E2DBD0] text-stone-700">
+                  🎂 {plan.ageRange}
+                </span>
+              )}
+            </div>
 
             <button
               type="button"

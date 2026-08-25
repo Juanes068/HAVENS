@@ -386,7 +386,7 @@ export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
                               @{friend.username}
                             </h4>
                             {friend.age ? (
-                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#FAF8F5] border border-[#E2DBD0] text-stone-600">
+                              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-[#FAF8F5] border border-[#E2DBD0] text-stone-700 shadow-2xs">
                                 {friend.age} yrs
                               </span>
                             ) : null}

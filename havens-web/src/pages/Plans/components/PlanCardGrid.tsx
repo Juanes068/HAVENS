@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react'
 import { useAuth } from '../../../context/AuthContext'
 import { useApp } from '../../../context/AppContext'
-import { Calendar, Sparkles, MapPin, Clock, Trash2 } from 'lucide-react'
+import { Calendar, Sparkles, MapPin, Clock, Trash2, Settings, Users, Edit3 } from 'lucide-react'
 import { EventDetailModal } from '../../../components/EventDetailModal'
+import { EventManagementModal } from './EventManagementModal'
 import {
   SERIF,
   PlanItem,
@@ -27,6 +28,7 @@ export const PlanCardGrid: React.FC<PlanCardGridProps> = ({
   const { user } = useAuth()
   const { t } = useApp()
   const [statusFilter, setStatusFilter] = useState<'all' | 'upcoming' | 'past'>('all')
+  const [managingPlan, setManagingPlan] = useState<PlanItem | null>(null)
   const [exploringPlan, setExploringPlan] = useState<PlanItem | null>(null)
 
   // Strict creator filter logic
@@ -63,7 +65,7 @@ export const PlanCardGrid: React.FC<PlanCardGridProps> = ({
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#E2DBD0]/60">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs font-bold font-serif text-[#2C2C2C]">
             Showing {myCreatedPlans.length} Created {myCreatedPlans.length === 1 ? 'Plan' : 'Plans'}
           </span>
@@ -105,11 +107,14 @@ export const PlanCardGrid: React.FC<PlanCardGridProps> = ({
             const isPast = badge === 'Past'
             const displayHobbies = (plan.hobbies || []).slice(0, 4)
             const remainingCount = Math.max(0, (plan.hobbies?.length || 0) - 4)
+            const goingCount = (plan.rsvps || []).filter((r: any) => r.response === 'going').length
+            const maybeCount = (plan.rsvps || []).filter((r: any) => r.response === 'maybe').length
+            const totalRsvps = goingCount + maybeCount
 
             return (
               <div
                 key={plan.id}
-                onClick={() => setExploringPlan(plan)}
+                onClick={() => setManagingPlan(plan)}
                 className={`rounded-3xl border transition-all duration-200 bg-white group overflow-hidden flex flex-col p-5 sm:p-5.5 shadow-xs hover:shadow-md cursor-pointer justify-between ${
                   isPast ? 'border-[#E2DBD0] opacity-85' : 'border-[#E2DBD0] hover:border-[#2D5A3D]/50'
                 }`}
@@ -149,9 +154,16 @@ export const PlanCardGrid: React.FC<PlanCardGridProps> = ({
                   ) : (
                     /* Top Badges for Card without Image */
                     <div className="flex items-center justify-between gap-2 mb-3">
-                      <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-[#eaf3ed] text-[#2D5A3D]">
-                        {plan.category || 'Gathering'}
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-[#eaf3ed] text-[#2D5A3D]">
+                          {plan.category || 'Gathering'}
+                        </span>
+                        {plan.ageRange && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#FAF8F5] border border-[#E2DBD0] text-stone-700">
+                            🎂 {plan.ageRange}
+                          </span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-1.5 shrink-0">
                         <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-[#2D5A3D] text-white shadow-2xs">
                           Hosting
@@ -169,13 +181,23 @@ export const PlanCardGrid: React.FC<PlanCardGridProps> = ({
                     </div>
                   )}
 
-                  {/* Title */}
-                  <h3
-                    className="text-lg sm:text-xl font-bold text-stone-900 mb-2 leading-snug truncate group-hover:text-[#2D5A3D] transition-colors"
-                    style={{ fontFamily: SERIF }}
-                  >
-                    {plan.title}
-                  </h3>
+                  {/* Title & Age Badge if Image is present */}
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <h3
+                      className="text-lg sm:text-xl font-bold text-stone-900 leading-snug line-clamp-2 group-hover:text-[#2D5A3D] transition-colors"
+                      style={{ fontFamily: SERIF }}
+                    >
+                      {plan.title}
+                    </h3>
+                  </div>
+
+                  {plan.imageUrl && plan.ageRange && (
+                    <div className="mb-2.5">
+                      <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-[#FAF8F5] border border-[#E2DBD0] text-stone-700">
+                        🎂 Age: {plan.ageRange}
+                      </span>
+                    </div>
+                  )}
 
                   {/* Optional Description Preview */}
                   {plan.description && (
@@ -223,24 +245,46 @@ export const PlanCardGrid: React.FC<PlanCardGridProps> = ({
                   )}
                 </div>
 
-                {/* Footer with Guest count and Delete Button */}
-                <div className="flex items-center justify-between pt-3 border-t border-[#E2DBD0]/60" onClick={(e) => e.stopPropagation()}>
-                  <span className="text-xs font-semibold text-stone-700">
-                    👥 {plan.going || 1} {plan.going === 1 ? 'guest' : 'guests'}
-                  </span>
+                {/* Footer with RSVP summary, Manage button, and Delete Button */}
+                <div className="flex items-center justify-between pt-3 border-t border-[#E2DBD0]/60 gap-2" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-stone-700">
+                    <span className="flex items-center gap-1 text-[#2D5A3D]">
+                      <span className="w-2 h-2 rounded-full bg-[#2D5A3D]" />
+                      <span>{goingCount || plan.going || 0} going</span>
+                    </span>
+                    {maybeCount > 0 && (
+                      <span className="text-[#C47B5A] font-medium text-[11px]">
+                        · {maybeCount} maybe
+                      </span>
+                    )}
+                  </div>
 
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onDeletePlan(plan)
-                    }}
-                    className="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold transition-colors cursor-pointer border border-rose-200 flex items-center gap-1 shadow-2xs"
-                    title="Delete this plan"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>{t('deleteEvent')}</span>
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setManagingPlan(plan)
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                      title="Manage Event & RSVPs"
+                    >
+                      <Settings className="w-3.5 h-3.5" />
+                      <span>Manage</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onDeletePlan(plan)
+                      }}
+                      className="p-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 transition-colors cursor-pointer border border-rose-200 shadow-2xs"
+                      title="Delete this plan"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             )
@@ -279,7 +323,23 @@ export const PlanCardGrid: React.FC<PlanCardGridProps> = ({
         </div>
       )}
 
-      {/* Expanded Event Detail Modal */}
+      {/* Event Management Modal (Edit details + RSVP Attendance Directory) */}
+      {managingPlan && (
+        <EventManagementModal
+          plan={managingPlan}
+          isOpen={Boolean(managingPlan)}
+          onClose={() => setManagingPlan(null)}
+          onDelete={(p) => {
+            setManagingPlan(null)
+            onDeletePlan(p)
+          }}
+          onEventUpdated={() => {
+            // refetch handled via apollo cache
+          }}
+        />
+      )}
+
+      {/* Expanded Event Detail Modal fallback */}
       {exploringPlan && (
         <EventDetailModal
           event={exploringPlan}
@@ -296,3 +356,4 @@ export const PlanCardGrid: React.FC<PlanCardGridProps> = ({
 }
 
 export default PlanCardGrid
+

@@ -94,6 +94,11 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
               <span className="text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full bg-[#eaf3ed] text-[#2D5A3D]">
                 {event.category || 'Gathering'}
               </span>
+              {event.ageRange && (
+                <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-[#FAF8F5] border border-[#E2DBD0] text-stone-700">
+                  🎂 {event.ageRange}
+                </span>
+              )}
               {isHost && (
                 <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200/60 flex items-center gap-1">
                   <Crown className="w-3 h-3 text-amber-700" />

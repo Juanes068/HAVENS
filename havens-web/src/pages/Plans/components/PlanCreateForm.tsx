@@ -36,6 +36,7 @@ export const PlanCreateForm: React.FC<PlanCreateFormProps> = ({ onSuccess, onCan
   const [selectedLocation, setSelectedLocation] = useState<LocationData | null>(null)
   const [visibility, setVis] = useState<Visibility>('public')
   const [category, setCategory] = useState('Outdoors')
+  const [ageRange, setAgeRange] = useState('All Ages')
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [uploadedUrl, setUploadedUrl] = useState<string>('')
@@ -57,6 +58,7 @@ export const PlanCreateForm: React.FC<PlanCreateFormProps> = ({ onSuccess, onCan
         setDate('')
         setTime('')
         setSelectedLocation(null)
+        setAgeRange('All Ages')
         setImageFile(null)
         setImagePreview(null)
         setUploadedUrl('')
@@ -161,6 +163,7 @@ export const PlanCreateForm: React.FC<PlanCreateFormProps> = ({ onSuccess, onCan
           locationName: selectedLocation.address || selectedLocation.name,
           scheduledDate: new Date(scheduledDateTime).toISOString(),
           visibility,
+          ageRange: ageRange.trim() || 'All Ages',
           imageUrl: finalImageUrl || null,
         },
       })
@@ -168,6 +171,8 @@ export const PlanCreateForm: React.FC<PlanCreateFormProps> = ({ onSuccess, onCan
       setErrorMsg(err.message || 'An error occurred while creating your plan.')
     }
   }
+
+  const ageOptions = ['All Ages', '18-25', '21-35', '25-40', '30-50', '18+', '21+']
 
   return (
     <div className="flex flex-col lg:flex-row gap-10 items-start">
@@ -211,6 +216,32 @@ export const PlanCreateForm: React.FC<PlanCreateFormProps> = ({ onSuccess, onCan
                   }`}
                 >
                   <span>{cat}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Age Range Attribute */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#2C2C2C]">
+                Target Age Range
+              </label>
+              <span className="text-[11px] text-[#8a8278]">Not all ages are suitable for every event</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {ageOptions.map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => setAgeRange(opt)}
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-150 cursor-pointer flex items-center gap-1.5 ${
+                    ageRange === opt
+                      ? 'bg-[#C47B5A] text-white shadow-xs'
+                      : 'bg-[#FAF8F5] border border-[#E2DBD0] text-stone-700 hover:bg-[#F0EAE0]'
+                  }`}
+                >
+                  <span>{opt}</span>
                 </button>
               ))}
             </div>
@@ -362,10 +393,15 @@ export const PlanCreateForm: React.FC<PlanCreateFormProps> = ({ onSuccess, onCan
             </div>
 
             <div className="p-5">
-              <div className="flex items-center gap-1.5 mb-1.5">
+              <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
                 <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-[#eaf3ed] text-[#2D5A3D]">
                   {category}
                 </span>
+                {ageRange && (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#FAF8F5] border border-[#E2DBD0] text-stone-700">
+                    🎂 {ageRange}
+                  </span>
+                )}
                 <span className="text-[10px] font-medium text-stone-500">
                   {date ? new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Date TBD'}
                 </span>

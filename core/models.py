@@ -164,6 +164,9 @@ class Event(models.Model):
     location_name = models.CharField(max_length=300, blank=True, default='')
     scheduled_date = models.DateTimeField(default=timezone.now)
     created_at = models.DateTimeField(default=timezone.now)
+    age_range = models.CharField(max_length=100, blank=True, default='All Ages')
+    min_age = models.IntegerField(null=True, blank=True, default=None)
+    max_age = models.IntegerField(null=True, blank=True, default=None)
     hobbies = models.ManyToManyField(Hobby, blank=True, related_name='events')
 
     def __str__(self):

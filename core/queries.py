@@ -927,16 +927,8 @@ class Query(graphene.ObjectType):
     # ── Feature 4: Event RSVPs ──────────────────────────────────────────────────
     @login_required
     def resolve_event_rsvps(self, info, event_id):
-        """Retrieve all RSVP records for a specific event.
-
-        Args:
-            info (graphene.ResolveInfo): Execution context.
-            event_id (int): Primary key ID of the target event.
-
-        Returns:
-            django.db.models.QuerySet[EventRSVP]: RSVPs with user and event joined.
-        """
-        return EventRSVP.objects.filter(event_id=event_id).select_related('user', 'event')
+        """Retrieve all RSVP records for a specific event with user profiles."""
+        return EventRSVP.objects.filter(event_id=event_id).select_related('user', 'user__profile', 'event').order_by('-updated_at')
 
     @login_required
     def resolve_my_rsvps(self, info):

@@ -17,6 +17,9 @@ export const GET_ALL_EVENTS = gql`
       imageUrl
       locationName
       scheduledDate
+      ageRange
+      minAge
+      maxAge
       createdAt
       creator {
         id
@@ -32,7 +35,7 @@ export const GET_ALL_EVENTS = gql`
 `;
 
 /**
- * Query to fetch events created strictly by the authenticated user.
+ * Query to fetch events created strictly by the authenticated user with full RSVP tracking.
  */
 export const GET_MY_CREATED_EVENTS = gql`
   query GetMyCreatedEvents($upcomingOnly: Boolean) {
@@ -48,11 +51,28 @@ export const GET_MY_CREATED_EVENTS = gql`
       imageUrl
       locationName
       scheduledDate
+      ageRange
+      minAge
+      maxAge
       createdAt
       creator {
         id
         username
         photoUrl
+      }
+      rsvps {
+        id
+        response
+        createdAt
+        updatedAt
+        user {
+          id
+          username
+          photoUrl
+          age
+          neighbourhood
+          cityName
+        }
       }
       hobbies {
         id
@@ -63,8 +83,33 @@ export const GET_MY_CREATED_EVENTS = gql`
 `;
 
 /**
- * Mutation to create a new event on the Django backend.
- * imageUrl: the Cloudinary secure_url returned after a successful upload.
+ * Query to fetch RSVP attendance directory for a specific event.
+ */
+export const GET_EVENT_RSVPS = gql`
+  query GetEventRsvps($eventId: Int!) {
+    eventRsvps(eventId: $eventId) {
+      id
+      response
+      createdAt
+      updatedAt
+      user {
+        id
+        username
+        photoUrl
+        age
+        neighbourhood
+        cityName
+        hobbies {
+          id
+          name
+        }
+      }
+    }
+  }
+`;
+
+/**
+ * Mutation to create a new event on the Django backend with Age Range and taxonomy.
  */
 export const CREATE_EVENT = gql`
   mutation CreateEvent(
@@ -78,6 +123,10 @@ export const CREATE_EVENT = gql`
     $imageUrl: String
     $locationName: String
     $scheduledDate: DateTime
+    $ageRange: String
+    $minAge: Int
+    $maxAge: Int
+    $hobbyIds: [Int]
   ) {
     createEvent(
       title: $title
@@ -90,6 +139,10 @@ export const CREATE_EVENT = gql`
       imageUrl: $imageUrl
       locationName: $locationName
       scheduledDate: $scheduledDate
+      ageRange: $ageRange
+      minAge: $minAge
+      maxAge: $maxAge
+      hobbyIds: $hobbyIds
     ) {
       success
       message
@@ -104,10 +157,96 @@ export const CREATE_EVENT = gql`
         imageUrl
         locationName
         scheduledDate
+        ageRange
+        minAge
+        maxAge
         trustScore
         creator {
           id
           username
+        }
+      }
+    }
+  }
+`;
+
+/**
+ * Mutation to modify details of an event created by the authenticated user.
+ */
+export const UPDATE_EVENT = gql`
+  mutation UpdateEvent(
+    $id: Int!
+    $title: String
+    $description: String
+    $latitude: Float
+    $longitude: Float
+    $locationName: String
+    $scheduledDate: DateTime
+    $visibility: String
+    $imageUrl: String
+    $ageRange: String
+    $minAge: Int
+    $maxAge: Int
+    $pointsReward: Int
+    $communityId: Int
+    $hobbyIds: [Int]
+  ) {
+    updateEvent(
+      id: $id
+      title: $title
+      description: $description
+      latitude: $latitude
+      longitude: $longitude
+      locationName: $locationName
+      scheduledDate: $scheduledDate
+      visibility: $visibility
+      imageUrl: $imageUrl
+      ageRange: $ageRange
+      minAge: $minAge
+      maxAge: $maxAge
+      pointsReward: $pointsReward
+      communityId: $communityId
+      hobbyIds: $hobbyIds
+    ) {
+      success
+      message
+      event {
+        id
+        title
+        description
+        latitude
+        longitude
+        pointsReward
+        visibility
+        imageUrl
+        locationName
+        scheduledDate
+        ageRange
+        minAge
+        maxAge
+        trustScore
+        creator {
+          id
+          username
+          photoUrl
+        }
+        rsvps {
+          id
+          response
+          createdAt
+          updatedAt
+          user {
+            id
+            username
+            photoUrl
+            age
+            neighbourhood
+            cityName
+          }
+        }
+        hobbies {
+          id
+          name
         }
       }
     }
@@ -135,6 +274,9 @@ export const MY_RSVPS = gql`
         imageUrl
         locationName
         scheduledDate
+        ageRange
+        minAge
+        maxAge
         createdAt
         creator {
           id
@@ -177,3 +319,4 @@ export const DELETE_EVENT = gql`
     }
   }
 `;
+
