@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { computeAffinity } from '../utils/ignoreStorage';
 import { Avatar } from '../../../components/Avatar';
-import { Zap, Sparkles, Compass } from 'lucide-react';
+import { Zap, Sparkles, Compass, Search } from 'lucide-react';
 import { UserProfileModal } from './UserProfileModal';
 import { useAuth } from '../../../context/AuthContext';
 
@@ -139,7 +139,7 @@ export const SuggestionCard: React.FC<{
           </div>
 
           {/* % Match Affinity Pill */}
-          {affinity > 0 && (
+          {affinity > 0 ? (
             <div
               className={`shrink-0 flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full shadow-2xs ${
                 affinity >= 70
@@ -149,6 +149,10 @@ export const SuggestionCard: React.FC<{
             >
               {affinity >= 70 ? <Zap className="w-3.5 h-3.5 text-[#2D5A3D]" /> : <Sparkles className="w-3.5 h-3.5 text-[#C47B5A]" />}
               <span>{affinity}%</span>
+            </div>
+          ) : (
+            <div className="shrink-0 flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-[#FAF8F5] text-[#8a8278] border border-[#E2DBD0]">
+              <span>0% Match</span>
             </div>
           )}
         </div>
@@ -257,20 +261,99 @@ export const MeetTab: React.FC<MeetTabProps> = ({
 }) => {
   const { user: currentUser } = useAuth();
   const [exploringUser, setExploringUser] = useState<any | null>(null);
+  const [profileSearchQuery, setProfileSearchQuery] = useState('');
+
+  const isSearching = profileSearchQuery.trim().length > 0;
+  const normalizedQuery = profileSearchQuery.trim().toLowerCase();
+
+  // ─── Filter Logic ───
+  // Default recommendations: STRICTLY ONLY match percentage > 0.
+  // Profiles with match percentage <= 0 are hidden from default view.
+  // When explicitly searching: all matching profiles (including <= 0%) become visible.
+  const displayUsers = useMemo(() => {
+    if (isSearching) {
+      return suggestedUsers.filter((usr: any) => {
+        const username = usr.username?.toLowerCase() || '';
+        const bio = usr.bio?.toLowerCase() || '';
+        const neighbourhood = usr.neighbourhood?.toLowerCase() || '';
+        const cityName = usr.cityName?.toLowerCase() || '';
+        const hobbyMatch = (usr.hobbies || []).some((h: any) =>
+          h.name?.toLowerCase().includes(normalizedQuery)
+        );
+
+        return (
+          username.includes(normalizedQuery) ||
+          bio.includes(normalizedQuery) ||
+          neighbourhood.includes(normalizedQuery) ||
+          cityName.includes(normalizedQuery) ||
+          hobbyMatch
+        );
+      });
+    }
+
+    // Default view: Strict filter where match percentage > 0
+    return suggestedUsers.filter((usr: any) => {
+      const affinity = usr.matchPercentage ?? computeAffinity(myHobbies, usr.hobbies);
+      return affinity > 0;
+    });
+  }, [suggestedUsers, isSearching, normalizedQuery, myHobbies]);
 
   return (
     <div className="space-y-6">
+      {/* ── Header Title and Overview ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
           <h3 className="text-xl font-serif font-semibold text-[#2D5A3D]">Nearby Match Suggestions</h3>
           <p className="text-xs text-[#8a8278] mt-0.5">
-            Strictly location-filtered members ranked by hobby affinity. Connect to build genuine bonds.
+            Strictly location-filtered members ranked by hobby affinity (&gt;0% match). Connect to build genuine bonds.
           </p>
         </div>
-        {suggestedUsers.length > 0 && !loading && (
+        {!loading && (
           <span className="text-xs bg-[#eaf3ed] text-[#2D5A3D] px-3 py-1 rounded-full font-semibold self-start sm:self-auto border border-[#7aaa8a]/30">
-            {suggestedUsers.length} {suggestedUsers.length === 1 ? 'member' : 'members'} nearby
+            {isSearching ? (
+              `${displayUsers.length} search ${displayUsers.length === 1 ? 'result' : 'results'}`
+            ) : (
+              `${displayUsers.length} ${displayUsers.length === 1 ? 'match' : 'matches'} (>0%)`
+            )}
           </span>
+        )}
+      </div>
+
+      {/* ── Dedicated Profile Search Bar ── */}
+      <div className="relative w-full">
+        <div className="relative flex items-center">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8a8278] pointer-events-none" />
+          <input
+            type="text"
+            value={profileSearchQuery}
+            onChange={(e) => setProfileSearchQuery(e.target.value)}
+            placeholder="Search profiles by username, bio, city, or hobbies..."
+            className="w-full pl-11 pr-10 py-3 rounded-2xl bg-white border border-[#E2DBD0] hover:border-[#2D5A3D]/40 focus:border-[#2D5A3D] text-xs sm:text-sm text-[#2C2C2C] placeholder:text-[#8a8278]/70 shadow-2xs focus:shadow-xs focus:outline-none transition-all"
+          />
+          {profileSearchQuery && (
+            <button
+              type="button"
+              onClick={() => setProfileSearchQuery('')}
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#8a8278] hover:text-[#2C2C2C] bg-[#F4EEE2] hover:bg-[#E2DBD0] w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold cursor-pointer transition-colors"
+              title="Clear profile search"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+        {isSearching && (
+          <div className="flex items-center justify-between mt-2 px-1 text-xs text-[#8a8278]">
+            <span>
+              Showing {displayUsers.length} profile{displayUsers.length === 1 ? '' : 's'} matching "{profileSearchQuery}"
+            </span>
+            <button
+              type="button"
+              onClick={() => setProfileSearchQuery('')}
+              className="text-[#2D5A3D] hover:underline font-semibold cursor-pointer"
+            >
+              Reset to default recommendations (&gt;0%)
+            </button>
+          </div>
         )}
       </div>
 
@@ -280,20 +363,39 @@ export const MeetTab: React.FC<MeetTabProps> = ({
             <CardSkeleton key={i} />
           ))}
         </div>
-      ) : suggestedUsers.length === 0 ? (
-        <div className="bg-white border border-[#E2DBD0] rounded-3xl p-12 text-center shadow-xs space-y-3 max-w-lg mx-auto">
-          <div className="w-16 h-16 rounded-full bg-[#eaf3ed] flex items-center justify-center mx-auto">
-            <Compass className="w-8 h-8 text-[#2D5A3D]" />
+      ) : displayUsers.length === 0 ? (
+        isSearching ? (
+          <div className="bg-white border border-[#E2DBD0] rounded-3xl p-10 text-center shadow-xs space-y-3 max-w-lg mx-auto">
+            <div className="w-14 h-14 rounded-full bg-[#F4EEE2] flex items-center justify-center mx-auto text-[#8a8278]">
+              <Search className="w-7 h-7" />
+            </div>
+            <h4 className="text-base font-semibold text-[#2D5A3D]">No profiles found</h4>
+            <p className="text-xs text-[#8a8278] leading-relaxed">
+              We couldn't find any member profiles matching "{profileSearchQuery}". Try searching for another name, city, or hobby tag.
+            </p>
+            <button
+              type="button"
+              onClick={() => setProfileSearchQuery('')}
+              className="px-4 py-2 rounded-xl bg-[#2D5A3D] text-white text-xs font-semibold hover:bg-[#3d7a55] transition-colors cursor-pointer inline-block"
+            >
+              Clear Search
+            </button>
           </div>
-          <h4 className="text-base font-semibold text-[#2D5A3D]">You're all caught up!</h4>
-          <p className="text-xs text-[#8a8278] leading-relaxed">
-            There are no new unreviewed profiles in your local radius right now. Check back as new members join, or invite friends to your community!
-          </p>
-        </div>
+        ) : (
+          <div className="bg-white border border-[#E2DBD0] rounded-3xl p-12 text-center shadow-xs space-y-3 max-w-lg mx-auto">
+            <div className="w-16 h-16 rounded-full bg-[#eaf3ed] flex items-center justify-center mx-auto">
+              <Compass className="w-8 h-8 text-[#2D5A3D]" />
+            </div>
+            <h4 className="text-base font-semibold text-[#2D5A3D]">No matching recommendations found</h4>
+            <p className="text-xs text-[#8a8278] leading-relaxed">
+              There are no unreviewed profiles in your area with a match percentage greater than 0% (&gt;0%). You can search for members directly using the search bar above, or add more hobbies to your profile!
+            </p>
+          </div>
+        )
       ) : (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {suggestedUsers.map((usr: any) => {
+            {displayUsers.map((usr: any) => {
               const isFading = fadingCardId === String(usr.id);
               const isSent = sentRequestUserIds.some((id) => String(id) === String(usr.id));
               const isConnecting = String(connectingUserId) === String(usr.id);
@@ -315,37 +417,39 @@ export const MeetTab: React.FC<MeetTabProps> = ({
           </div>
 
           {/* ── Pagination Controls ("Load More" & End of Feed Indicator) ── */}
-          <div className="flex flex-col items-center justify-center pt-6 pb-2">
-            {hasMore ? (
-              <button
-                type="button"
-                disabled={loadingMore}
-                onClick={onLoadMore}
-                className="px-6 py-2.5 rounded-2xl bg-white border border-[#E2DBD0] hover:bg-[#F4EEE2] hover:border-[#2D5A3D] text-xs font-semibold text-[#2D5A3D] transition-all shadow-2xs hover:shadow-xs cursor-pointer flex items-center gap-2 disabled:opacity-50"
-              >
-                {loadingMore ? (
-                  <>
-                    <svg className="animate-spin w-4 h-4 text-[#2D5A3D]" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    <span>Loading more suggestions...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-3.5 h-3.5 text-[#2D5A3D]" />
-                    <span>Load More Suggestions</span>
-                  </>
-                )}
-              </button>
-            ) : (
-              <div className="text-center py-2">
-                <span className="text-xs text-[#8a8278] bg-[#E2DBD0]/40 px-4 py-1.5 rounded-full font-medium">
-                  ✓ You've seen all local recommendations
-                </span>
-              </div>
-            )}
-          </div>
+          {!isSearching && (
+            <div className="flex flex-col items-center justify-center pt-6 pb-2">
+              {hasMore ? (
+                <button
+                  type="button"
+                  disabled={loadingMore}
+                  onClick={onLoadMore}
+                  className="px-6 py-2.5 rounded-2xl bg-white border border-[#E2DBD0] hover:bg-[#F4EEE2] hover:border-[#2D5A3D] text-xs font-semibold text-[#2D5A3D] transition-all shadow-2xs hover:shadow-xs cursor-pointer flex items-center gap-2 disabled:opacity-50"
+                >
+                  {loadingMore ? (
+                    <>
+                      <svg className="animate-spin w-4 h-4 text-[#2D5A3D]" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      <span>Loading more suggestions...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3.5 h-3.5 text-[#2D5A3D]" />
+                      <span>Load More Suggestions</span>
+                    </>
+                  )}
+                </button>
+              ) : (
+                <div className="text-center py-2">
+                  <span className="text-xs text-[#8a8278] bg-[#E2DBD0]/40 px-4 py-1.5 rounded-full font-medium">
+                    ✓ You've seen all local recommendations
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
 

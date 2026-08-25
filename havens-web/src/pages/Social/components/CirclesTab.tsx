@@ -4,7 +4,7 @@ import { GET_RECOMMENDED_CIRCLES, DELETE_COMMUNITY } from '../../../graphql/oper
 import { useAuth } from '../../../context/AuthContext';
 import { Circle } from '../types';
 import { CreateCircleWizard } from './CreateCircleWizard';
-import { Target, Users, Crown, Trash2, Sparkles } from 'lucide-react';
+import { Target, Users, Crown, Trash2, Sparkles, Search } from 'lucide-react';
 
 interface CirclesTabProps {
   joinedCircleIds: (number | string)[];
@@ -51,6 +51,7 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
   const [circleToDelete, setCircleToDelete] = useState<Circle | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [circleSearchQuery, setCircleSearchQuery] = useState('');
 
   // GraphQL query for real circles with pagination support
   const { data, loading, refetch, fetchMore } = useQuery(GET_RECOMMENDED_CIRCLES, {
@@ -73,6 +74,24 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
   const circles: Circle[] = useMemo(() => {
     return data?.recommendedCircles || [];
   }, [data]);
+
+  const isSearching = circleSearchQuery.trim().length > 0;
+  const normalizedCircleQuery = circleSearchQuery.trim().toLowerCase();
+
+  const filteredCircles = useMemo(() => {
+    if (!isSearching) return circles;
+    return circles.filter((circle) => {
+      const nameMatch = circle.name?.toLowerCase().includes(normalizedCircleQuery);
+      const descMatch = circle.description?.toLowerCase().includes(normalizedCircleQuery);
+      const locMatch = circle.locationName?.toLowerCase().includes(normalizedCircleQuery);
+      const creatorMatch = circle.creator?.username?.toLowerCase().includes(normalizedCircleQuery);
+      const hobbyMatch = (circle.hobbies || []).some((h: any) =>
+        h.name?.toLowerCase().includes(normalizedCircleQuery)
+      );
+
+      return nameMatch || descMatch || locMatch || creatorMatch || hobbyMatch;
+    });
+  }, [circles, isSearching, normalizedCircleQuery]);
 
   const handleLoadMoreCircles = async () => {
     if (loadingMore || !hasMore) return;
@@ -178,7 +197,11 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
           <div className="flex items-center gap-3">
             <span className="text-xs bg-[#2D5A3D] text-white px-3 py-2 rounded-xl font-semibold self-start md:self-auto shadow-xs flex items-center gap-1.5">
               <Target className="w-3.5 h-3.5" />
-              <span>{circles.length} Circles Available</span>
+              <span>
+                {isSearching
+                  ? `${filteredCircles.length} ${filteredCircles.length === 1 ? 'Circle Found' : 'Circles Found'}`
+                  : `${circles.length} Circles Available`}
+              </span>
             </span>
             <button
               type="button"
@@ -193,6 +216,44 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
           </div>
         </div>
 
+        {/* ── Dedicated Circle Search Bar ── */}
+        <div className="relative w-full mb-6">
+          <div className="relative flex items-center">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8a8278] pointer-events-none" />
+            <input
+              type="text"
+              value={circleSearchQuery}
+              onChange={(e) => setCircleSearchQuery(e.target.value)}
+              placeholder="Search circles by name, description, topics, or location..."
+              className="w-full pl-11 pr-10 py-3 rounded-2xl bg-white border border-[#E2DBD0] hover:border-[#2D5A3D]/40 focus:border-[#2D5A3D] text-xs sm:text-sm text-[#2C2C2C] placeholder:text-[#8a8278]/70 shadow-2xs focus:shadow-xs focus:outline-none transition-all"
+            />
+            {circleSearchQuery && (
+              <button
+                type="button"
+                onClick={() => setCircleSearchQuery('')}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#8a8278] hover:text-[#2C2C2C] bg-[#F4EEE2] hover:bg-[#E2DBD0] w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold cursor-pointer transition-colors"
+                title="Clear circle search"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+          {isSearching && (
+            <div className="flex items-center justify-between mt-2 px-1 text-xs text-[#8a8278]">
+              <span>
+                Showing {filteredCircles.length} circle{filteredCircles.length === 1 ? '' : 's'} matching "{circleSearchQuery}"
+              </span>
+              <button
+                type="button"
+                onClick={() => setCircleSearchQuery('')}
+                className="text-[#2D5A3D] hover:underline font-semibold cursor-pointer"
+              >
+                Show all available circles
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* ─── Grid of Circles ─── */}
         {loading && circles.length === 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -200,32 +261,51 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
               <CircleCardSkeleton key={i} />
             ))}
           </div>
-        ) : circles.length === 0 ? (
-          /* Empty State */
-          <div className="bg-white border border-[#E2DBD0] rounded-2xl p-12 text-center space-y-4">
-            <div className="w-16 h-16 rounded-full bg-[#eaf3ed] flex items-center justify-center mx-auto">
-              <Users className="w-8 h-8 text-[#2D5A3D]" />
-            </div>
-            <div>
-              <h4 className="text-base font-semibold text-[#2D5A3D]">No circles created yet</h4>
-              <p className="text-xs text-[#8a8278] max-w-md mx-auto mt-1">
-                Be the pioneer of your local community! Start the first micro-group for your favorite hobbies.
+        ) : filteredCircles.length === 0 ? (
+          isSearching ? (
+            <div className="bg-white border border-[#E2DBD0] rounded-2xl p-10 text-center space-y-3">
+              <div className="w-14 h-14 rounded-full bg-[#F4EEE2] flex items-center justify-center mx-auto text-[#8a8278]">
+                <Search className="w-7 h-7" />
+              </div>
+              <h4 className="text-base font-semibold text-[#2D5A3D]">No circles found</h4>
+              <p className="text-xs text-[#8a8278] max-w-md mx-auto">
+                We couldn't find any circles matching "{circleSearchQuery}". Try a different search term or launch a new circle!
               </p>
+              <button
+                type="button"
+                onClick={() => setCircleSearchQuery('')}
+                className="px-4 py-2 rounded-xl bg-[#2D5A3D] text-white text-xs font-semibold hover:bg-[#3d7a55] transition-colors cursor-pointer inline-block"
+              >
+                Clear Search
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setIsWizardOpen(true)}
-              className="px-5 py-2.5 rounded-xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white text-xs font-semibold shadow-xs transition-all cursor-pointer inline-flex items-center gap-2"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-              Launch First Circle
-            </button>
-          </div>
+          ) : (
+            /* Empty State */
+            <div className="bg-white border border-[#E2DBD0] rounded-2xl p-12 text-center space-y-4">
+              <div className="w-16 h-16 rounded-full bg-[#eaf3ed] flex items-center justify-center mx-auto">
+                <Users className="w-8 h-8 text-[#2D5A3D]" />
+              </div>
+              <div>
+                <h4 className="text-base font-semibold text-[#2D5A3D]">No circles created yet</h4>
+                <p className="text-xs text-[#8a8278] max-w-md mx-auto mt-1">
+                  Be the pioneer of your local community! Start the first micro-group for your favorite hobbies.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsWizardOpen(true)}
+                className="px-5 py-2.5 rounded-xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white text-xs font-semibold shadow-xs transition-all cursor-pointer inline-flex items-center gap-2"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                Launch First Circle
+              </button>
+            </div>
+          )
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {circles.map((circle) => {
+            {filteredCircles.map((circle) => {
               const isJoined = joinedCircleIds.some((id) => String(id) === String(circle.id));
               const isCreator = Boolean(currentUser && circle.creator && String(circle.creator.id) === String(currentUser.id));
               const affinity = getAffinityPercent(circle);
@@ -391,7 +471,7 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
         )}
 
         {/* Pagination Load More Controls */}
-        {!loading && circles.length > 0 && (
+        {!loading && !isSearching && circles.length > 0 && (
           <div className="mt-8 flex flex-col items-center justify-center gap-3">
             {hasMore ? (
               <button
