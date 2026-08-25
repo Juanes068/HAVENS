@@ -12,6 +12,9 @@ interface MeetTabProps {
   fadingCardId: string | null;
   sentRequestUserIds?: (string | number)[];
   connectingUserId?: string | number | null;
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
   onConnect: (userId: string) => void;
   onIgnore: (userId: string) => void;
   onOpenChat?: (userId: string, matchId?: string) => void;
@@ -267,6 +270,9 @@ export const MeetTab: React.FC<MeetTabProps> = ({
   fadingCardId,
   sentRequestUserIds = [],
   connectingUserId = null,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
   onConnect,
   onIgnore,
   onOpenChat,
@@ -307,27 +313,62 @@ export const MeetTab: React.FC<MeetTabProps> = ({
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {suggestedUsers.map((usr: any) => {
-            const isFading = fadingCardId === String(usr.id);
-            const isSent = sentRequestUserIds.some((id) => String(id) === String(usr.id));
-            const isConnecting = String(connectingUserId) === String(usr.id);
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {suggestedUsers.map((usr: any) => {
+              const isFading = fadingCardId === String(usr.id);
+              const isSent = sentRequestUserIds.some((id) => String(id) === String(usr.id));
+              const isConnecting = String(connectingUserId) === String(usr.id);
 
-            return (
-              <SuggestionCard
-                key={usr.id}
-                user={usr}
-                myHobbies={myHobbies}
-                isFading={isFading}
-                isSent={isSent}
-                isConnecting={isConnecting}
-                onConnect={onConnect}
-                onIgnore={onIgnore}
-                onExplore={(u) => setExploringUser(u)}
-              />
-            );
-          })}
-        </div>
+              return (
+                <SuggestionCard
+                  key={usr.id}
+                  user={usr}
+                  myHobbies={myHobbies}
+                  isFading={isFading}
+                  isSent={isSent}
+                  isConnecting={isConnecting}
+                  onConnect={onConnect}
+                  onIgnore={onIgnore}
+                  onExplore={(u) => setExploringUser(u)}
+                />
+              );
+            })}
+          </div>
+
+          {/* ── Pagination Controls ("Load More" & End of Feed Indicator) ── */}
+          <div className="flex flex-col items-center justify-center pt-6 pb-2">
+            {hasMore ? (
+              <button
+                type="button"
+                disabled={loadingMore}
+                onClick={onLoadMore}
+                className="px-6 py-2.5 rounded-2xl bg-white border border-[#E2DBD0] hover:bg-[#F4EEE2] hover:border-[#2D5A3D] text-xs font-semibold text-[#2D5A3D] transition-all shadow-2xs hover:shadow-xs cursor-pointer flex items-center gap-2 disabled:opacity-50"
+              >
+                {loadingMore ? (
+                  <>
+                    <svg className="animate-spin w-4 h-4 text-[#2D5A3D]" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <span>Loading more suggestions...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5 text-[#2D5A3D]" />
+                    <span>Load More Suggestions</span>
+                  </>
+                )}
+              </button>
+            ) : (
+              <div className="text-center py-2">
+                <span className="text-xs text-[#8a8278] bg-[#E2DBD0]/40 px-4 py-1.5 rounded-full font-medium">
+                  ✓ You've seen all local recommendations
+                </span>
+              </div>
+            )}
+          </div>
+        </>
       )}
 
       {/* ─── User Profile Preview Modal ─── */}

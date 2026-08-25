@@ -1,164 +1,181 @@
-import React, { useState } from 'react'
-import { useMutation } from '@apollo/client'
-import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
-import { TOKEN_AUTH, CREATE_USER } from '../graphql/operations'
-import { LocationInput, LocationData } from '../components/LocationInput'
+import React, { useState } from 'react';
+import { useMutation } from '@apollo/client';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { useApp } from '../context/AppContext';
+import { TOKEN_AUTH, CREATE_USER } from '../graphql/operations';
+import { LocationInput, LocationData } from '../components/LocationInput';
+import { LanguageSwitcher } from '../components/LanguageSwitcher';
 
 export const AuthPage: React.FC = () => {
-  const navigate = useNavigate()
-  const { token, user, isOnboarded, networkError, login } = useAuth()
+  const navigate = useNavigate();
+  const { token, user, isOnboarded, networkError, login } = useAuth();
+  const { t } = useApp();
 
   // Redirect already authenticated users
   React.useEffect(() => {
     if (token && user) {
       if (isOnboarded) {
-        navigate('/discover', { replace: true })
+        navigate('/discover', { replace: true });
       } else {
-        navigate('/onboarding', { replace: true })
+        navigate('/onboarding', { replace: true });
       }
     }
-  }, [token, user, isOnboarded, navigate])
+  }, [token, user, isOnboarded, navigate]);
 
-  const [isRegisterMode, setIsRegisterMode] = useState(false)
-  const [username, setUsername] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [invitationCode, setInvitationCode] = useState('')
-  const [bio, setBio] = useState('')
-  const [selectedLocation, setSelectedLocation] = useState<LocationData | null>(null)
+  const [isRegisterMode, setIsRegisterMode] = useState(false);
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [invitationCode, setInvitationCode] = useState('');
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [bio, setBio] = useState('');
+  const [selectedLocation, setSelectedLocation] = useState<LocationData | null>(null);
 
   // Derived: real-time password mismatch indicator (only active once confirmPassword is non-empty)
-  const passwordMismatch = confirmPassword.length > 0 && password !== confirmPassword
+  const passwordMismatch = confirmPassword.length > 0 && password !== confirmPassword;
 
   // Pipeline Status & Messages
-  const [isProcessing, setIsProcessing] = useState(false)
-  const [statusText, setStatusText] = useState('')
-  const [errorMsg, setErrorMsg] = useState('')
-  const [successMsg, setSuccessMsg] = useState('')
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [statusText, setStatusText] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
 
-  // Reset confirmPassword when toggling between Sign In / Register modes
+  // Reset states when toggling between Sign In / Register modes
   const handleSwitchToLogin = () => {
-    setIsRegisterMode(false)
-    setConfirmPassword('')
-    setErrorMsg('')
-    setSuccessMsg('')
-  }
+    setIsRegisterMode(false);
+    setConfirmPassword('');
+    setErrorMsg('');
+    setSuccessMsg('');
+  };
 
   const handleSwitchToRegister = () => {
-    setIsRegisterMode(true)
-    setErrorMsg('')
-    setSuccessMsg('')
-  }
+    setIsRegisterMode(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+  };
 
   // GraphQL Mutations
-  const [tokenAuthMutation] = useMutation(TOKEN_AUTH)
-  const [createUserMutation] = useMutation(CREATE_USER)
+  const [tokenAuthMutation] = useMutation(TOKEN_AUTH);
+  const [createUserMutation] = useMutation(CREATE_USER);
 
   // Form Submission Handler
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setErrorMsg('')
-    setSuccessMsg('')
+    e.preventDefault();
+    setErrorMsg('');
+    setSuccessMsg('');
 
     if (!isRegisterMode) {
       // ───────────── SIGN IN FLOW ─────────────
       if (!username || !password) {
-        setErrorMsg('Please enter both username and password.')
-        return
+        setErrorMsg(t('authErrorMissingFields'));
+        return;
       }
 
-      setIsProcessing(true)
-      setStatusText('Authenticating...')
+      setIsProcessing(true);
+      setStatusText(t('processing'));
 
       try {
         const loginRes = await tokenAuthMutation({
           variables: { username, password },
-        })
+        });
 
         if (loginRes?.data?.tokenAuth?.token) {
-          await login(loginRes.data.tokenAuth.token)
-          navigate('/discover')
+          await login(loginRes.data.tokenAuth.token);
+          navigate('/discover');
         } else {
-          setErrorMsg('Authentication failed: Invalid credentials.')
+          setErrorMsg(t('authErrorInvalidCreds'));
         }
       } catch (err: any) {
-        setErrorMsg(err.message || 'Authentication error.')
+        setErrorMsg(err.message || t('authErrorInvalidCreds'));
       } finally {
-        setIsProcessing(false)
+        setIsProcessing(false);
       }
-      return
+      return;
     }
 
     // ───────────── REGISTRATION FLOW ─────────────
     if (!username || !email || !password || !confirmPassword || !invitationCode) {
-      setErrorMsg('Please fill in all required fields including your 6-character invitation code.')
-      return
+      setErrorMsg(t('authErrorMissingFields'));
+      return;
     }
 
     // Client-side password confirmation guard
     if (password !== confirmPassword) {
-      setErrorMsg('⚠️ Passwords do not match. Please re-enter your password.')
-      return
+      setErrorMsg(`⚠️ ${t('passwordsMismatch')}`);
+      return;
     }
 
     if (!selectedLocation) {
-      setErrorMsg('Please search and select a valid location from the Google Maps suggestions dropdown.')
-      return
+      setErrorMsg(t('locationPlaceholder'));
+      return;
     }
 
-    setIsProcessing(true)
+    // Mandatory Terms & Conditions Checkbox Validation
+    if (!termsAccepted) {
+      setErrorMsg(t('termsCheckboxRequired'));
+      return;
+    }
+
+    setIsProcessing(true);
 
     try {
       // Step 1: Create User Account in Django Database
-      setStatusText('Step 1/2: Creating your Havens account...')
+      setStatusText('Step 1/2: Creating your Havens account...');
       const regRes = await createUserMutation({
         variables: {
           username,
           email,
           password,
           invitationCode,
+          termsAccepted: true,
           bio,
           neighbourhood: selectedLocation.neighbourhood || selectedLocation.formatted_address,
           cityName: selectedLocation.cityName || selectedLocation.formatted_address,
           latitude: selectedLocation.lat ?? selectedLocation.latitude,
           longitude: selectedLocation.lng ?? selectedLocation.longitude,
         },
-      })
+      });
 
       if (!regRes?.data?.createUser?.success) {
-        throw new Error(regRes?.data?.createUser?.message || 'Registration failed.')
+        throw new Error(regRes?.data?.createUser?.message || 'Registration failed.');
       }
 
       // Step 2: Authenticate and save JWT Token
-      setStatusText('Authenticating session & injecting JWT headers...')
+      setStatusText(t('settingUpSession'));
       const loginRes = await tokenAuthMutation({
         variables: { username, password },
-      })
+      });
 
-      const token = loginRes?.data?.tokenAuth?.token
+      const token = loginRes?.data?.tokenAuth?.token;
       if (!token) {
-        throw new Error('Auto-login after registration failed.')
+        throw new Error('Auto-login after registration failed.');
       }
 
       // Injects JWT token into secureStore and updates Apollo Client Authorization headers
-      await login(token)
+      await login(token);
 
-      setSuccessMsg('Account created! A welcome email is on its way. Proceeding to Profile Setup...')
+      setSuccessMsg(t('authSuccessRedirect'));
 
       // Proceed to Step 2 (Hobby Selection & Photo Upload)
-      navigate('/onboarding')
+      navigate('/onboarding');
     } catch (err: any) {
-      console.error('[Registration Error]', err)
-      setErrorMsg(err.message || 'Registration failed.')
+      console.error('[Registration Error]', err);
+      setErrorMsg(err.message || 'Registration failed.');
     } finally {
-      setIsProcessing(false)
+      setIsProcessing(false);
     }
-  }
+  };
 
   return (
-    <div className="min-h-screen bg-[#F4EEE2] text-[#2C2C2C] flex flex-col items-center justify-center p-6 antialiased">
+    <div className="min-h-screen bg-[#F4EEE2] text-[#2C2C2C] flex flex-col items-center justify-center p-6 antialiased relative">
+      
+      {/* Top Header Floating Language Switcher */}
+      <div className="absolute top-6 right-6">
+        <LanguageSwitcher variant="dropdown" />
+      </div>
+
       <div className="max-w-md w-full bg-[#F0EAE0]/80 border border-[#E2DBD0] rounded-3xl p-8 shadow-sm relative">
 
         {/* Brand Title */}
@@ -167,7 +184,7 @@ export const AuthPage: React.FC = () => {
             havens
           </h1>
           <p className="text-sm text-[#8a8278] font-normal mt-1">
-            trusted circles &amp; warm community spaces
+            {t('brandTagline')}
           </p>
         </div>
 
@@ -180,7 +197,7 @@ export const AuthPage: React.FC = () => {
               !isRegisterMode ? 'bg-white text-[#2C2C2C] shadow-sm' : 'text-[#8a8278] hover:text-[#2C2C2C]'
             }`}
           >
-            Sign In
+            {t('signInTab')}
           </button>
           <button
             type="button"
@@ -189,7 +206,7 @@ export const AuthPage: React.FC = () => {
               isRegisterMode ? 'bg-white text-[#2C2C2C] shadow-sm' : 'text-[#8a8278] hover:text-[#2C2C2C]'
             }`}
           >
-            Register with Invite
+            {t('registerTab')}
           </button>
         </div>
 
@@ -209,7 +226,7 @@ export const AuthPage: React.FC = () => {
         {isProcessing && (
           <div className="absolute inset-0 z-50 bg-[#F0EAE0]/95 backdrop-blur-xs rounded-3xl flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-200">
             <div className="w-10 h-10 border-4 border-[#2D5A3D] border-t-transparent rounded-full animate-spin mb-4" />
-            <h3 className="text-sm font-semibold text-[#2D5A3D]">Setting up your Havens session...</h3>
+            <h3 className="text-sm font-semibold text-[#2D5A3D]">{t('settingUpSession')}</h3>
             <p className="text-xs text-[#8a8278] mt-1 font-mono">{statusText}</p>
           </div>
         )}
@@ -217,7 +234,9 @@ export const AuthPage: React.FC = () => {
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="auth-username" className="block text-xs font-medium text-[#8a8278] mb-1">Username</label>
+            <label htmlFor="auth-username" className="block text-xs font-medium text-[#8a8278] mb-1">
+              {t('usernameLabel')}
+            </label>
             <input
               id="auth-username"
               name="username"
@@ -225,14 +244,16 @@ export const AuthPage: React.FC = () => {
               autoComplete="username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="Enter username"
+              placeholder={t('usernamePlaceholder')}
               className="w-full px-4 py-2.5 rounded-xl bg-white border border-[#E2DBD0] text-[#2C2C2C] text-sm focus:outline-none focus:border-[#2D5A3D]"
             />
           </div>
 
           {isRegisterMode && (
             <div>
-              <label htmlFor="auth-email" className="block text-xs font-medium text-[#8a8278] mb-1">Email</label>
+              <label htmlFor="auth-email" className="block text-xs font-medium text-[#8a8278] mb-1">
+                {t('emailLabel')}
+              </label>
               <input
                 id="auth-email"
                 name="email"
@@ -240,14 +261,16 @@ export const AuthPage: React.FC = () => {
                 autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="name@example.com"
+                placeholder={t('emailPlaceholder')}
                 className="w-full px-4 py-2.5 rounded-xl bg-white border border-[#E2DBD0] text-[#2C2C2C] text-sm focus:outline-none focus:border-[#2D5A3D]"
               />
             </div>
           )}
 
           <div>
-            <label htmlFor="auth-password" className="block text-xs font-medium text-[#8a8278] mb-1">Password</label>
+            <label htmlFor="auth-password" className="block text-xs font-medium text-[#8a8278] mb-1">
+              {t('passwordLabel')}
+            </label>
             <input
               id="auth-password"
               name="password"
@@ -255,7 +278,7 @@ export const AuthPage: React.FC = () => {
               autoComplete={isRegisterMode ? 'new-password' : 'current-password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter password"
+              placeholder={t('passwordPlaceholder')}
               className="w-full px-4 py-2.5 rounded-xl bg-white border border-[#E2DBD0] text-[#2C2C2C] text-sm focus:outline-none focus:border-[#2D5A3D]"
             />
           </div>
@@ -264,7 +287,7 @@ export const AuthPage: React.FC = () => {
           {isRegisterMode && (
             <div>
               <label htmlFor="auth-confirm-password" className="block text-xs font-medium text-[#8a8278] mb-1">
-                Confirm Password <span className="text-[#C47B5A]">*</span>
+                {t('confirmPasswordLabel')} <span className="text-[#C47B5A]">*</span>
               </label>
               <input
                 id="auth-confirm-password"
@@ -273,7 +296,7 @@ export const AuthPage: React.FC = () => {
                 autoComplete="new-password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Re-enter your password"
+                placeholder={t('confirmPasswordPlaceholder')}
                 className={`w-full px-4 py-2.5 rounded-xl bg-white border text-[#2C2C2C] text-sm focus:outline-none transition-colors ${
                   passwordMismatch
                     ? 'border-rose-400 focus:border-rose-500 bg-rose-50/30'
@@ -282,16 +305,16 @@ export const AuthPage: React.FC = () => {
                     : 'border-[#E2DBD0] focus:border-[#2D5A3D]'
                 }`}
               />
-              {/* Inline mismatch feedback — appears immediately as the user types */}
+              {/* Inline mismatch feedback */}
               {passwordMismatch && (
                 <p className="text-[11px] text-rose-600 mt-1.5 font-medium flex items-center gap-1">
-                  <span>⚠️</span> Passwords do not match.
+                  <span>⚠️</span> {t('passwordsMismatch')}
                 </p>
               )}
               {/* Positive match feedback */}
               {confirmPassword.length > 0 && !passwordMismatch && (
                 <p className="text-[11px] text-[#2D5A3D] mt-1.5 font-medium flex items-center gap-1">
-                  <span>✓</span> Passwords match.
+                  <span>✓</span> {t('passwordsMatch')}
                 </p>
               )}
             </div>
@@ -301,7 +324,7 @@ export const AuthPage: React.FC = () => {
             <>
               <div>
                 <label htmlFor="auth-invite-code" className="block text-xs font-medium text-[#8a8278] mb-1">
-                  Invitation Code <span className="text-[#C47B5A]">*</span>
+                  {t('inviteCodeLabel')} <span className="text-[#C47B5A]">*</span>
                 </label>
                 <input
                   id="auth-invite-code"
@@ -311,39 +334,91 @@ export const AuthPage: React.FC = () => {
                   maxLength={6}
                   value={invitationCode}
                   onChange={(e) => setInvitationCode(e.target.value.toUpperCase())}
-                  placeholder="Enter 6-character code (e.g. A8X9K2)"
+                  placeholder={t('inviteCodePlaceholder')}
                   className="w-full px-4 py-2.5 rounded-xl bg-white border border-[#E2DBD0] text-[#2C2C2C] text-sm tracking-wider font-mono focus:outline-none focus:border-[#2D5A3D] uppercase"
                 />
               </div>
 
               <div>
                 <label htmlFor="auth-location" className="block text-xs font-medium text-[#8a8278] mb-1">
-                  Location / Neighbourhood <span className="text-[#C47B5A]">*</span>
+                  {t('locationLabel')} <span className="text-[#C47B5A]">*</span>
                 </label>
                 <LocationInput
                   onSelectLocation={(loc) => {
-                    setSelectedLocation(loc)
-                    if (loc) setErrorMsg('')
+                    setSelectedLocation(loc);
+                    if (loc) setErrorMsg('');
                   }}
-                  placeholder="Search address or neighbourhood (e.g. Kitsilano, Vancouver)"
+                  placeholder={t('locationPlaceholder')}
                 />
+              </div>
+
+              {/* Mandatory Terms & Conditions Checkbox */}
+              <div className="pt-2">
+                <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    id="auth-terms-checkbox"
+                    name="termsAccepted"
+                    checked={termsAccepted}
+                    onChange={(e) => {
+                      setTermsAccepted(e.target.checked);
+                      if (e.target.checked && errorMsg === t('termsCheckboxRequired')) {
+                        setErrorMsg('');
+                      }
+                    }}
+                    className="mt-0.5 w-4 h-4 rounded border-[#E2DBD0] text-[#2D5A3D] focus:ring-[#2D5A3D] cursor-pointer accent-[#2D5A3D]"
+                  />
+                  <span className="text-xs text-[#5a5450] leading-relaxed">
+                    {t('termsCheckboxLabel')}{' '}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        navigate('/terms');
+                      }}
+                      className="text-[#2D5A3D] font-semibold underline underline-offset-2 hover:opacity-80 cursor-pointer"
+                    >
+                      ({t('termsAndConditions')})
+                    </button>{' '}
+                    <span className="text-[#C47B5A]">*</span>
+                  </span>
+                </label>
               </div>
             </>
           )}
 
           <button
             type="submit"
-            disabled={isProcessing || (isRegisterMode && (passwordMismatch || !selectedLocation))}
+            disabled={
+              isProcessing ||
+              (isRegisterMode && (passwordMismatch || !selectedLocation || !termsAccepted))
+            }
             className="w-full py-3 px-4 rounded-xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white font-medium text-sm transition-colors shadow-xs disabled:opacity-50 mt-4 cursor-pointer"
           >
             {isProcessing
-              ? 'Processing...'
+              ? t('processing')
               : isRegisterMode
-              ? 'Continue to Profile Setup (Step 1 of 2) →'
-              : 'Sign In'}
+              ? t('registerButton')
+              : t('signInButton')}
           </button>
         </form>
+
+        {/* Footer text link */}
+        <div className="text-center mt-6 pt-4 border-t border-[#E2DBD0]/60">
+          <p className="text-[11px] text-[#8a8278]">
+            {t('termsDisclaimer')}{' '}
+            <button
+              type="button"
+              onClick={() => navigate('/terms')}
+              className="text-[#2D5A3D] font-semibold underline underline-offset-2 hover:opacity-80 cursor-pointer"
+            >
+              {t('termsAndConditions')}
+            </button>
+          </p>
+        </div>
       </div>
     </div>
-  )
-}
+  );
+};
+
+export default AuthPage;

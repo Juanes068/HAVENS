@@ -11,14 +11,16 @@ import { CalendarView } from './pages/Calendar'
 import { SavedView } from './pages/Saved'
 import { ProfileSettingsView } from './pages/ProfileSettings'
 import { ChatHubView } from './pages/ChatHub'
+import { TermsPage } from './pages/Terms'
 
 export default function App() {
   return (
     <AppContextProvider>
       <BrowserRouter>
         <Routes>
-          {/* Public Auth Route */}
+          {/* Public Routes */}
           <Route path="/auth" element={<AuthPage />} />
+          <Route path="/terms" element={<TermsPage />} />
 
           {/* Private Application Routes (Guarded by ProtectedRoute) */}
           <Route element={<ProtectedRoute />}>

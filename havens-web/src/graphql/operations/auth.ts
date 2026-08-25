@@ -22,6 +22,7 @@ export const CREATE_USER = gql`
     $email: String!
     $password: String!
     $invitationCode: String!
+    $termsAccepted: Boolean!
     $bio: String
     $neighbourhood: String
     $cityName: String
@@ -34,6 +35,7 @@ export const CREATE_USER = gql`
       email: $email
       password: $password
       invitationCode: $invitationCode
+      termsAccepted: $termsAccepted
       bio: $bio
       neighbourhood: $neighbourhood
       cityName: $cityName

@@ -18,10 +18,25 @@ import React, { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation } from '@apollo/client'
 import { SectionHeading } from './SectionHeading'
+import { Avatar } from './Avatar'
 import { ScheduledEventCard, ScheduledEvent } from './ScheduledEventCard'
 import { MY_RSVPS, GET_ALL_EVENTS, SWIPE_EVENT } from '../graphql/operations'
 import { useAuth } from '../context/AuthContext'
-import { CalendarDays, Compass } from 'lucide-react'
+import {
+  CalendarDays,
+  Compass,
+  ArrowLeft,
+  Check,
+  HelpCircle,
+  Share2,
+  MapPin,
+  Clock,
+  Star,
+  Users,
+  Crown,
+  Sparkles,
+  ExternalLink,
+} from 'lucide-react'
 
 // ─── [DOMAIN 1: DATE UTILITIES & MATRIX CALCULATORS] ────────────────────────
 function getDaysInMonth(year: number, month: number): number {
@@ -149,6 +164,8 @@ export const CalendarTab: React.FC = () => {
   // Calendar month navigation state & interactive selectedDate state
   const [viewDate, setViewDate] = useState<Date>(() => new Date(todayYear, todayMonth, 1))
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date(todayYear, todayMonth, todayDay))
+  const [selectedEventId, setSelectedEventId] = useState<string | number | null>(null)
+  const [shareCopied, setShareCopied] = useState(false)
   
   // Right Column Tabs: ONLY "Upcoming" and "Selected Day"
   const [activeTab, setActiveTab] = useState<'upcoming' | 'selected'>('upcoming')
@@ -252,6 +269,12 @@ export const CalendarTab: React.FC = () => {
     return Array.from(eventMap.values())
   }, [rawRsvps, rawAllEvents, user])
 
+  // Selected event entity
+  const selectedEvent = useMemo(() => {
+    if (!selectedEventId) return null
+    return unifiedEvents.find((e) => String(e.id) === String(selectedEventId)) || null
+  }, [unifiedEvents, selectedEventId])
+
   // Filter 1: Upcoming Events (scheduledDate >= todayMidnight)
   const upcomingEvents = useMemo(() => {
     const upcoming: ScheduledEvent[] = []
@@ -297,13 +320,45 @@ export const CalendarTab: React.FC = () => {
     setViewDate(new Date(todayYear, todayMonth, 1))
     setSelectedDate(today)
     setActiveTab('selected')
+    const dayEvs = unifiedEvents.filter((e) => isSameCalendarDay(e.scheduledDate, today))
+    if (dayEvs.length > 0) {
+      setSelectedEventId(dayEvs[0].id)
+    }
   }
 
   // Interactive Day Click Handler: Selects date and auto-switches tab to "Selected Day"
   const handleSelectDay = (day: number) => {
     const newSelected = new Date(currentViewYear, currentViewMonth, day)
     setSelectedDate(newSelected)
-    setActiveTab('selected') // Auto-switch UX
+    setActiveTab('selected')
+    const dayEvs = unifiedEvents.filter((e) => isSameCalendarDay(e.scheduledDate, newSelected))
+    if (dayEvs.length > 0) {
+      setSelectedEventId(dayEvs[0].id)
+    } else {
+      setSelectedEventId(null)
+    }
+  }
+
+  // Share Event Handler (Web Share API with Clipboard Fallback)
+  const handleShareEvent = async (event: ScheduledEvent) => {
+    const shareUrl = `${window.location.origin}/discover?event=${event.id}`
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: event.title,
+          text: event.description || `Join me for ${event.title} on Havens!`,
+          url: shareUrl,
+        })
+        return
+      } catch (err) {
+        // User aborted share or not supported
+      }
+    }
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(shareUrl)
+      setShareCopied(true)
+      setTimeout(() => setShareCopied(false), 2500)
+    }
   }
 
   // Dynamic formatted Month + Year title
@@ -522,139 +577,357 @@ export const CalendarTab: React.FC = () => {
           </div>
         </div>
 
-        {/* 2. RIGHT COLUMN: 30% WIDTH (md:col-span-3) WITH INTERNAL VERTICAL SCROLL */}
+        {/* 2. RIGHT COLUMN: 30% WIDTH (md:col-span-3) WITH EXTENDED DETAILS OR EVENT FEED */}
         <div className="md:col-span-3 space-y-4 w-full flex flex-col max-h-[85vh]">
           
-          {/* Clean Pill Toggle Menu: STRICTLY Two Tabs ("Upcoming" & "Selected Day") */}
-          <div className="flex items-center justify-between gap-2 shrink-0">
-            <div className="flex items-center gap-1 p-1 bg-[#F0EAE0] rounded-xl shadow-2xs border border-[#E2DBD0]/60 w-full sm:w-auto">
+          {selectedEvent ? (
+            /* ═══════════════════════════════════════════════════════════ */
+            /* EXTENDED EVENT DETAIL PANEL VIEW                          */
+            /* ═══════════════════════════════════════════════════════════ */
+            <div className="bg-white border border-[#E2DBD0] rounded-3xl p-5 shadow-xs flex flex-col max-h-[82vh] overflow-y-auto space-y-4 [scrollbar-width:thin] [scrollbar-color:#E2DBD0_transparent]">
               
-              {/* Tab 1: Upcoming */}
-              <button
-                type="button"
-                onClick={() => setActiveTab('upcoming')}
-                className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                  activeTab === 'upcoming'
-                    ? 'bg-white text-stone-800 shadow-xs'
-                    : 'text-stone-500 hover:text-stone-800'
-                }`}
-              >
-                <span>Upcoming</span>
-                <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                    activeTab === 'upcoming'
-                      ? 'bg-[#eaf3ed] text-[#2D5A3D]'
-                      : 'bg-[#F0EAE0] text-stone-500'
-                  }`}
+              {/* Back to feed header button */}
+              <div className="flex items-center justify-between pb-3 border-b border-[#E2DBD0]/60 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSelectedEventId(null)}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-[#2D5A3D] hover:text-[#3d7a55] transition-colors cursor-pointer"
                 >
-                  {upcomingEvents.length}
-                </span>
-              </button>
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Back to plans feed</span>
+                </button>
+                {selectedEvent.pointsReward ? (
+                  <span className="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200/60 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                    <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                    +{selectedEvent.pointsReward} pts
+                  </span>
+                ) : null}
+              </div>
 
-              {/* Tab 2: Selected Day */}
-              <button
-                type="button"
-                onClick={() => setActiveTab('selected')}
-                className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                  activeTab === 'selected'
-                    ? 'bg-white text-stone-800 shadow-xs'
-                    : 'text-stone-500 hover:text-stone-800'
-                }`}
-              >
-                <span>Selected Day</span>
-                <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                    activeTab === 'selected'
-                      ? 'bg-[#eaf3ed] text-[#2D5A3D]'
-                      : 'bg-[#F0EAE0] text-stone-500'
-                  }`}
-                >
-                  {selectedDayEvents.length}
-                </span>
-              </button>
-
-            </div>
-          </div>
-
-          {/* Feed Title Bar with Selected Date Context */}
-          <div className="flex items-center justify-between pb-2 border-b border-[#E2DBD0]/60 shrink-0">
-            <h3 className="text-sm font-bold font-serif text-stone-800 flex items-center gap-2 flex-wrap">
-              {activeTab === 'upcoming' ? (
-                <span>All Upcoming Plans ({upcomingEvents.length})</span>
-              ) : (
-                <>
-                  <span>Plans for {new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(selectedDate)}</span>
-                  {isSelectedDateToday && (
-                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-[#2D5A3D] text-white">
-                      Today
-                    </span>
-                  )}
-                  {isSelectedDatePast && !isSelectedDateToday && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#fdf0eb] text-[#C47B5A]">
-                      Past
-                    </span>
-                  )}
-                </>
-              )}
-            </h3>
-          </div>
-
-          {/* Loading Indicator */}
-          {isLoading && (
-            <div className="text-center py-16 text-stone-400 font-serif animate-pulse text-sm">
-              Loading your Havens schedule...
-            </div>
-          )}
-
-          {/* 2. SCROLLABLE EVENT FEED CONTAINER (max-h-[70vh] overflow-y-auto with smooth styled scrollbar) */}
-          {!isLoading && displayedFeedEvents.length > 0 && (
-            <div className="flex-1 overflow-y-auto max-h-[68vh] pr-1.5 space-y-3.5 [scrollbar-width:thin] [scrollbar-color:#E2DBD0_transparent]">
-              {displayedFeedEvents.map((event) => {
-                const evDate = event.scheduledDate ? new Date(event.scheduledDate) : new Date()
-                const isEventPast = evDate.getTime() < todayMidnight.getTime()
-
-                return (
-                  <ScheduledEventCard
-                    key={String(event.id)}
-                    event={event}
-                    isPast={isEventPast}
-                    onRsvpChange={handleRsvpChange}
-                    currentUsername={user?.username}
+              {/* Event Image Banner (if available) */}
+              {selectedEvent.imageUrl && (
+                <div className="w-full h-44 rounded-2xl overflow-hidden bg-[#F4EEE2] relative border border-[#E2DBD0]/60 shrink-0">
+                  <img
+                    src={selectedEvent.imageUrl}
+                    alt={selectedEvent.title}
+                    className="w-full h-full object-cover"
                   />
-                )
-              })}
-            </div>
-          )}
+                </div>
+              )}
 
-          {/* 3. CLEAN EMPTY STATE: Displayed ONLY when exact clicked date has 0 events */}
-          {!isLoading && displayedFeedEvents.length === 0 && (
-            <div className="text-center py-12 px-5 rounded-3xl bg-white/80 border border-[#E2DBD0] shadow-2xs space-y-3">
-              <div className="w-12 h-12 rounded-full bg-[#eaf3ed] text-[#2D5A3D] flex items-center justify-center mx-auto">
-                <CalendarDays className="w-6 h-6 text-[#2D5A3D]" />
-              </div>
-
+              {/* Title & Status Badges */}
               <div>
-                <h3 className="text-sm sm:text-base font-bold text-stone-800 font-serif">
-                  {activeTab === 'upcoming'
-                    ? 'Your calendar is clear. Go discover some Havens!'
-                    : 'No events scheduled for this date.'}
-                </h3>
-                <p className="text-xs text-stone-500 mt-1 leading-relaxed">
-                  {activeTab === 'upcoming'
-                    ? 'Explore upcoming community gatherings, RSVP with friends, or host your own plan.'
-                    : `No gatherings are scheduled for ${selectedDateFormatted}. Click another date on the calendar or explore live community events.`}
-                </p>
+                <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                  {selectedEvent.role === 'hosting' ? (
+                    <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-[#eaf3ed] text-[#2D5A3D] border border-[#2D5A3D]/20 flex items-center gap-1">
+                      <Crown className="w-3 h-3 text-[#2D5A3D]" />
+                      <span>Hosting</span>
+                    </span>
+                  ) : selectedEvent.response === 'going' ? (
+                    <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-[#eaf3ed] text-[#2D5A3D] flex items-center gap-1">
+                      <Check className="w-3 h-3 text-[#2D5A3D]" />
+                      <span>Going</span>
+                    </span>
+                  ) : selectedEvent.response === 'maybe' ? (
+                    <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-[#fef9ee] text-[#b87e28] flex items-center gap-1">
+                      <HelpCircle className="w-3 h-3 text-[#b87e28]" />
+                      <span>Maybe</span>
+                    </span>
+                  ) : null}
+
+                  {selectedEvent.visibility && (
+                    <span className="text-[10px] text-stone-500 capitalize px-2 py-0.5 rounded-md bg-[#F4EEE2] border border-[#E2DBD0]/60">
+                      {selectedEvent.visibility.replace('_', ' ')}
+                    </span>
+                  )}
+                </div>
+
+                <h2 className="text-xl font-bold font-serif text-stone-900 leading-tight">
+                  {selectedEvent.title}
+                </h2>
               </div>
 
-              <button
-                type="button"
-                onClick={() => navigate('/discover')}
-                className="w-full py-2.5 rounded-xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
-              >
-                <Compass className="w-4 h-4" />
-                <span>Discover Havens</span>
-              </button>
+              {/* Host info row */}
+              {selectedEvent.creator && (
+                <div className="flex items-center justify-between p-3 rounded-2xl bg-[#FDFBF7] border border-[#E2DBD0]/60">
+                  <div className="flex items-center gap-3">
+                    <Avatar
+                      name={selectedEvent.creator.username || 'Host'}
+                      photoUrl={selectedEvent.creator.photoUrl}
+                      color="#2D5A3D"
+                      size="md"
+                    />
+                    <div>
+                      <p className="text-xs font-semibold text-stone-900">
+                        @{selectedEvent.creator.username}
+                      </p>
+                      <p className="text-[10px] text-stone-500">Event Host</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Date, Time & Location Details */}
+              <div className="space-y-2 text-xs">
+                {selectedEvent.scheduledDate && !isNaN(new Date(selectedEvent.scheduledDate).getTime()) && (
+                  <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-[#eaf3ed]/40 border border-[#2D5A3D]/15 text-[#2D5A3D]">
+                    <Clock className="w-4 h-4 shrink-0 mt-0.5 text-[#2D5A3D]" />
+                    <div>
+                      <p className="font-semibold">
+                        {new Intl.DateTimeFormat('en-US', {
+                          weekday: 'long',
+                          month: 'long',
+                          day: 'numeric',
+                          year: 'numeric',
+                        }).format(new Date(selectedEvent.scheduledDate))}
+                      </p>
+                      <p className="text-[11px] text-stone-600 mt-0.5">
+                        {new Intl.DateTimeFormat('en-US', {
+                          hour: 'numeric',
+                          minute: '2-digit',
+                          hour12: true,
+                        }).format(new Date(selectedEvent.scheduledDate))}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-[#FDFBF7] border border-[#E2DBD0]/60 text-stone-700">
+                  <MapPin className="w-4 h-4 shrink-0 mt-0.5 text-[#C47B5A]" />
+                  <div>
+                    <p className="font-semibold text-stone-900">
+                      {selectedEvent.locationName || 'Local Haven Location'}
+                    </p>
+                    <p className="text-[10px] text-stone-500 mt-0.5">Physical gathering point</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Description */}
+              {selectedEvent.description && (
+                <div className="space-y-1 pt-1">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-stone-400">About Gathering</h4>
+                  <p className="text-xs text-stone-700 leading-relaxed whitespace-pre-wrap bg-[#FDFBF7] p-3 rounded-2xl border border-[#E2DBD0]/40">
+                    {selectedEvent.description}
+                  </p>
+                </div>
+              )}
+
+              {/* Passions / Hobbies */}
+              {selectedEvent.hobbies && selectedEvent.hobbies.length > 0 && (
+                <div className="space-y-1.5 pt-1">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-stone-400">Passions</h4>
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedEvent.hobbies.map((hb) => (
+                      <span
+                        key={hb.id}
+                        className="text-[11px] font-medium px-2.5 py-1 rounded-xl bg-[#eaf3ed] text-[#2D5A3D] border border-[#7aaa8a]/30"
+                      >
+                        #{hb.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Share Confirmation Banner */}
+              {shareCopied && (
+                <div className="p-2 text-xs bg-[#eaf3ed] text-[#2D5A3D] border border-[#2D5A3D]/20 rounded-xl text-center font-medium">
+                  ✓ Event link copied to clipboard!
+                </div>
+              )}
+
+              {/* RSVP Action Bar */}
+              <div className="pt-3 border-t border-[#E2DBD0]/60 space-y-2 shrink-0">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const eventIdNum = typeof selectedEvent.id === 'string' ? parseInt(selectedEvent.id, 10) : selectedEvent.id
+                      handleRsvpChange(eventIdNum, selectedEvent.response === 'going' ? 'pass' : 'going')
+                    }}
+                    className={`flex-1 py-2.5 px-3 rounded-2xl text-xs font-semibold transition-all cursor-pointer shadow-xs flex items-center justify-center gap-1.5 ${
+                      selectedEvent.response === 'going'
+                        ? 'bg-[#2D5A3D] text-white hover:bg-[#3d7a55]'
+                        : 'bg-[#eaf3ed] text-[#2D5A3D] hover:bg-[#2D5A3D] hover:text-white border border-[#2D5A3D]/20'
+                    }`}
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>{selectedEvent.response === 'going' ? 'Going (Confirmed)' : 'Confirm (Going)'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const eventIdNum = typeof selectedEvent.id === 'string' ? parseInt(selectedEvent.id, 10) : selectedEvent.id
+                      handleRsvpChange(eventIdNum, selectedEvent.response === 'maybe' ? 'pass' : 'maybe')
+                    }}
+                    className={`py-2.5 px-4 rounded-2xl text-xs font-semibold transition-all cursor-pointer border flex items-center justify-center gap-1.5 ${
+                      selectedEvent.response === 'maybe'
+                        ? 'bg-amber-100 border-amber-300 text-amber-900 shadow-xs'
+                        : 'border-[#E2DBD0] bg-white text-stone-700 hover:bg-[#F4EEE2]'
+                    }`}
+                  >
+                    <HelpCircle className="w-3.5 h-3.5" />
+                    <span>Maybe</span>
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleShareEvent(selectedEvent)}
+                  className="w-full py-2 px-3 rounded-2xl border border-[#E2DBD0] bg-white hover:bg-[#F4EEE2] text-stone-700 text-xs font-semibold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Share2 className="w-3.5 h-3.5 text-stone-500" />
+                  <span>Share Event</span>
+                </button>
+              </div>
+
             </div>
+          ) : (
+            /* ═══════════════════════════════════════════════════════════ */
+            /* UPCOMING / SELECTED DAY EVENT FEED LIST                   */
+            /* ═══════════════════════════════════════════════════════════ */
+            <>
+              {/* Clean Pill Toggle Menu: STRICTLY Two Tabs ("Upcoming" & "Selected Day") */}
+              <div className="flex items-center justify-between gap-2 shrink-0">
+                <div className="flex items-center gap-1 p-1 bg-[#F0EAE0] rounded-xl shadow-2xs border border-[#E2DBD0]/60 w-full sm:w-auto">
+                  
+                  {/* Tab 1: Upcoming */}
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('upcoming')}
+                    className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                      activeTab === 'upcoming'
+                        ? 'bg-white text-stone-800 shadow-xs'
+                        : 'text-stone-500 hover:text-stone-800'
+                    }`}
+                  >
+                    <span>Upcoming</span>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                        activeTab === 'upcoming'
+                          ? 'bg-[#eaf3ed] text-[#2D5A3D]'
+                          : 'bg-[#F0EAE0] text-stone-500'
+                      }`}
+                    >
+                      {upcomingEvents.length}
+                    </span>
+                  </button>
+
+                  {/* Tab 2: Selected Day */}
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('selected')}
+                    className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                      activeTab === 'selected'
+                        ? 'bg-white text-stone-800 shadow-xs'
+                        : 'text-stone-500 hover:text-stone-800'
+                    }`}
+                  >
+                    <span>Selected Day</span>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                        activeTab === 'selected'
+                          ? 'bg-[#eaf3ed] text-[#2D5A3D]'
+                          : 'bg-[#F0EAE0] text-stone-500'
+                      }`}
+                    >
+                      {selectedDayEvents.length}
+                    </span>
+                  </button>
+
+                </div>
+              </div>
+
+              {/* Feed Title Bar with Selected Date Context */}
+              <div className="flex items-center justify-between pb-2 border-b border-[#E2DBD0]/60 shrink-0">
+                <h3 className="text-sm font-bold font-serif text-stone-800 flex items-center gap-2 flex-wrap">
+                  {activeTab === 'upcoming' ? (
+                    <span>All Upcoming Plans ({upcomingEvents.length})</span>
+                  ) : (
+                    <>
+                      <span>
+                        Plans for{' '}
+                        {selectedDate instanceof Date && !isNaN(selectedDate.getTime())
+                          ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(selectedDate)
+                          : 'Selected Day'}
+                      </span>
+                      {isSelectedDateToday && (
+                        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-[#2D5A3D] text-white">
+                          Today
+                        </span>
+                      )}
+                      {isSelectedDatePast && !isSelectedDateToday && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#fdf0eb] text-[#C47B5A]">
+                          Past
+                        </span>
+                      )}
+                    </>
+                  )}
+                </h3>
+              </div>
+
+              {/* Loading Indicator */}
+              {isLoading && (
+                <div className="text-center py-16 text-stone-400 font-serif animate-pulse text-sm">
+                  Loading your Havens schedule...
+                </div>
+              )}
+
+              {/* SCROLLABLE EVENT FEED CONTAINER */}
+              {!isLoading && displayedFeedEvents.length > 0 && (
+                <div className="flex-1 overflow-y-auto max-h-[68vh] pr-1.5 space-y-3.5 [scrollbar-width:thin] [scrollbar-color:#E2DBD0_transparent]">
+                  {displayedFeedEvents.map((event) => {
+                    const evDate = event.scheduledDate ? new Date(event.scheduledDate) : new Date()
+                    const isEventPast = evDate.getTime() < todayMidnight.getTime()
+
+                    return (
+                      <ScheduledEventCard
+                        key={String(event.id)}
+                        event={event}
+                        isPast={isEventPast}
+                        isSelected={selectedEventId !== null && String(selectedEventId) === String(event.id)}
+                        onSelect={() => setSelectedEventId(event.id)}
+                        onRsvpChange={handleRsvpChange}
+                        currentUsername={user?.username}
+                      />
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* CLEAN EMPTY STATE */}
+              {!isLoading && displayedFeedEvents.length === 0 && (
+                <div className="text-center py-12 px-5 rounded-3xl bg-white/80 border border-[#E2DBD0] shadow-2xs space-y-3">
+                  <div className="w-12 h-12 rounded-full bg-[#eaf3ed] text-[#2D5A3D] flex items-center justify-center mx-auto">
+                    <CalendarDays className="w-6 h-6 text-[#2D5A3D]" />
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm sm:text-base font-bold text-stone-800 font-serif">
+                      {activeTab === 'upcoming'
+                        ? 'Your calendar is clear. Go discover some Havens!'
+                        : 'No events scheduled for this date.'}
+                    </h3>
+                    <p className="text-xs text-stone-500 mt-1 leading-relaxed">
+                      {activeTab === 'upcoming'
+                        ? 'Explore upcoming community gatherings, RSVP with friends, or host your own plan.'
+                        : `No gatherings are scheduled for ${selectedDateFormatted}. Click another date on the calendar or explore live community events.`}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => navigate('/discover')}
+                    className="w-full py-2.5 rounded-xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <Compass className="w-4 h-4" />
+                    <span>Discover Havens</span>
+                  </button>
+                </div>
+              )}
+            </>
           )}
 
         </div>

@@ -3,6 +3,7 @@ import { useMutation } from '@apollo/client';
 import { GoogleMap, useLoadScript, MarkerF, InfoWindowF } from '@react-google-maps/api';
 import { SWIPE_EVENT } from '../graphql/operations';
 import { EventItem } from './SwipeCardsView';
+import { GOOGLE_MAPS_LIBRARIES } from './LocationInput';
 
 interface DiscoveryMapViewProps {
   events: EventItem[];
@@ -36,6 +37,7 @@ export const DiscoveryMapView: React.FC<DiscoveryMapViewProps> = ({ events }) =>
 
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey: apiKey,
+    libraries: GOOGLE_MAPS_LIBRARIES,
   });
 
   const [selectedEvent, setSelectedEvent] = useState<EventItem | null>(events[0] || null);

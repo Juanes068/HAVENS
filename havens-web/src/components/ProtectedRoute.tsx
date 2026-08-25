@@ -2,6 +2,7 @@ import React from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Navigation } from './Navigation';
+import { Footer } from './Footer';
 import { HAVENS_JWT_TOKEN_KEY } from '../services/apollo';
 import { secureStorage } from '../services/secureStore';
 
@@ -44,11 +45,12 @@ export const ProtectedRoute: React.FC = () => {
   const showNav = isOnboarded && !isOnboardingRoute;
 
   return (
-    <div className="min-h-screen bg-[#F4EEE2] text-[#2C2C2C] font-sans antialiased overflow-x-hidden flex flex-col">
+    <div className="min-h-screen bg-[#F4EEE2] text-[#2C2C2C] font-sans antialiased overflow-x-hidden flex flex-col justify-between">
       {showNav && <Navigation />}
       <main className="flex-1 w-full max-w-[100vw] overflow-x-hidden">
         <Outlet />
       </main>
+      {showNav && <Footer />}
     </div>
   );
 };

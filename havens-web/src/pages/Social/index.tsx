@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -31,10 +31,64 @@ export const SocialView: React.FC = () => {
   const [fadingCardId, setFadingCardId] = useState<string | null>(null);
   const [connectingUserId, setConnectingUserId] = useState<number | null>(null);
 
+  // ─── Pagination State for Meet / Recommended Users ───
+  const PAGE_SIZE = 10;
+  const [hasMoreUsers, setHasMoreUsers] = useState(true);
+  const [loadingMoreUsers, setLoadingMoreUsers] = useState(false);
+
   // ─── GraphQL Queries ───
-  const { data: usersData, loading: usersLoading, refetch: refetchUsers } = useQuery(GET_ALL_USERS, {
+  const {
+    data: usersData,
+    loading: usersLoading,
+    fetchMore: fetchMoreUsers,
+    refetch: refetchUsers,
+  } = useQuery(GET_ALL_USERS, {
+    variables: { limit: PAGE_SIZE, offset: 0 },
     fetchPolicy: 'cache-and-network',
+    notifyOnNetworkStatusChange: true,
   });
+
+  useEffect(() => {
+    if (usersData?.allUsers) {
+      if (usersData.allUsers.length < PAGE_SIZE) {
+        setHasMoreUsers(false);
+      }
+    }
+  }, [usersData?.allUsers, PAGE_SIZE]);
+
+  const handleLoadMoreUsers = async () => {
+    if (loadingMoreUsers || !hasMoreUsers) return;
+    setLoadingMoreUsers(true);
+    try {
+      const currentOffset = usersData?.allUsers?.length || 0;
+      const res = await fetchMoreUsers({
+        variables: {
+          offset: currentOffset,
+          limit: PAGE_SIZE,
+        },
+        updateQuery: (prev: any, { fetchMoreResult }: any) => {
+          if (!fetchMoreResult || !fetchMoreResult.allUsers || fetchMoreResult.allUsers.length === 0) {
+            setHasMoreUsers(false);
+            return prev;
+          }
+          if (fetchMoreResult.allUsers.length < PAGE_SIZE) {
+            setHasMoreUsers(false);
+          }
+          return {
+            ...prev,
+            allUsers: [...(prev.allUsers || []), ...fetchMoreResult.allUsers],
+          };
+        },
+      });
+      if (!res.data?.allUsers || res.data.allUsers.length < PAGE_SIZE) {
+        setHasMoreUsers(false);
+      }
+    } catch (err) {
+      console.error('Failed to load more recommended users', err);
+    } finally {
+      setLoadingMoreUsers(false);
+    }
+  };
 
   const { data: matchesData, refetch: refetchMatches } = useQuery(MY_MATCHES, {
     variables: { status: 'accepted' },
@@ -275,12 +329,15 @@ export const SocialView: React.FC = () => {
       {/* TAB 1: MEET */}
       {activeTab === 'meet' && (
         <MeetTab
-          loading={usersLoading}
+          loading={usersLoading && !loadingMoreUsers}
           suggestedUsers={suggestedUsers}
           myHobbies={myHobbies}
           fadingCardId={fadingCardId}
           sentRequestUserIds={sentRequestIds}
           connectingUserId={connectingUserId}
+          hasMore={hasMoreUsers}
+          loadingMore={loadingMoreUsers}
+          onLoadMore={handleLoadMoreUsers}
           onConnect={handleConnect}
           onIgnore={handleIgnore}
           onOpenChat={handleOpenChat}

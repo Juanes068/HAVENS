@@ -52,6 +52,7 @@ export const Step1Account: React.FC<Step1AccountProps> = ({ onSuccess, onError }
           email,
           password,
           invitationCode,
+          termsAccepted: true,
           neighbourhood: selectedLocation.neighbourhood || selectedLocation.formatted_address,
           cityName: selectedLocation.cityName || selectedLocation.formatted_address,
           latitude: selectedLocation.lat ?? selectedLocation.latitude,

@@ -17,7 +17,7 @@ def filter_events_by_radius(queryset, latitude, longitude, radius_km):
     ]
 
 
-def calculate_user_recommendations(user, queryset=None, latitude=None, longitude=None, radius_km=50.0):
+def calculate_user_recommendations(user, queryset=None, latitude=None, longitude=None, radius_km=50.0, limit=None, offset=0):
     """
     Advanced Matching & Recommendation Engine with Strict Geographic Boundary.
 
@@ -32,6 +32,9 @@ def calculate_user_recommendations(user, queryset=None, latitude=None, longitude
        - Exact hobby match: +3 points
        - Related hobby (shared category): +1 point
        - Profiles are strictly sorted by highest affinity score first, then closest distance.
+
+    3. Pagination:
+       - Supports offset and limit to paginate large user pools efficiently.
     """
     from django.contrib.auth.models import User
     from django.db.models import F, Value, Q
@@ -141,6 +144,12 @@ def calculate_user_recommendations(user, queryset=None, latitude=None, longitude
         u.distance if u.distance is not None else 999999.0,
         -u.id
     ))
+
+    # ── 4. PAGINATION (OFFSET & LIMIT) ──────────────────────────────────────
+    if offset and offset > 0:
+        results = results[offset:]
+    if limit is not None and limit > 0:
+        results = results[:limit]
 
     return results
 

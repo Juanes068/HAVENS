@@ -30,8 +30,8 @@ export const MY_PROFILE = gql`
  * Query to fetch recommended users (strictly location-filtered by Haversine radius & ranked by affinity).
  */
 export const GET_ALL_USERS = gql`
-  query GetAllUsers($radiusKm: Float, $latitude: Float, $longitude: Float) {
-    allUsers(radiusKm: $radiusKm, latitude: $latitude, longitude: $longitude) {
+  query GetAllUsers($radiusKm: Float, $latitude: Float, $longitude: Float, $limit: Int, $offset: Int) {
+    allUsers(radiusKm: $radiusKm, latitude: $latitude, longitude: $longitude, limit: $limit, offset: $offset) {
       id
       username
       email

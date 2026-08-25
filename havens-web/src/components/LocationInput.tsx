@@ -2,12 +2,17 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useLoadScript } from '@react-google-maps/api';
 import { Loader2 } from 'lucide-react';
 
+export const GOOGLE_MAPS_LIBRARIES: ('places')[] = ['places'];
+
 export interface LocationData {
   formatted_address: string;
   lat: number;
   lng: number;
   cityName?: string;
   neighbourhood?: string;
+  streetNumber?: string;
+  route?: string;
+  postalCode?: string;
   // Aliases for seamless compatibility across forms
   formattedAddress?: string;
   latitude?: number;
@@ -38,7 +43,7 @@ interface PlacePrediction {
 export const LocationInput: React.FC<LocationInputProps> = ({
   onSelectLocation,
   onLocationSelect,
-  placeholder = 'Search address, neighbourhood or city (e.g. Kitsilano Beach, Vancouver)',
+  placeholder = 'Search exact street address, establishment or venue (e.g. 1234 Robson St, Vancouver)',
   initialValue = '',
   initialLocation = null,
   className = '',
@@ -48,6 +53,7 @@ export const LocationInput: React.FC<LocationInputProps> = ({
 
   const { isLoaded } = useLoadScript({
     googleMapsApiKey: apiKey,
+    libraries: GOOGLE_MAPS_LIBRARIES,
   });
 
   const getInitialString = () => {
@@ -101,6 +107,8 @@ export const LocationInput: React.FC<LocationInputProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const geocoderRef = useRef<google.maps.Geocoder | null>(null);
+  const autocompleteServiceRef = useRef<google.maps.places.AutocompleteService | null>(null);
+  const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
 
   const notifySelectLocation = useCallback(
     (loc: LocationData | null) => {
@@ -134,14 +142,22 @@ export const LocationInput: React.FC<LocationInputProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Initialize Geocoder once Google Maps JS is loaded
+  // Initialize Google Maps Services once JS is loaded
   useEffect(() => {
-    if (isLoaded && window.google?.maps?.Geocoder) {
-      geocoderRef.current = new window.google.maps.Geocoder();
+    if (isLoaded && window.google?.maps) {
+      if (window.google.maps.Geocoder) {
+        geocoderRef.current = new window.google.maps.Geocoder();
+      }
+      if (window.google.maps.places?.AutocompleteService) {
+        autocompleteServiceRef.current = new window.google.maps.places.AutocompleteService();
+      }
+      if (window.google.maps.places?.PlacesService) {
+        placesServiceRef.current = new window.google.maps.places.PlacesService(document.createElement('div'));
+      }
     }
   }, [isLoaded]);
 
-  // Safe modern asynchronous prediction fetcher (Photon / OpenStreetMap Geocoding API)
+  // Precision Autocomplete Fetcher: Google Places (unrestricted for exact addresses) + Photon Fallback
   const fetchPredictions = useCallback(async (query: string) => {
     if (!query || query.trim().length < 2) {
       setPredictions([]);
@@ -152,6 +168,40 @@ export const LocationInput: React.FC<LocationInputProps> = ({
 
     setIsLoadingPredictions(true);
 
+    // 1. Primary: Google Places AutocompleteService with UNRESTRICTED types for exact addresses & establishments
+    if (autocompleteServiceRef.current && window.google?.maps?.places) {
+      autocompleteServiceRef.current.getPlacePredictions(
+        {
+          input: query,
+          // No types restriction: allows exact street addresses, establishments, venues, etc.
+        },
+        (results, status) => {
+          setIsLoadingPredictions(false);
+          if (status === window.google.maps.places.PlacesServiceStatus.OK && results && results.length > 0) {
+            const list: PlacePrediction[] = results.slice(0, 6).map((p) => ({
+              place_id: p.place_id,
+              description: p.description,
+              main_text: p.structured_formatting?.main_text || p.description,
+              secondary_text: p.structured_formatting?.secondary_text,
+            }));
+            setPredictions(list);
+            setIsDropdownOpen(true);
+            setHighlightedIndex(-1);
+            return;
+          }
+
+          // Fallback to Photon if Google returns zero results
+          fetchPhotonFallback(query);
+        }
+      );
+      return;
+    }
+
+    // 2. Fallback: Photon / OSM Geocoder
+    fetchPhotonFallback(query);
+  }, []);
+
+  const fetchPhotonFallback = async (query: string) => {
     try {
       const res = await fetch(
         `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=6`
@@ -161,10 +211,11 @@ export const LocationInput: React.FC<LocationInputProps> = ({
         if (data && data.features && data.features.length > 0) {
           const list: PlacePrediction[] = data.features.map((f: any) => {
             const props = f.properties || {};
-            const name = props.name || props.street || '';
+            const street = props.street ? `${props.housenumber ? props.housenumber + ' ' : ''}${props.street}` : '';
+            const name = props.name || street || '';
             const city = props.city || props.town || props.state || '';
             const country = props.country || '';
-            const sub = [city, country].filter(Boolean).join(', ');
+            const sub = [city, props.postcode, country].filter(Boolean).join(', ');
             const full = [name, sub].filter(Boolean).join(', ');
 
             return {
@@ -185,7 +236,7 @@ export const LocationInput: React.FC<LocationInputProps> = ({
         }
       }
 
-      // Fallback: Google Maps Geocoder if available
+      // Geocoder fallback
       if (geocoderRef.current) {
         geocoderRef.current.geocode({ address: query }, (results, status) => {
           setIsLoadingPredictions(false);
@@ -210,32 +261,10 @@ export const LocationInput: React.FC<LocationInputProps> = ({
         setIsLoadingPredictions(false);
       }
     } catch {
-      // Fallback to Google Geocoder on network error
-      if (geocoderRef.current) {
-        geocoderRef.current.geocode({ address: query }, (results, status) => {
-          setIsLoadingPredictions(false);
-          if (status === 'OK' && results && results.length > 0) {
-            const list: PlacePrediction[] = results.slice(0, 5).map((r) => ({
-              place_id: r.place_id,
-              description: r.formatted_address,
-              main_text: r.formatted_address.split(',')[0],
-              secondary_text: r.formatted_address.split(',').slice(1).join(',').trim(),
-              lat: r.geometry.location.lat(),
-              lng: r.geometry.location.lng(),
-            }));
-            setPredictions(list);
-            setIsDropdownOpen(true);
-            setHighlightedIndex(-1);
-          } else {
-            setPredictions([]);
-          }
-        });
-      } else {
-        setPredictions([]);
-        setIsLoadingPredictions(false);
-      }
+      setPredictions([]);
+      setIsLoadingPredictions(false);
     }
-  }, []);
+  };
 
   // Debounce query inputs by 250ms
   useEffect(() => {
@@ -279,6 +308,94 @@ export const LocationInput: React.FC<LocationInputProps> = ({
     setIsLoadingPredictions(true);
     setIsDropdownOpen(false);
 
+    // 1. If Google PlacesService is available with placeId, fetch complete Place details
+    if (placesServiceRef.current && prediction.place_id && !prediction.place_id.includes('.')) {
+      placesServiceRef.current.getDetails(
+        {
+          placeId: prediction.place_id,
+          fields: ['formatted_address', 'geometry', 'name', 'address_components', 'vicinity'],
+        },
+        (place, status) => {
+          if (status === window.google.maps.places.PlacesServiceStatus.OK && place && place.geometry?.location) {
+            setIsLoadingPredictions(false);
+            const lat = place.geometry.location.lat();
+            const lng = place.geometry.location.lng();
+            const formatted_address = place.formatted_address || prediction.description;
+
+            let streetNumber = '';
+            let route = '';
+            let cityName = '';
+            let neighbourhood = '';
+            let postalCode = '';
+
+            if (place.address_components) {
+              for (const comp of place.address_components) {
+                if (comp.types.includes('street_number')) {
+                  streetNumber = comp.long_name;
+                }
+                if (comp.types.includes('route')) {
+                  route = comp.long_name;
+                }
+                if (comp.types.includes('locality') || comp.types.includes('postal_town')) {
+                  cityName = comp.long_name;
+                } else if (!cityName && comp.types.includes('administrative_area_level_2')) {
+                  cityName = comp.long_name;
+                }
+                if (
+                  comp.types.includes('neighborhood') ||
+                  comp.types.includes('sublocality') ||
+                  comp.types.includes('sublocality_level_1')
+                ) {
+                  neighbourhood = comp.long_name;
+                }
+                if (comp.types.includes('postal_code')) {
+                  postalCode = comp.long_name;
+                }
+              }
+            }
+
+            if (!neighbourhood && streetNumber && route) {
+              neighbourhood = `${streetNumber} ${route}`;
+            } else if (!neighbourhood) {
+              neighbourhood = cityName || prediction.main_text;
+            }
+            if (!cityName) {
+              cityName = neighbourhood;
+            }
+
+            const locData: LocationData = {
+              formatted_address,
+              formattedAddress: formatted_address,
+              address: formatted_address,
+              name: place.name || prediction.main_text || formatted_address,
+              lat,
+              lng,
+              latitude: lat,
+              longitude: lng,
+              cityName,
+              neighbourhood,
+              streetNumber,
+              route,
+              postalCode,
+            };
+
+            setSelectedLocation(locData);
+            setInputValue(formatted_address);
+            notifySelectLocation(locData);
+            return;
+          }
+
+          // Fallback to Geocoder if PlacesService details fail
+          fallbackGeocode(prediction);
+        }
+      );
+      return;
+    }
+
+    fallbackGeocode(prediction);
+  };
+
+  const fallbackGeocode = (prediction: PlacePrediction) => {
     if (geocoderRef.current) {
       const geocodeReq = prediction.place_id && !prediction.place_id.includes('.')
         ? { placeId: prediction.place_id }
@@ -292,11 +409,20 @@ export const LocationInput: React.FC<LocationInputProps> = ({
           const lng = result.geometry.location.lng();
           const formatted_address = result.formatted_address || prediction.description;
 
+          let streetNumber = '';
+          let route = '';
           let cityName = '';
           let neighbourhood = '';
+          let postalCode = '';
 
           if (result.address_components) {
             for (const comp of result.address_components) {
+              if (comp.types.includes('street_number')) {
+                streetNumber = comp.long_name;
+              }
+              if (comp.types.includes('route')) {
+                route = comp.long_name;
+              }
               if (comp.types.includes('locality') || comp.types.includes('postal_town')) {
                 cityName = comp.long_name;
               } else if (!cityName && comp.types.includes('administrative_area_level_2')) {
@@ -310,10 +436,15 @@ export const LocationInput: React.FC<LocationInputProps> = ({
               ) {
                 neighbourhood = comp.long_name;
               }
+              if (comp.types.includes('postal_code')) {
+                postalCode = comp.long_name;
+              }
             }
           }
 
-          if (!neighbourhood && prediction.main_text && prediction.main_text !== formatted_address) {
+          if (!neighbourhood && streetNumber && route) {
+            neighbourhood = `${streetNumber} ${route}`;
+          } else if (!neighbourhood && prediction.main_text && prediction.main_text !== formatted_address) {
             neighbourhood = prediction.main_text;
           }
           if (!neighbourhood) {
@@ -334,6 +465,9 @@ export const LocationInput: React.FC<LocationInputProps> = ({
             longitude: lng,
             cityName,
             neighbourhood,
+            streetNumber,
+            route,
+            postalCode,
           };
 
           setSelectedLocation(locData);
@@ -469,7 +603,7 @@ export const LocationInput: React.FC<LocationInputProps> = ({
         <div className="absolute z-50 w-full mt-1 bg-white border border-[#E2DBD0] rounded-2xl shadow-xl max-h-60 overflow-y-auto divide-y divide-[#E2DBD0]/40">
           {predictions.map((item, idx) => (
             <button
-              key={item.place_id || idx}
+              key={`${item.place_id || 'loc'}-${idx}`}
               type="button"
               onClick={() => handleSelectPrediction(item)}
               onMouseEnter={() => setHighlightedIndex(idx)}

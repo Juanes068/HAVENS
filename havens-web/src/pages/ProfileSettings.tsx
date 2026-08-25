@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -6,11 +6,13 @@ import {
   UPDATE_ACCOUNT_SECURITY,
   DELETE_ACCOUNT,
   GENERATE_INVITE,
+  GENERATE_CLOUDINARY_SIGNATURE,
+  UPDATE_USER_PROFILE,
 } from '../graphql/operations';
 import { useAuth } from '../context/AuthContext';
 import { LocationInput } from '../components/LocationInput';
 import { Avatar } from '../components/Avatar';
-import { Clock, Copy, Check, RefreshCw, Pencil } from 'lucide-react';
+import { Clock, Copy, Check, RefreshCw, Pencil, Camera } from 'lucide-react';
 
 interface Hobby {
   id: string;
@@ -57,6 +59,10 @@ export const ProfileSettingsView: React.FC = () => {
   const [isCodeFlashing, setIsCodeFlashing] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
 
+  // Photo Upload State & Ref
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+
   // Formats seconds into MM:SS format (e.g. 01:59)
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -88,6 +94,78 @@ export const ProfileSettingsView: React.FC = () => {
   const [updateSecurityMutation, { loading: isUpdating }] = useMutation(UPDATE_ACCOUNT_SECURITY);
   const [deleteAccountMutation, { loading: isDeleting }] = useMutation(DELETE_ACCOUNT);
   const [generateInviteMutation, { loading: isGeneratingInvite }] = useMutation(GENERATE_INVITE);
+  const [generateCloudinarySignature] = useMutation(GENERATE_CLOUDINARY_SIGNATURE);
+  const [updateUserProfileMutation] = useMutation(UPDATE_USER_PROFILE);
+
+  /**
+   * Uploads avatar directly to Cloudinary and persists new URL via updateUserProfile GraphQL mutation
+   */
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingPhoto(true);
+    setSuccessMsg('');
+    setErrorMsg('');
+
+    try {
+      const sigRes = await generateCloudinarySignature({
+        variables: { paramsToSign: '{}', folder: 'havens_profiles' },
+      });
+
+      const sigData = sigRes?.data?.generateCloudinarySignature;
+      if (!sigData || !sigData.success) {
+        throw new Error(sigData?.message || 'Failed to obtain photo upload signature.');
+      }
+
+      const { signature, timestamp, apiKey } = sigData;
+      const cloudName = 'g8jffrmx';
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('api_key', String(apiKey));
+      formData.append('timestamp', String(timestamp));
+      formData.append('signature', String(signature));
+      formData.append('folder', 'havens_profiles');
+
+      const cloudRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!cloudRes.ok) {
+        const errorText = await cloudRes.text();
+        throw new Error(`Upload failed (${cloudRes.status}): ${errorText}`);
+      }
+
+      const cloudJson = await cloudRes.json();
+      const uploadedPhotoUrl = cloudJson?.secure_url ? String(cloudJson.secure_url).trim() : '';
+
+      if (!uploadedPhotoUrl || !uploadedPhotoUrl.startsWith('http')) {
+        throw new Error('Upload response missing valid secure URL.');
+      }
+
+      const updateRes = await updateUserProfileMutation({
+        variables: { photoUrl: uploadedPhotoUrl },
+      });
+
+      if (updateRes?.data?.updateUserProfile?.success) {
+        setSuccessMsg('✓ Profile photo updated successfully!');
+        await refetch();
+        await refetchUser();
+      } else {
+        throw new Error(updateRes?.data?.updateUserProfile?.message || 'Failed to update profile photo.');
+      }
+    } catch (err: any) {
+      console.error('[Change Profile Photo Error]', err);
+      setErrorMsg(err.message || 'Failed to upload photo.');
+    } finally {
+      setIsUploadingPhoto(false);
+      if (photoInputRef.current) {
+        photoInputRef.current.value = '';
+      }
+    }
+  };
 
   /**
    * Generates a fresh dynamic invitation code from the backend.
@@ -360,14 +438,34 @@ export const ProfileSettingsView: React.FC = () => {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => navigate('/onboarding', { state: { editMode: true } })}
-            className="px-4 py-2 rounded-xl bg-[#F0EAE0] hover:bg-[#E2DBD0] text-[#2C2C2C] text-xs font-semibold border border-[#E2DBD0] transition-colors cursor-pointer flex items-center gap-1.5"
-          >
-            <Pencil className="w-3.5 h-3.5 text-[#2C2C2C]" />
-            <span>Edit Hobbies Taxonomy</span>
-          </button>
+          <div className="flex flex-col gap-2 w-full sm:w-auto shrink-0">
+            <button
+              type="button"
+              onClick={() => navigate('/onboarding', { state: { editMode: true } })}
+              className="w-full px-4 py-2 rounded-xl bg-[#F0EAE0] hover:bg-[#E2DBD0] text-[#2C2C2C] text-xs font-semibold border border-[#E2DBD0] transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <Pencil className="w-3.5 h-3.5 text-[#2C2C2C]" />
+              <span>Edit Hobbies Taxonomy</span>
+            </button>
+
+            <button
+              type="button"
+              disabled={isUploadingPhoto}
+              onClick={() => photoInputRef.current?.click()}
+              className="w-full px-4 py-2 rounded-xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+            >
+              <Camera className="w-3.5 h-3.5 text-white" />
+              <span>{isUploadingPhoto ? 'Uploading Photo...' : 'Change Profile Photo'}</span>
+            </button>
+
+            <input
+              type="file"
+              ref={photoInputRef}
+              onChange={handlePhotoUpload}
+              accept="image/*"
+              className="hidden"
+            />
+          </div>
         </div>
 
         {/* Read-Only Spotify/Netflix Hobbies Visual Cards */}

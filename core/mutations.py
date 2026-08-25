@@ -50,6 +50,7 @@ class CreateUser(graphene.Mutation):
         email = graphene.String(required=True, description="Valid unique email address.")
         password = graphene.String(required=True, description="Raw password to be hashed by Django.")
         invitation_code = graphene.String(required=True, description="Unused 12-character invitation code.")
+        terms_accepted = graphene.Boolean(required=True, description="Explicit acceptance of Terms and Conditions (mandatory).")
         bio = graphene.String(default_value='', description="Short introductory bio.")
         neighbourhood = graphene.String(default_value='', description="Local neighborhood or district.")
         city_name = graphene.String(default_value='', description="City name for geolocation tagging.")
@@ -62,7 +63,7 @@ class CreateUser(graphene.Mutation):
     message = graphene.String(description="Status or error message.")
 
     @classmethod
-    def mutate(cls, root, info, username, email, password, invitation_code,
+    def mutate(cls, root, info, username, email, password, invitation_code, terms_accepted,
                bio='', neighbourhood='', city_name='', latitude=None, longitude=None, photo_url=''):
         """Execute user creation, link profile, mark invite as used, and queue welcome email.
 
@@ -73,6 +74,7 @@ class CreateUser(graphene.Mutation):
             email (str): Target email.
             password (str): Account password.
             invitation_code (str): Invitation code to validate and consume.
+            terms_accepted (bool): Explicit user confirmation of Terms & Conditions.
             bio (str, optional): User biography.
             neighbourhood (str, optional): Neighborhood description.
             city_name (str, optional): City name.
@@ -83,6 +85,10 @@ class CreateUser(graphene.Mutation):
         Returns:
             CreateUser: Mutation payload containing `user`, `success`, and `message`.
         """
+        # 0. Backend Validation: Enforce Terms and Conditions acceptance at the API level
+        if not terms_accepted:
+            raise GraphQLError("You must accept the Terms and Conditions to create an account.")
+
         try:
             # 1. Validate invitation code existence and ensure it has not been redeemed yet
             try:

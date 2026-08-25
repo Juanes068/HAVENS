@@ -65,21 +65,27 @@ class Query(graphene.ObjectType):
         radius_km=graphene.Float(required=False, default_value=50.0),
         latitude=graphene.Float(required=False),
         longitude=graphene.Float(required=False),
-        description="Retrieve users ranked by hobby affinity score and physical proximity."
+        limit=graphene.Int(required=False, description="Max number of profiles to return"),
+        offset=graphene.Int(required=False, default_value=0, description="Offset starting index for pagination"),
+        description="Retrieve users ranked by hobby affinity score and physical proximity with pagination."
     )
     get_recommended_users = graphene.List(
         UserType,
         radius_km=graphene.Float(required=False, default_value=50.0),
         latitude=graphene.Float(required=False),
         longitude=graphene.Float(required=False),
-        description="Location-first recommended users filtered by Haversine radius and sorted by affinity score."
+        limit=graphene.Int(required=False, description="Max number of profiles to return"),
+        offset=graphene.Int(required=False, default_value=0, description="Offset starting index for pagination"),
+        description="Location-first recommended users filtered by Haversine radius, sorted by affinity score, and paginated."
     )
     recommended_users = graphene.List(
         UserType,
         radius_km=graphene.Float(required=False, default_value=50.0),
         latitude=graphene.Float(required=False),
         longitude=graphene.Float(required=False),
-        description="Alias for recommended users matching query."
+        limit=graphene.Int(required=False, description="Max number of profiles to return"),
+        offset=graphene.Int(required=False, default_value=0, description="Offset starting index for pagination"),
+        description="Alias for recommended users matching query with pagination support."
     )
     user_by_id = graphene.Field(
         UserType,
@@ -293,34 +299,40 @@ class Query(graphene.ObjectType):
             return user
         return None
 
-    def resolve_all_users(self, info, radius_km=50.0, latitude=None, longitude=None):
-        """Fetch users ordered by shared hobby affinity and geographic distance."""
+    def resolve_all_users(self, info, radius_km=50.0, latitude=None, longitude=None, limit=None, offset=0):
+        """Fetch users ordered by shared hobby affinity and geographic distance with pagination."""
         user = info.context.user
         return calculate_user_recommendations(
             user=user,
             latitude=latitude,
             longitude=longitude,
-            radius_km=radius_km
+            radius_km=radius_km,
+            limit=limit,
+            offset=offset
         )
 
-    def resolve_get_recommended_users(self, info, radius_km=50.0, latitude=None, longitude=None):
-        """Location-first recommendation resolver filtering by radius and ranking by affinity score."""
+    def resolve_get_recommended_users(self, info, radius_km=50.0, latitude=None, longitude=None, limit=None, offset=0):
+        """Location-first recommendation resolver filtering by radius and ranking by affinity score with pagination."""
         user = info.context.user
         return calculate_user_recommendations(
             user=user,
             latitude=latitude,
             longitude=longitude,
-            radius_km=radius_km
+            radius_km=radius_km,
+            limit=limit,
+            offset=offset
         )
 
-    def resolve_recommended_users(self, info, radius_km=50.0, latitude=None, longitude=None):
-        """Alias for location-first user recommendations."""
+    def resolve_recommended_users(self, info, radius_km=50.0, latitude=None, longitude=None, limit=None, offset=0):
+        """Alias for location-first user recommendations with pagination."""
         user = info.context.user
         return calculate_user_recommendations(
             user=user,
             latitude=latitude,
             longitude=longitude,
-            radius_km=radius_km
+            radius_km=radius_km,
+            limit=limit,
+            offset=offset
         )
 
     @login_required
