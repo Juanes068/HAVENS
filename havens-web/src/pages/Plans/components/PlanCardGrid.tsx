@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../context/AuthContext'
 import { useApp } from '../../../context/AppContext'
 import {
@@ -68,6 +69,7 @@ const PlanCardItem: React.FC<{
   onDelete: (plan: PlanItem) => void
   onRsvpChange: (eventId: number, response: 'going' | 'maybe' | 'pass') => Promise<void>
 }> = ({ plan, onManage, onExplore, onDelete, onRsvpChange }) => {
+  const navigate = useNavigate()
   const [imgError, setImgError] = useState(false)
   const { label, time, badge } = formatEventDisplayDate(plan.scheduledDate)
   const isPast = badge === 'Past'
@@ -82,11 +84,7 @@ const PlanCardItem: React.FC<{
   const planIdNum = typeof plan.id === 'string' ? parseInt(plan.id, 10) : plan.id
 
   const handleCardClick = () => {
-    if (isHost) {
-      onManage(plan)
-    } else {
-      onExplore(plan)
-    }
+    navigate(`/event/${planIdNum}`)
   }
 
   const hasValidImage = Boolean(plan.imageUrl) && !imgError

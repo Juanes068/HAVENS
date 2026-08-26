@@ -1,4 +1,5 @@
 import React from 'react'
+import { useNavigate } from 'react-router-dom'
 
 export interface DiscoverPlan {
   id: number
@@ -23,12 +24,21 @@ interface EventCardProps {
 }
 
 export const EventCard: React.FC<EventCardProps> = ({ plan, isSaved, onToggleSave, onSelect }) => {
+  const navigate = useNavigate()
   const displayTags = (plan.tags || []).slice(0, 4)
   const remainingTags = Math.max(0, (plan.tags?.length || 0) - 4)
 
+  const handleCardClick = () => {
+    if (onSelect) {
+      onSelect(plan)
+    } else {
+      navigate(`/event/${plan.id}`)
+    }
+  }
+
   return (
     <div
-      onClick={() => onSelect && onSelect(plan)}
+      onClick={handleCardClick}
       className="rounded-3xl overflow-hidden border border-[#E2DBD0] hover:border-[#2D5A3D]/50 bg-white group cursor-pointer hover:shadow-md transition-all duration-200 p-5 sm:p-5.5 flex flex-col justify-between shadow-xs"
     >
       <div>

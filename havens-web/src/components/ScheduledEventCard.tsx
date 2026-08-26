@@ -1,4 +1,5 @@
 import React from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Avatar } from './Avatar'
 import { HelpCircle, Clock, Crown, Check, Share2 } from 'lucide-react'
 
@@ -91,15 +92,22 @@ export const ScheduledEventCard: React.FC<ScheduledEventCardProps> = ({
 
   const rsvpStatus = event.response || (isHost ? 'hosting' : undefined)
 
+  const navigate = useNavigate()
   const displayHobbies = (event.hobbies || []).slice(0, 4)
   const remainingHobbiesCount = Math.max(0, (event.hobbies?.length || 0) - 4)
 
+  const handleCardClick = () => {
+    if (onSelect) {
+      onSelect()
+    } else {
+      navigate(`/event/${event.id}`)
+    }
+  }
+
   return (
     <div
-      onClick={onSelect}
-      className={`p-4 rounded-2xl border transition-all duration-200 bg-white ${
-        onSelect ? 'cursor-pointer' : ''
-      } ${
+      onClick={handleCardClick}
+      className={`p-4 rounded-2xl border transition-all duration-200 bg-white cursor-pointer ${
         isSelected
           ? 'border-[#2D5A3D] ring-2 ring-[#2D5A3D]/20 shadow-md bg-[#FAFDFB]'
           : isPast

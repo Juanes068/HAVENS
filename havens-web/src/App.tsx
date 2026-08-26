@@ -11,6 +11,7 @@ import { CalendarView } from './pages/Calendar'
 import { SavedView } from './pages/Saved'
 import { ProfileSettingsView } from './pages/ProfileSettings'
 import { UserProfileDetailView } from './pages/UserProfileDetail'
+import { EventDetailPageView } from './pages/EventDetail'
 import { ChatHubView } from './pages/ChatHub'
 import { TermsPage } from './pages/Terms'
 
@@ -38,6 +39,8 @@ export default function App() {
             <Route path="/profile" element={<ProfileSettingsView />} />
             <Route path="/profile/:userId" element={<UserProfileDetailView />} />
             <Route path="/user/:userId" element={<UserProfileDetailView />} />
+            <Route path="/event/:eventId" element={<EventDetailPageView />} />
+            <Route path="/events/:eventId" element={<EventDetailPageView />} />
           </Route>
 
           {/* Fallback Route */}

@@ -131,6 +131,73 @@ export const GET_EVENT_RSVPS = gql`
 `;
 
 /**
+ * Query to fetch a single event by ID for the dedicated standalone Event Detail Page.
+ */
+export const GET_EVENT_BY_ID = gql`
+  query GetEventById($id: Int!) {
+    eventById(id: $id) {
+      id
+      title
+      description
+      latitude
+      longitude
+      pointsReward
+      visibility
+      trustScore
+      imageUrl
+      locationName
+      scheduledDate
+      ageRange
+      minAge
+      maxAge
+      createdAt
+      goingCount
+      creator {
+        id
+        username
+        photoUrl
+      }
+      community {
+        id
+        name
+        subdomain
+        imageUrl
+      }
+      attendees {
+        id
+        username
+        photoUrl
+        age
+        neighbourhood
+        cityName
+      }
+      rsvps {
+        id
+        response
+        createdAt
+        updatedAt
+        user {
+          id
+          username
+          photoUrl
+          age
+          neighbourhood
+          cityName
+        }
+      }
+      hobbies {
+        id
+        name
+        category {
+          id
+          name
+        }
+      }
+    }
+  }
+`;
+
+/**
  * Mutation to create a new event on the Django backend with Age Range and taxonomy.
  */
 export const CREATE_EVENT = gql`

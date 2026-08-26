@@ -604,9 +604,9 @@ export const CalendarTab: React.FC = () => {
                   <span>Back to plans feed</span>
                 </button>
                 {selectedEvent.pointsReward ? (
-                  <span className="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200/60 px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                    <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
-                    +{selectedEvent.pointsReward} pts
+                  <span className="text-xs font-bold text-amber-900 bg-amber-50 border border-amber-300 px-3 py-1 rounded-full shadow-2xs flex items-center gap-1.5">
+                    <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                    <span>+{selectedEvent.pointsReward} pts</span>
                   </span>
                 ) : null}
               </div>
