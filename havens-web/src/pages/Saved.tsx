@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation } from '@apollo/client'
 import { useNavigate } from 'react-router-dom'
 import { SectionHeading } from '../components/SectionHeading'
@@ -25,6 +25,7 @@ import {
 
 const SAVED_KEYS = 'havens_saved_ids'
 const SERIF = "'Playfair Display', Georgia, serif"
+const PAGE_SIZE = 6
 
 export type SavedFilterTab = 'all' | 'going' | 'maybe' | 'bookmarked' | 'past'
 
@@ -267,6 +268,13 @@ export const SavedView: React.FC = () => {
     }
   }, [unifiedPlans, startOfToday])
 
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+
+  // Reset pagination count on tab / filter changes
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE)
+  }, [activeTab, searchQuery, selectedCategory])
+
   // Filtered List based on tab, search, category
   const filteredPlans = useMemo(() => {
     return unifiedPlans.filter((plan) => {
@@ -299,6 +307,17 @@ export const SavedView: React.FC = () => {
       return true
     })
   }, [unifiedPlans, activeTab, selectedCategory, searchQuery, startOfToday])
+
+  // Paginated displayed plans (strictly limited to visibleCount, initially 6)
+  const displayedPlans = useMemo(() => {
+    return filteredPlans.slice(0, visibleCount)
+  }, [filteredPlans, visibleCount])
+
+  const hasMore = visibleCount < filteredPlans.length
+
+  const handleLoadMore = () => {
+    setVisibleCount((prev) => prev + PAGE_SIZE)
+  }
 
   const loading = loadingEvents || loadingRsvps
 
@@ -455,10 +474,10 @@ export const SavedView: React.FC = () => {
         </div>
       )}
 
-      {/* Grid of Saved / RSVPed Event Cards */}
+      {/* Grid of Saved / RSVPed Event Cards (Paginated) */}
       {!loading && filteredPlans.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredPlans.map((plan) => {
+          {displayedPlans.map((plan) => {
             const isGoing = plan.rsvpStatus === 'going'
             const isMaybe = plan.rsvpStatus === 'maybe'
             const isBookmarked = plan.isBookmarked
@@ -688,6 +707,27 @@ export const SavedView: React.FC = () => {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Pagination / Load More Controls */}
+      {!loading && filteredPlans.length > PAGE_SIZE && (
+        <div className="mt-8 flex flex-col items-center justify-center gap-3">
+          {hasMore ? (
+            <button
+              type="button"
+              onClick={handleLoadMore}
+              className="px-6 py-3 rounded-2xl bg-white border border-[#E2DBD0] hover:border-[#2D5A3D]/50 hover:bg-[#FAF8F5] text-[#2D5A3D] text-xs font-bold transition-all shadow-2xs hover:shadow-xs flex items-center gap-2 cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4 text-[#2D5A3D]" />
+              <span>Load More ({displayedPlans.length} of {filteredPlans.length} plans shown)</span>
+            </button>
+          ) : (
+            <div className="flex items-center gap-2 text-stone-500 text-xs py-2 px-4 rounded-full bg-[#FAF8F5] border border-[#E2DBD0]/60">
+              <span>✓</span>
+              <span>All {filteredPlans.length} saved plans displayed</span>
+            </div>
+          )}
         </div>
       )}
 
