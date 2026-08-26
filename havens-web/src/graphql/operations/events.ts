@@ -284,6 +284,7 @@ export const MY_RSVPS = gql`
       id
       response
       createdAt
+      updatedAt
       event {
         id
         title
@@ -313,6 +314,20 @@ export const MY_RSVPS = gql`
           age
           neighbourhood
           cityName
+        }
+        rsvps {
+          id
+          response
+          createdAt
+          updatedAt
+          user {
+            id
+            username
+            photoUrl
+            age
+            neighbourhood
+            cityName
+          }
         }
         hobbies {
           id

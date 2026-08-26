@@ -65,9 +65,9 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
       <div className="bg-white border border-[#E2DBD0] rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 max-h-[85vh] overflow-y-auto">
-        {/* Cover Photo */}
-        {event.imageUrl ? (
-          <div className="w-full h-44 rounded-2xl overflow-hidden bg-[#F4EEE2] border border-[#E2DBD0]/60 relative shrink-0">
+        {/* Cover Photo Banner or Generic Fallback */}
+        <div className="w-full h-44 rounded-2xl overflow-hidden bg-gradient-to-br from-[#FAF8F5] via-[#F4EEE2] to-[#EAE2D2] border border-[#E2DBD0]/60 relative shrink-0 flex items-center justify-center">
+          {event.imageUrl ? (
             <img
               src={event.imageUrl}
               alt={event.title}
@@ -76,16 +76,20 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                 e.currentTarget.style.display = 'none';
               }}
             />
-            <div className="absolute top-3 right-3 flex items-center gap-1.5">
-              {event.pointsReward ? (
-                <span className="text-[10px] font-bold text-amber-800 bg-amber-50/90 backdrop-blur-xs border border-amber-200/60 px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                  <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
-                  +{event.pointsReward} pts
-                </span>
-              ) : null}
+          ) : (
+            <div className="w-14 h-14 rounded-2xl bg-white/90 backdrop-blur-xs border border-[#E2DBD0] shadow-2xs flex items-center justify-center text-[#2D5A3D]">
+              <span className="text-2xl">🌿</span>
             </div>
+          )}
+          <div className="absolute top-3 right-3 flex items-center gap-1.5">
+            {event.pointsReward ? (
+              <span className="text-[10px] font-bold text-amber-800 bg-amber-50/90 backdrop-blur-xs border border-amber-200/60 px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
+                <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                +{event.pointsReward} pts
+              </span>
+            ) : null}
           </div>
-        ) : null}
+        </div>
 
         {/* Header Title Bar */}
         <div className="flex justify-between items-start gap-3">

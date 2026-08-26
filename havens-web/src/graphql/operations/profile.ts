@@ -17,7 +17,54 @@ export const MY_PROFILE = gql`
       cityName
       photoUrl
       inviteCode
+      createdCirclesCount
       hobbies {
+        id
+        name
+        category {
+          id
+          name
+        }
+      }
+    }
+  }
+`;
+
+/**
+ * Query to fetch complete profile details of a target user by ID.
+ */
+export const GET_USER_BY_ID = gql`
+  query GetUserById($id: Int!) {
+    userById(id: $id) {
+      id
+      username
+      email
+      totalPoints
+      bio
+      dateOfBirth
+      age
+      neighbourhood
+      cityName
+      photoUrl
+      inviteCode
+      createdCirclesCount
+      hobbies {
+        id
+        name
+        category {
+          id
+          name
+        }
+      }
+      sharedHobbies {
+        id
+        name
+        category {
+          id
+          name
+        }
+      }
+      relatedHobbies {
         id
         name
         category {

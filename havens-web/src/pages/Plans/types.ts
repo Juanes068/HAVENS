@@ -50,8 +50,12 @@ export interface PlanItem {
   maxAge?: number
   creator?: EventCreator
   rsvps?: PlanRSVPItem[]
+  attendees?: PlanRSVPUser[]
   hobbies?: { id: string | number; name: string }[]
   going?: number
+  goingCount?: number
+  userResponse?: 'going' | 'maybe' | 'pass' | 'hosting' | string
+  role?: 'hosting' | 'attending'
 }
 
 /**

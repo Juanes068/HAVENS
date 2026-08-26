@@ -4,8 +4,10 @@ import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
 import {
   GET_MY_CREATED_EVENTS,
+  MY_RSVPS,
   GET_ALL_EVENTS,
   DELETE_EVENT,
+  SWIPE_EVENT,
 } from '../../graphql/operations'
 import { PlansSubTab, PlanItem } from './types'
 import { PlanCreateForm } from './components/PlanCreateForm'
@@ -19,44 +21,177 @@ export const PlansView: React.FC = () => {
   const [postSuccess, setPostSuccess] = useState(false)
   const [deleteConfirmPlan, setDeleteConfirmPlan] = useState<PlanItem | null>(null)
 
-  // Fetch events
-  const { data: createdData, loading: loadingCreated, refetch: refetchCreated } = useQuery(GET_MY_CREATED_EVENTS, {
+  // 1. Fetch created events
+  const {
+    data: createdData,
+    loading: loadingCreated,
+    refetch: refetchCreated,
+  } = useQuery(GET_MY_CREATED_EVENTS, {
     variables: { upcomingOnly: false },
     fetchPolicy: 'cache-and-network',
     errorPolicy: 'ignore',
     skip: !user,
   })
 
-  const { data: allData, loading: loadingAll, refetch: refetchAll } = useQuery(GET_ALL_EVENTS, {
+  // 2. Fetch user RSVP records ('going', 'maybe')
+  const {
+    data: rsvpsData,
+    loading: loadingRsvps,
+    refetch: refetchRsvps,
+  } = useQuery(MY_RSVPS, {
+    fetchPolicy: 'cache-and-network',
+    errorPolicy: 'ignore',
+    skip: !user,
+  })
+
+  // 3. Fetch all events for fallback / metadata enrichment
+  const {
+    data: allData,
+    loading: loadingAll,
+    refetch: refetchAll,
+  } = useQuery(GET_ALL_EVENTS, {
     variables: { upcomingOnly: false },
     fetchPolicy: 'cache-and-network',
   })
 
   // Delete event mutation
   const [deleteEventMutation, { loading: isDeleting }] = useMutation(DELETE_EVENT, {
-    refetchQueries: [{ query: GET_ALL_EVENTS }, { query: GET_MY_CREATED_EVENTS }],
+    refetchQueries: [
+      { query: GET_ALL_EVENTS, variables: { upcomingOnly: false } },
+      { query: GET_MY_CREATED_EVENTS, variables: { upcomingOnly: false } },
+      { query: MY_RSVPS },
+    ],
     onCompleted: (data) => {
       if (data && data.deleteEvent && data.deleteEvent.success) {
         setDeleteConfirmPlan(null)
         refetchCreated()
+        refetchRsvps()
         refetchAll()
       }
     },
   })
 
-  const totalMyPlansCount = useMemo(() => {
-    const rawList: PlanItem[] = createdData?.myCreatedEvents || allData?.allEvents || []
-    return rawList.filter((event) => {
-      const currentUserId = user?.id ? String(user.id) : ''
-      const currentUsername = user?.username ? user.username.toLowerCase() : ''
-      const eventCreatorId = event.creator?.id ? String(event.creator.id) : ''
-      const eventCreatorUsername = event.creator?.username ? event.creator.username.toLowerCase() : ''
-      return (
-        (currentUserId && eventCreatorId === currentUserId) ||
-        (currentUsername && eventCreatorUsername === currentUsername)
-      )
-    }).length
-  }, [createdData, allData, user])
+  // Swipe / RSVP mutation for interactive RSVP actions on cards
+  const [swipeEventMutation] = useMutation(SWIPE_EVENT, {
+    refetchQueries: [
+      { query: MY_RSVPS },
+      { query: GET_ALL_EVENTS, variables: { upcomingOnly: false } },
+      { query: GET_MY_CREATED_EVENTS, variables: { upcomingOnly: false } },
+    ],
+    onCompleted: () => {
+      refetchRsvps()
+      refetchCreated()
+      refetchAll()
+    },
+  })
+
+  const handleRsvpChange = async (eventId: number, response: 'going' | 'maybe' | 'pass') => {
+    try {
+      await swipeEventMutation({
+        variables: {
+          eventId,
+          response,
+        },
+      })
+    } catch (err) {
+      console.error('[PlansView RSVP Mutation Error]', err)
+    }
+  }
+
+  // Unified list of all user plans (Hosting + RSVP'd Going/Maybe)
+  const unifiedPlans: PlanItem[] = useMemo(() => {
+    const map = new Map<string, PlanItem>()
+    const currentUserId = user?.id ? String(user.id) : ''
+    const currentUsername = user?.username ? user.username.toLowerCase() : ''
+
+    // 1. Ingest events created by the user (Host)
+    const rawCreated: PlanItem[] = createdData?.myCreatedEvents || []
+    rawCreated.forEach((ev) => {
+      const idStr = String(ev.id)
+      map.set(idStr, {
+        ...ev,
+        role: 'hosting',
+        userResponse: 'hosting',
+      })
+    })
+
+    // 2. Ingest events the user has RSVP'd to (Going / Maybe)
+    const rawRsvps = rsvpsData?.myRsvps || []
+    rawRsvps.forEach((r: any) => {
+      if (r.event && r.event.id) {
+        const idStr = String(r.event.id)
+        const isHost =
+          (currentUserId && String(r.event.creator?.id) === currentUserId) ||
+          (currentUsername && r.event.creator?.username?.toLowerCase() === currentUsername)
+
+        if (map.has(idStr)) {
+          const existing = map.get(idStr)!
+          map.set(idStr, {
+            ...existing,
+            userResponse: isHost ? 'hosting' : r.response,
+            role: isHost ? 'hosting' : (r.response === 'pass' ? undefined : 'attending'),
+          })
+        } else if (r.response === 'going' || r.response === 'maybe') {
+          map.set(idStr, {
+            ...r.event,
+            role: isHost ? 'hosting' : 'attending',
+            userResponse: isHost ? 'hosting' : r.response,
+          })
+        }
+      }
+    })
+
+    // 3. Ingest from allEvents if creator matches or user RSVP is present in event.rsvps
+    const rawAll: PlanItem[] = allData?.allEvents || []
+    rawAll.forEach((ev) => {
+      const idStr = String(ev.id)
+      const isHost =
+        (currentUserId && String(ev.creator?.id) === currentUserId) ||
+        (currentUsername && ev.creator?.username?.toLowerCase() === currentUsername)
+
+      const userRsvp = (ev.rsvps || []).find((r: any) => {
+        const rUserId = r.user?.id ? String(r.user.id) : ''
+        const rUsername = r.user?.username ? r.user.username.toLowerCase() : ''
+        return (
+          (currentUserId && rUserId === currentUserId) ||
+          (currentUsername && rUsername === currentUsername)
+        )
+      })
+
+      if (isHost) {
+        if (!map.has(idStr)) {
+          map.set(idStr, {
+            ...ev,
+            role: 'hosting',
+            userResponse: 'hosting',
+          })
+        }
+      } else if (userRsvp && (userRsvp.response === 'going' || userRsvp.response === 'maybe')) {
+        if (!map.has(idStr)) {
+          map.set(idStr, {
+            ...ev,
+            role: 'attending',
+            userResponse: userRsvp.response,
+          })
+        } else {
+          const existing = map.get(idStr)!
+          map.set(idStr, {
+            ...existing,
+            userResponse: userRsvp.response,
+            role: existing.role || 'attending',
+          })
+        }
+      }
+    })
+
+    // Return all plans that are either hosted by user or actively RSVP'd ('going' or 'maybe')
+    return Array.from(map.values()).filter((p) => {
+      if (p.role === 'hosting') return true
+      return p.userResponse === 'going' || p.userResponse === 'maybe'
+    })
+  }, [createdData, rsvpsData, allData, user])
+
+  const totalMyPlansCount = unifiedPlans.length
 
   const handlePlanCreated = () => {
     setPostSuccess(true)
@@ -64,6 +199,7 @@ export const PlansView: React.FC = () => {
       setPostSuccess(false)
       setSubTab('my plans')
       refetchCreated()
+      refetchRsvps()
       refetchAll()
     }, 800)
   }
@@ -83,7 +219,7 @@ export const PlansView: React.FC = () => {
           <p className="text-sm text-[#8a8278] mt-1">
             {subTab === 'create plan'
               ? 'Organize an intimate gathering, adventure, or community plan'
-              : 'All gatherings and plans created by you'}
+              : 'All gatherings hosted by you or where you have confirmed attendance'}
           </p>
         </div>
 
@@ -148,10 +284,10 @@ export const PlansView: React.FC = () => {
       {/* Sub-Tab 2: My Plans Grid */}
       {subTab === 'my plans' && (
         <PlanCardGrid
-          createdData={createdData}
-          allData={allData}
-          loading={loadingCreated || loadingAll}
+          plans={unifiedPlans}
+          loading={loadingCreated || loadingRsvps || loadingAll}
           onDeletePlan={(plan) => setDeleteConfirmPlan(plan)}
+          onRsvpChange={handleRsvpChange}
           onSwitchToCreate={() => setSubTab('create plan')}
         />
       )}
@@ -168,3 +304,4 @@ export const PlansView: React.FC = () => {
 }
 
 export default PlansView
+

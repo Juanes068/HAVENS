@@ -165,7 +165,7 @@ export const ScheduledEventCard: React.FC<ScheduledEventCardProps> = ({
               ) : null}
 
               {event.pointsReward ? (
-                <span className="text-[9px] font-bold text-amber-800 bg-amber-50 border border-amber-200/60 px-2 py-0.5 rounded-full">
+                <span className="text-xs font-bold text-amber-900 bg-amber-50/90 border border-amber-300 px-2.5 py-1 rounded-full shadow-2xs inline-flex items-center gap-1">
                   ⭐ +{event.pointsReward} pts
                 </span>
               ) : null}

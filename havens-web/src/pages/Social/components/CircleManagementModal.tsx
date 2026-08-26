@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@apollo/client';
 import {
   GET_COMMUNITY_MEMBERS,
@@ -48,6 +49,7 @@ export const CircleManagementModal: React.FC<CircleManagementModalProps> = ({
   onCircleDeleted,
   onViewUserProfile,
 }) => {
+  const navigate = useNavigate();
   const { user: currentUser } = useAuth();
   const [activeTab, setActiveTab] = useState<'members' | 'edit'>('members');
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
@@ -480,7 +482,10 @@ export const CircleManagementModal: React.FC<CircleManagementModalProps> = ({
                   return (
                     <div
                       key={membership.id}
-                      onClick={() => onViewUserProfile && onViewUserProfile(u)}
+                      onClick={() => {
+                        onClose();
+                        navigate(`/profile/${u.id}?circleId=${circle.id}`);
+                      }}
                       className="p-3.5 rounded-2xl border border-[#E2DBD0] bg-white hover:border-[#2D5A3D]/50 hover:shadow-2xs transition-all flex flex-col justify-between gap-3 cursor-pointer group"
                     >
                       <div className="flex items-start gap-3">

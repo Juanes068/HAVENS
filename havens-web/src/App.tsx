@@ -10,6 +10,7 @@ import { PlansView } from './pages/Plans'
 import { CalendarView } from './pages/Calendar'
 import { SavedView } from './pages/Saved'
 import { ProfileSettingsView } from './pages/ProfileSettings'
+import { UserProfileDetailView } from './pages/UserProfileDetail'
 import { ChatHubView } from './pages/ChatHub'
 import { TermsPage } from './pages/Terms'
 
@@ -35,6 +36,8 @@ export default function App() {
             <Route path="/calendar" element={<CalendarView />} />
             <Route path="/saved" element={<SavedView />} />
             <Route path="/profile" element={<ProfileSettingsView />} />
+            <Route path="/profile/:userId" element={<UserProfileDetailView />} />
+            <Route path="/user/:userId" element={<UserProfileDetailView />} />
           </Route>
 
           {/* Fallback Route */}

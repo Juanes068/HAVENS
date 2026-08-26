@@ -315,3 +315,44 @@ export const UPDATE_COMMUNITY = gql`
   }
 `;
 
+/**
+ * Query to fetch a single circle by its ID.
+ */
+export const GET_COMMUNITY_BY_ID = gql`
+  query GetCommunityById($id: Int!) {
+    communityById(id: $id) {
+      id
+      name
+      subdomain
+      description
+      locationName
+      isVirtual
+      imageUrl
+      ageRange
+      memberCount
+      createdAt
+      creator {
+        id
+        username
+      }
+      hobbies {
+        id
+        name
+      }
+    }
+  }
+`;
+
+/**
+ * Mutation to remove a member from a Circle.
+ */
+export const REMOVE_COMMUNITY_MEMBER = gql`
+  mutation RemoveCommunityMember($communityId: Int!, $userId: Int!) {
+    removeCommunityMember(communityId: $communityId, userId: $userId) {
+      success
+      message
+    }
+  }
+`;
+
+

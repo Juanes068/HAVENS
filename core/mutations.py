@@ -907,6 +907,47 @@ class UpdateCommunity(graphene.Mutation):
             return cls(community=None, success=False, message=str(e))
 
 
+class RemoveCommunityMember(graphene.Mutation):
+    """Remove a member from a Circle. Can be performed by the Circle creator, staff, or the member themselves."""
+
+    class Arguments:
+        community_id = graphene.Int(required=True, description="Primary key ID of the target Circle/Community.")
+        user_id = graphene.Int(required=True, description="Primary key ID of the user to remove.")
+
+    success = graphene.Boolean(description="Indicates if removal was successful.")
+    message = graphene.String(description="Status message.")
+
+    @classmethod
+    @login_required
+    def mutate(cls, root, info, community_id, user_id):
+        try:
+            current_user = info.context.user
+            community = Community.objects.get(id=community_id)
+            target_user = User.objects.get(id=user_id)
+
+            # Verification: Circle creator, staff, or the user themselves
+            is_creator = community.creator == current_user
+            is_self = current_user == target_user
+            if not (is_creator or is_self or current_user.is_staff):
+                return cls(success=False, message="Permission denied. Only the Circle creator can remove members.")
+
+            if community.creator == target_user and not is_self:
+                return cls(success=False, message="Cannot remove the Circle creator from their own Circle.")
+
+            membership = CommunityMembership.objects.filter(user=target_user, community=community).first()
+            if not membership:
+                return cls(success=False, message="User is not a member of this Circle.")
+
+            membership.delete()
+            return cls(success=True, message=f"@{target_user.username} was removed from {community.name}.")
+        except Community.DoesNotExist:
+            return cls(success=False, message="Circle not found.")
+        except User.DoesNotExist:
+            return cls(success=False, message="User not found.")
+        except Exception as e:
+            return cls(success=False, message=str(e))
+
+
 class CreateEvent(graphene.Mutation):
     """Create a new event/meetup on the Havens platform."""
 
@@ -1390,6 +1431,7 @@ class Mutation(graphene.ObjectType):
     update_community = UpdateCommunity.Field(description="Update circle details owned by the caller.")
     delete_community = DeleteCommunity.Field(description="Delete a circle created by the caller.")
     join_community = JoinCommunity.Field(description="Join an existing community as a member.")
+    remove_community_member = RemoveCommunityMember.Field(description="Remove a member from a Circle.")
 
     # ── Events & RSVP ───────────────────────────────────────────────────────
     create_event = CreateEvent.Field(description="Create a new event.")

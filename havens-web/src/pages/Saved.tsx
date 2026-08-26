@@ -21,13 +21,14 @@ import {
   Trash2,
   Compass,
   Sparkles,
+  XCircle,
 } from 'lucide-react'
 
 const SAVED_KEYS = 'havens_saved_ids'
 const SERIF = "'Playfair Display', Georgia, serif"
 const PAGE_SIZE = 6
 
-export type SavedFilterTab = 'all' | 'going' | 'maybe' | 'bookmarked' | 'past'
+export type SavedFilterTab = 'all' | 'going' | 'maybe' | 'bookmarked' | 'discarded'
 
 interface UnifiedSavedPlan {
   id: number
@@ -161,7 +162,7 @@ export const SavedView: React.FC = () => {
 
     const rsvpMap = new Map<number, { response: string; createdAt?: string }>()
     rawRsvps.forEach((r) => {
-      if (r.event?.id && r.response && String(r.response).toLowerCase() !== 'pass') {
+      if (r.event?.id && r.response) {
         rsvpMap.set(Number(r.event.id), {
           response: String(r.response).toLowerCase(),
           createdAt: r.createdAt,
@@ -206,7 +207,7 @@ export const SavedView: React.FC = () => {
 
     // Also include any RSVPs that might not be in allEvents query
     rawRsvps.forEach((r) => {
-      if (r.event?.id && r.response && String(r.response).toLowerCase() !== 'pass') {
+      if (r.event?.id && r.response) {
         const id = Number(r.event.id)
         if (!result.some((p) => p.id === id)) {
           const resp = String(r.response).toLowerCase()
@@ -237,36 +238,31 @@ export const SavedView: React.FC = () => {
     return result
   }, [eventsData, rsvpsData, normalizedBookmarkSet])
 
-  // Date anchor for past events separation
-  const startOfToday = useMemo(() => {
-    return new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()).getTime()
-  }, [])
-
   const counts = useMemo(() => {
     let goingCount = 0
     let maybeCount = 0
     let bookmarkCount = 0
-    let pastCount = 0
+    let discardedCount = 0
 
     unifiedPlans.forEach((p) => {
-      const isPast = p.scheduledDate && new Date(p.scheduledDate).getTime() < startOfToday
-
-      if (isPast) {
-        pastCount++
-      }
       if (p.rsvpStatus === 'going') goingCount++
       if (p.rsvpStatus === 'maybe') maybeCount++
       if (p.isBookmarked) bookmarkCount++
+      if (p.rsvpStatus === 'pass') discardedCount++
     })
 
+    const allSavedCount = unifiedPlans.filter(
+      (p) => (p.rsvpStatus === 'going' || p.rsvpStatus === 'maybe' || p.isBookmarked)
+    ).length
+
     return {
-      all: unifiedPlans.length,
+      all: allSavedCount,
       going: goingCount,
       maybe: maybeCount,
       bookmarked: bookmarkCount,
-      past: pastCount,
+      discarded: discardedCount,
     }
-  }, [unifiedPlans, startOfToday])
+  }, [unifiedPlans])
 
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
 
@@ -278,13 +274,15 @@ export const SavedView: React.FC = () => {
   // Filtered List based on tab, search, category
   const filteredPlans = useMemo(() => {
     return unifiedPlans.filter((plan) => {
-      const isPast = plan.scheduledDate && new Date(plan.scheduledDate).getTime() < startOfToday
-
       // Tab filter
+      if (activeTab === 'all') {
+        // All Saved contains active items (going, maybe, bookmarked), excluding discarded unless bookmarked
+        if (plan.rsvpStatus === 'pass' && !plan.isBookmarked) return false
+      }
       if (activeTab === 'going' && plan.rsvpStatus !== 'going') return false
       if (activeTab === 'maybe' && plan.rsvpStatus !== 'maybe') return false
       if (activeTab === 'bookmarked' && !plan.isBookmarked) return false
-      if (activeTab === 'past' && !isPast) return false
+      if (activeTab === 'discarded' && plan.rsvpStatus !== 'pass') return false
 
       // Category filter
       if (selectedCategory !== 'all' && plan.category?.toLowerCase() !== selectedCategory.toLowerCase()) {
@@ -306,7 +304,7 @@ export const SavedView: React.FC = () => {
 
       return true
     })
-  }, [unifiedPlans, activeTab, selectedCategory, searchQuery, startOfToday])
+  }, [unifiedPlans, activeTab, selectedCategory, searchQuery])
 
   // Paginated displayed plans (strictly limited to visibleCount, initially 6)
   const displayedPlans = useMemo(() => {
@@ -362,8 +360,8 @@ export const SavedView: React.FC = () => {
               { key: 'all', label: 'All Saved', count: counts.all, icon: Bookmark },
               { key: 'going', label: 'Going', count: counts.going, icon: CheckCircle2 },
               { key: 'maybe', label: 'Maybe', count: counts.maybe, icon: HelpCircle },
-              { key: 'bookmarked', label: 'Bookmarks', count: counts.bookmarked, icon: Bookmark },
-              { key: 'past', label: 'Past Events', count: counts.past, icon: Clock },
+              { key: 'bookmarked', label: 'Bookmark', count: counts.bookmarked, icon: Bookmark },
+              { key: 'discarded', label: 'Discarded', count: counts.discarded, icon: XCircle },
             ] as const
           ).map((tab) => {
             const Icon = tab.icon
@@ -480,10 +478,8 @@ export const SavedView: React.FC = () => {
           {displayedPlans.map((plan) => {
             const isGoing = plan.rsvpStatus === 'going'
             const isMaybe = plan.rsvpStatus === 'maybe'
+            const isDiscarded = plan.rsvpStatus === 'pass'
             const isBookmarked = plan.isBookmarked
-
-            const eventTime = plan.scheduledDate ? new Date(plan.scheduledDate).getTime() : 0
-            const isPast = eventTime > 0 && eventTime < startOfToday
 
             const formattedDate = plan.scheduledDate
               ? new Date(plan.scheduledDate).toLocaleDateString('en-US', {
@@ -508,7 +504,7 @@ export const SavedView: React.FC = () => {
                 key={plan.id}
                 onClick={() => setSelectedModalPlan(plan)}
                 className={`rounded-3xl border transition-all duration-200 bg-white group overflow-hidden flex flex-col p-5 sm:p-5.5 shadow-xs hover:shadow-md cursor-pointer justify-between ${
-                  isPast ? 'border-[#E2DBD0] opacity-90' : 'border-[#E2DBD0] hover:border-[#2D5A3D]/50'
+                  isDiscarded ? 'border-rose-200/80 bg-rose-50/10' : 'border-[#E2DBD0] hover:border-[#2D5A3D]/50'
                 }`}
               >
                 <div>
@@ -575,9 +571,10 @@ export const SavedView: React.FC = () => {
                           <span>Interested (Maybe)</span>
                         </span>
                       )}
-                      {isPast && (
-                        <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-stone-800/90 backdrop-blur-xs text-white shadow-2xs">
-                          Past Gathering
+                      {isDiscarded && (
+                        <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-rose-600 text-white shadow-2xs flex items-center gap-1">
+                          <XCircle className="w-3 h-3" />
+                          <span>Discarded (Passed)</span>
                         </span>
                       )}
                     </div>
