@@ -7,6 +7,9 @@ import {
   DELETE_COMMUNITY,
   GET_ALL_HOBBY_CATEGORIES,
   GENERATE_CLOUDINARY_SIGNATURE,
+  REMOVE_COMMUNITY_MEMBER,
+  GET_ALL_COMMUNITIES,
+  MY_COMMUNITIES,
 } from '../../../graphql/operations';
 import { useAuth } from '../../../context/AuthContext';
 import { LocationInput, LocationData } from '../../../components/LocationInput';
@@ -25,6 +28,7 @@ import {
   Sparkles,
   Save,
   X,
+  UserMinus,
 } from 'lucide-react';
 import { Circle } from '../types';
 
@@ -91,6 +95,50 @@ export const CircleManagementModal: React.FC<CircleManagementModalProps> = ({
   const [updateCommunityMutation] = useMutation(UPDATE_COMMUNITY);
   const [deleteCommunityMutation, { loading: isDeleting }] = useMutation(DELETE_COMMUNITY);
   const [generateCloudinarySignature] = useMutation(GENERATE_CLOUDINARY_SIGNATURE);
+
+  const [removingMemberId, setRemovingMemberId] = useState<number | null>(null);
+  const [confirmRemoveId, setConfirmRemoveId] = useState<number | null>(null);
+
+  const [removeMemberMutation] = useMutation(REMOVE_COMMUNITY_MEMBER, {
+    refetchQueries: [
+      { query: GET_COMMUNITY_MEMBERS, variables: { communityId: circle ? Number(circle.id) : 0 } },
+      { query: GET_ALL_COMMUNITIES },
+      { query: MY_COMMUNITIES },
+    ],
+    onCompleted: (res) => {
+      setRemovingMemberId(null);
+      setConfirmRemoveId(null);
+      if (res?.removeCommunityMember?.success) {
+        setStatusMessage({ type: 'success', text: 'Member removed from Circle successfully.' });
+        refetchMembers();
+      } else {
+        setStatusMessage({
+          type: 'error',
+          text: res?.removeCommunityMember?.message || 'Failed to remove member from Circle.',
+        });
+      }
+    },
+    onError: (err) => {
+      setRemovingMemberId(null);
+      setConfirmRemoveId(null);
+      setStatusMessage({ type: 'error', text: err.message || 'Error removing member.' });
+    },
+  });
+
+  const handleRemoveMember = async (userId: number) => {
+    if (!circle) return;
+    setRemovingMemberId(userId);
+    try {
+      await removeMemberMutation({
+        variables: {
+          communityId: Number(circle.id),
+          userId,
+        },
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   // Populate form with circle data when opened
   useEffect(() => {
@@ -484,7 +532,7 @@ export const CircleManagementModal: React.FC<CircleManagementModalProps> = ({
                       key={membership.id}
                       onClick={() => {
                         onClose();
-                        navigate(`/profile/${u.id}?circleId=${circle.id}`);
+                        navigate(`/profile/${u?.username || u?.id}?circleId=${circle.id}`);
                       }}
                       className="p-3.5 rounded-2xl border border-[#E2DBD0] bg-white hover:border-[#2D5A3D]/50 hover:shadow-2xs transition-all flex flex-col justify-between gap-3 cursor-pointer group"
                     >
@@ -532,17 +580,61 @@ export const CircleManagementModal: React.FC<CircleManagementModalProps> = ({
                         </div>
                       </div>
 
-                      {/* Footer with Joined Date & Hobbies preview */}
-                      <div className="pt-2 border-t border-[#E2DBD0]/60 flex items-center justify-between text-[10px] text-[#8a8278]">
+                      {/* Footer with Joined Date & Member Actions */}
+                      <div className="pt-2 border-t border-[#E2DBD0]/60 flex items-center justify-between text-[10px] text-[#8a8278] gap-2">
                         {joinedDate && (
-                          <span className="flex items-center gap-1">
-                            <Calendar className="w-3 h-3 text-[#8a8278]" />
-                            <span>Joined {joinedDate}</span>
+                          <span className="flex items-center gap-1 truncate">
+                            <Calendar className="w-3 h-3 text-[#8a8278] shrink-0" />
+                            <span className="truncate">Joined {joinedDate}</span>
                           </span>
                         )}
-                        <span className="font-bold text-[#2D5A3D] group-hover:underline">
-                          View Profile →
-                        </span>
+
+                        <div className="flex items-center gap-2 ml-auto" onClick={(e) => e.stopPropagation()}>
+                          {isCreator && !isHost && !isSelf && (
+                            confirmRemoveId === u?.id ? (
+                              <div className="flex items-center gap-1 animate-in fade-in">
+                                <button
+                                  type="button"
+                                  disabled={removingMemberId === u?.id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRemoveMember(Number(u.id));
+                                  }}
+                                  className="px-2 py-0.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] transition-colors cursor-pointer shadow-2xs"
+                                >
+                                  {removingMemberId === u?.id ? 'Removing...' : 'Yes, Remove'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setConfirmRemoveId(null);
+                                  }}
+                                  className="px-1.5 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] transition-colors cursor-pointer"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setConfirmRemoveId(u.id);
+                                }}
+                                className="px-2 py-0.5 rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-semibold text-[10px] transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                                title="Remove member from circle"
+                              >
+                                <UserMinus className="w-2.5 h-2.5" />
+                                <span>Remove</span>
+                              </button>
+                            )
+                          )}
+
+                          <span className="font-bold text-[#2D5A3D] group-hover:underline">
+                            View Profile →
+                          </span>
+                        </div>
                       </div>
                     </div>
                   );

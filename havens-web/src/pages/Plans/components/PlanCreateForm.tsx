@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { useMutation } from '@apollo/client'
+import React, { useState, useMemo, useEffect } from 'react'
+import { useQuery, useMutation } from '@apollo/client'
 import { useAuth } from '../../../context/AuthContext'
 import { useApp } from '../../../context/AppContext'
 import { LocationInput, LocationData } from '../../../components/LocationInput'
@@ -8,8 +8,9 @@ import {
   GET_MY_CREATED_EVENTS,
   CREATE_EVENT,
   GENERATE_CLOUDINARY_SIGNATURE,
+  MY_COMMUNITIES,
 } from '../../../graphql/operations'
-import { Clock, Calendar } from 'lucide-react'
+import { Clock, Calendar, Users, ShieldCheck, Check } from 'lucide-react'
 import { HavensDatePicker } from '../../../components/ui/HavensDatePicker'
 import { HavensTimePicker } from '../../../components/ui/HavensTimePicker'
 import { AgeRangeSelector } from '../../../components/ui/AgeRangeSelector'
@@ -36,6 +37,7 @@ export const PlanCreateForm: React.FC<PlanCreateFormProps> = ({ onSuccess, onCan
   const [time, setTime] = useState('')
   const [selectedLocation, setSelectedLocation] = useState<LocationData | null>(null)
   const [visibility, setVis] = useState<Visibility>('public')
+  const [selectedCommunityId, setSelectedCommunityId] = useState<number | null>(null)
   const [category, setCategory] = useState('Outdoors')
   const [ageRange, setAgeRange] = useState('All Ages')
   const [imageFile, setImageFile] = useState<File | null>(null)
@@ -43,6 +45,23 @@ export const PlanCreateForm: React.FC<PlanCreateFormProps> = ({ onSuccess, onCan
   const [uploadedUrl, setUploadedUrl] = useState<string>('')
   const [errorMsg, setErrorMsg] = useState('')
   const [isUploading, setIsUploading] = useState(false)
+
+  // Fetch active user circles
+  const { data: myCommunitiesData } = useQuery(MY_COMMUNITIES, {
+    fetchPolicy: 'cache-and-network',
+  })
+
+  const userCircles = useMemo(() => {
+    return (myCommunitiesData?.myCommunities || [])
+      .map((m: any) => m.community)
+      .filter(Boolean)
+  }, [myCommunitiesData])
+
+  useEffect(() => {
+    if (userCircles.length > 0 && !selectedCommunityId) {
+      setSelectedCommunityId(Number(userCircles[0].id))
+    }
+  }, [userCircles, selectedCommunityId])
 
   // Cloudinary signature mutation
   const [getSignatureMutation] = useMutation(GENERATE_CLOUDINARY_SIGNATURE)
@@ -74,9 +93,9 @@ export const PlanCreateForm: React.FC<PlanCreateFormProps> = ({ onSuccess, onCan
   })
 
   const visOptions: { value: Visibility; label: string; desc: string }[] = [
-    { value: 'friends_only', label: 'Friends Only', desc: 'Only your confirmed friends see this plan' },
-    { value: 'community_only', label: 'Community', desc: 'Members of your circle can discover it' },
-    { value: 'public', label: 'Public', desc: 'Anyone on Havens can find and RSVP' },
+    { value: 'public', label: '🌍 Public', desc: 'Anyone on Havens can find and RSVP' },
+    { value: 'community_only', label: '🔒 Circle Only', desc: 'Exclusive to members of your chosen Circle' },
+    { value: 'friends_only', label: '👥 Friends Only', desc: 'Only your direct connections can view this' },
   ]
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -152,7 +171,6 @@ export const PlanCreateForm: React.FC<PlanCreateFormProps> = ({ onSuccess, onCan
         finalImageUrl = await uploadToCloudinary(imageFile)
         setUploadedUrl(finalImageUrl)
       }
-
       const scheduledDateTime = time ? `${date}T${time}:00` : `${date}T12:00:00`
 
       await createEventMutation({
@@ -163,7 +181,11 @@ export const PlanCreateForm: React.FC<PlanCreateFormProps> = ({ onSuccess, onCan
           longitude: selectedLocation.longitude,
           locationName: selectedLocation.address || selectedLocation.name,
           scheduledDate: new Date(scheduledDateTime).toISOString(),
-          visibility,
+          visibility: visibility === 'community_only' ? 'community_only' : visibility,
+          communityId:
+            visibility === 'community_only'
+              ? (selectedCommunityId || (userCircles[0]?.id ? parseInt(userCircles[0].id, 10) : null))
+              : null,
           ageRange: ageRange.trim() || 'All Ages',
           imageUrl: finalImageUrl || null,
         },
@@ -172,8 +194,6 @@ export const PlanCreateForm: React.FC<PlanCreateFormProps> = ({ onSuccess, onCan
       setErrorMsg(err.message || 'An error occurred while creating your plan.')
     }
   }
-
-  const ageOptions = ['All Ages', '18-25', '21-35', '25-40', '30-50', '18+', '21+']
 
   return (
     <div className="flex flex-col lg:flex-row gap-10 items-start">
@@ -199,71 +219,36 @@ export const PlanCreateForm: React.FC<PlanCreateFormProps> = ({ onSuccess, onCan
             />
           </div>
 
-          {/* Category */}
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider mb-2 text-[#2C2C2C]">
-              Category
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {CATEGORIES.map((cat) => (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setCategory(cat)}
-                  className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-150 cursor-pointer flex items-center gap-1.5 ${
-                    category === cat
-                      ? 'bg-[#2D5A3D] text-white shadow-xs'
-                      : 'bg-[#F0EAE0] text-[#5a5450] hover:bg-[#e4dcd2]'
-                  }`}
-                >
-                  <span>{cat}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Age Range Restriction */}
-          <AgeRangeSelector
-            value={ageRange}
-            onChange={(val) => setAgeRange(val)}
-            label="Target Age Range"
-            description="Configure age brackets for your plan or choose All Ages"
-          />
-
           {/* Description */}
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider mb-2 text-[#2C2C2C]">
               Description
             </label>
             <textarea
+              rows={3}
               value={description}
               onChange={(e) => setDesc(e.target.value)}
               placeholder="What should people expect? Any details, what to bring, vibe, or meeting spot..."
-              rows={3}
               className="w-full px-4 py-3 rounded-xl border border-[#E2DBD0] bg-white text-[#2C2C2C] placeholder-[#b5b0aa] text-sm focus:outline-none focus:border-[#2D5A3D] focus:ring-1 focus:ring-[#2D5A3D]/20 transition-colors resize-none shadow-2xs"
             />
           </div>
 
-          {/* Date & Time with Modern Havens Pickers */}
+          {/* Date & Time Selectors */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <HavensDatePicker
-                label="Date"
-                required
-                value={date}
-                minDate={new Date()}
-                placeholder="Choose event date"
-                onChange={(dateStr) => setDate(dateStr)}
-              />
-            </div>
-            <div>
-              <HavensTimePicker
-                label="Time"
-                value={time}
-                placeholder="Choose start time"
-                onChange={(time24) => setTime(time24)}
-              />
-            </div>
+            <HavensDatePicker
+              label="Date"
+              required
+              value={date}
+              minDate={new Date()}
+              placeholder="Choose event date"
+              onChange={(dateStr) => setDate(dateStr)}
+            />
+            <HavensTimePicker
+              label="Time"
+              value={time}
+              placeholder="Choose start time"
+              onChange={(time24) => setTime(time24)}
+            />
           </div>
 
           {/* Location Input */}
@@ -278,10 +263,41 @@ export const PlanCreateForm: React.FC<PlanCreateFormProps> = ({ onSuccess, onCan
             />
           </div>
 
-          {/* Image Upload */}
+          {/* Category */}
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider mb-2 text-[#2C2C2C]">
-              Cover Photo (Cloudinary Upload)
+              Category
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {CATEGORIES.map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setCategory(cat)}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                    category === cat
+                      ? 'bg-[#2D5A3D] text-white shadow-2xs'
+                      : 'bg-[#FAF8F5] border border-[#E2DBD0] text-stone-600 hover:bg-[#F4EEE2]'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Age Range Selector */}
+          <AgeRangeSelector
+            value={ageRange}
+            onChange={(val) => setAgeRange(val)}
+            label="Target Age Range"
+            description="Configure age brackets for your plan or choose All Ages"
+          />
+
+          {/* Cover Photo Upload */}
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider mb-2 text-[#2C2C2C]">
+              Cover Photo (Optional)
             </label>
             <input
               type="file"
@@ -299,7 +315,7 @@ export const PlanCreateForm: React.FC<PlanCreateFormProps> = ({ onSuccess, onCan
           {/* Visibility Options */}
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider mb-2 text-[#2C2C2C]">
-              Visibility
+              Visibility & Audience
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {visOptions.map((opt) => (
@@ -327,6 +343,44 @@ export const PlanCreateForm: React.FC<PlanCreateFormProps> = ({ onSuccess, onCan
                 </button>
               ))}
             </div>
+
+            {/* Circle Selection Dropdown (Only when Circle Only is active) */}
+            {visibility === 'community_only' && (
+              <div className="mt-4 p-4 rounded-2xl bg-[#FAF8F5] border border-[#E2DBD0] space-y-3 animate-in fade-in">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-[#2D5A3D]" />
+                  <label className="text-xs font-bold text-stone-900">
+                    Select Target Circle <span className="text-rose-500">*</span>
+                  </label>
+                </div>
+
+                {userCircles.length > 0 ? (
+                  <div className="space-y-2">
+                    <select
+                      value={selectedCommunityId || userCircles[0]?.id || ''}
+                      onChange={(e) => setSelectedCommunityId(Number(e.target.value))}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-[#E2DBD0] bg-white text-xs font-semibold text-stone-800 focus:outline-none focus:border-[#2D5A3D] cursor-pointer shadow-2xs"
+                    >
+                      {userCircles.map((circle: any) => (
+                        <option key={circle.id} value={circle.id}>
+                          🌿 {circle.name} ({circle.memberCount || 1} members)
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[11px] text-[#8a8278]">
+                      Only joined members of this Circle will be able to discover and RSVP to this plan.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl text-xs space-y-1">
+                    <p className="font-bold">No Circles Joined Yet</p>
+                    <p className="text-[11px] text-amber-800">
+                      You are not currently part of any micro-community circles. Join or create a circle in the Social tab to publish circle-exclusive gatherings.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Submit Button */}

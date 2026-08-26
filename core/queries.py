@@ -92,6 +92,11 @@ class Query(graphene.ObjectType):
         id=graphene.Int(required=True),
         description="Look up a specific user account by its primary key ID."
     )
+    user_by_username = graphene.Field(
+        UserType,
+        username=graphene.String(required=True),
+        description="Look up a specific user account by its username or handle."
+    )
     search_users = graphene.List(
         UserType,
         query=graphene.String(required=True),
@@ -390,6 +395,32 @@ class Query(graphene.ObjectType):
         try:
             return User.objects.get(id=id)
         except User.DoesNotExist:
+            return None
+
+    @login_required
+    def resolve_user_by_username(self, info, username):
+        """Retrieve a specific user by username (case-insensitive match) with ID fallback.
+
+        Requires authentication.
+
+        Args:
+            info (graphene.ResolveInfo): Execution context.
+            username (str): Username or handle of the target user.
+
+        Returns:
+            User | None: The matching User instance if found; otherwise None.
+        """
+        clean_username = (username or '').strip().lstrip('@')
+        if not clean_username:
+            return None
+        try:
+            return User.objects.get(username__iexact=clean_username)
+        except User.DoesNotExist:
+            if clean_username.isdigit():
+                try:
+                    return User.objects.get(id=int(clean_username))
+                except User.DoesNotExist:
+                    pass
             return None
 
     def resolve_search_users(self, info, query, limit=50, offset=0):
@@ -707,6 +738,18 @@ class Query(graphene.ObjectType):
             print(f"🟢 BACKEND SUCCESS: User recognized as {user.username}")
 
         queryset = Event.objects.select_related('community', 'creator').prefetch_related('hobbies').all()
+
+        # Strict Visibility & Community Access Control
+        if user and user.is_authenticated:
+            if not user.is_staff:
+                user_community_ids = CommunityMembership.objects.filter(user=user).values_list('community_id', flat=True)
+                queryset = queryset.filter(
+                    Q(visibility='public') |
+                    Q(creator=user) |
+                    Q(visibility__in=['community_only', 'community'], community_id__in=user_community_ids)
+                )
+        else:
+            queryset = queryset.filter(visibility='public')
 
         # Filter by specific organizer/creator
         if creator_id is not None:

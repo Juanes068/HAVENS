@@ -208,8 +208,8 @@ export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
                 return (
                   <div
                     key={req.id}
-                    onClick={() => setExploringUser(sender)}
-                    className={`bg-white border border-[#E2DBD0] hover:border-[#2D5A3D]/50 rounded-2xl p-4 flex flex-col justify-between shadow-2xs hover:shadow-md transition-all duration-200 cursor-pointer ${
+                    onClick={() => sender && navigate(`/profile/${sender.username || sender.id}`)}
+                    className={`bg-white border border-[#E2DBD0] hover:border-[#2D5A3D]/50 rounded-2xl p-4 flex flex-col justify-between shadow-2xs hover:shadow-md transition-all duration-200 cursor-pointer group ${
                       isFading ? 'opacity-0 scale-95 translate-x-4' : 'opacity-100 scale-100'
                     }`}
                   >
@@ -222,7 +222,7 @@ export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
                         className="w-11 h-11 border-2 border-white shadow-2xs rounded-full ring-1 ring-[#2D5A3D]/20 shrink-0"
                       />
                       <div className="min-w-0 flex-1">
-                        <h4 className="text-sm font-semibold text-[#2C2C2C] truncate group-hover:text-[#2D5A3D]">
+                        <h4 className="text-sm font-semibold text-[#2C2C2C] truncate group-hover:text-[#2D5A3D] transition-colors">
                           @{sender?.username || 'member'}
                         </h4>
                         <p className="text-[11px] text-[#8a8278] truncate mt-0.5">
@@ -236,8 +236,20 @@ export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
                       </div>
                     </div>
 
-                    {/* Accept / Decline Action Buttons */}
+                    {/* Accept / Decline / View More Action Buttons */}
                     <div className="flex items-center gap-2 pt-2.5 border-t border-[#E2DBD0]/60" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (sender) navigate(`/profile/${sender.username || sender.id}`);
+                        }}
+                        className="px-2.5 py-2 rounded-xl border border-[#E2DBD0] hover:border-[#2D5A3D]/50 text-stone-700 hover:text-[#2D5A3D] bg-[#FAF8F5] hover:bg-white text-xs font-semibold transition-all cursor-pointer flex items-center justify-center shrink-0 shadow-2xs"
+                        title="View profile"
+                      >
+                        <span>View More</span>
+                      </button>
+
                       <button
                         type="button"
                         onClick={(e) => {
@@ -258,6 +270,7 @@ export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
                           handleAnimatedRespond(req.id, 'rejected');
                         }}
                         className="py-2 px-3 rounded-xl border border-[#E2DBD0] hover:bg-rose-50 hover:border-rose-200 text-rose-600 text-xs font-medium transition-all cursor-pointer flex items-center justify-center gap-1"
+                        title="Decline request"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -368,8 +381,8 @@ export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
                 return (
                   <div
                     key={friend.id}
-                    onClick={() => setExploringUser(friend)}
-                    className="bg-white border border-[#E2DBD0] hover:border-[#2D5A3D]/50 rounded-3xl p-5 flex flex-col justify-between shadow-xs hover:shadow-md transition-all duration-200 cursor-pointer"
+                    onClick={() => navigate(`/profile/${friend.username || friend.id}`)}
+                    className="bg-white border border-[#E2DBD0] hover:border-[#2D5A3D]/50 rounded-3xl p-5 flex flex-col justify-between shadow-xs hover:shadow-md transition-all duration-200 cursor-pointer group"
                   >
                     <div>
                       {/* Header info */}
@@ -378,11 +391,11 @@ export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
                           name={friend.username}
                           photoUrl={friend.photoUrl}
                           size="md"
-                          className="w-13 h-13 border-2 border-white shadow-xs rounded-full ring-1 ring-[#2D5A3D]/20 shrink-0"
+                          className="w-13 h-13 border-2 border-white shadow-xs rounded-full ring-1 ring-[#2D5A3D]/20 shrink-0 group-hover:ring-[#2D5A3D]/50 transition-all"
                         />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <h4 className="text-base font-semibold text-[#2C2C2C] truncate">
+                            <h4 className="text-base font-semibold text-[#2C2C2C] truncate group-hover:text-[#2D5A3D] transition-colors">
                               @{friend.username}
                             </h4>
                             {friend.age ? (
@@ -429,15 +442,27 @@ export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
                       )}
                     </div>
 
-                    {/* Actions: Open Chat */}
+                    {/* Actions: View More & Open Chat */}
                     <div className="pt-2.5 border-t border-[#E2DBD0]/60 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/profile/${friend.username || friend.id}`);
+                        }}
+                        className="px-3.5 py-2 rounded-xl border border-[#E2DBD0] hover:border-[#2D5A3D]/50 text-stone-700 hover:text-[#2D5A3D] bg-[#FAF8F5] hover:bg-white text-xs font-semibold transition-all shadow-2xs cursor-pointer flex items-center justify-center gap-1 shrink-0"
+                        title="View profile"
+                      >
+                        <span>View More</span>
+                      </button>
+
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleChat(String(friend.id), friend.matchId);
                         }}
-                        className="w-full py-2 rounded-xl bg-[#eaf3ed] text-[#2D5A3D] hover:bg-[#2D5A3D] hover:text-white text-xs font-semibold transition-all shadow-2xs cursor-pointer flex items-center justify-center gap-1.5"
+                        className="flex-1 py-2 rounded-xl bg-[#eaf3ed] text-[#2D5A3D] hover:bg-[#2D5A3D] hover:text-white text-xs font-semibold transition-all shadow-2xs cursor-pointer flex items-center justify-center gap-1.5"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />

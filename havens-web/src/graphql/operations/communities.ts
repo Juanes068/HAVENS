@@ -326,18 +326,73 @@ export const GET_COMMUNITY_BY_ID = gql`
       subdomain
       description
       locationName
+      latitude
+      longitude
       isVirtual
       imageUrl
       ageRange
+      minAge
+      maxAge
       memberCount
       createdAt
       creator {
         id
         username
+        photoUrl
+        bio
+        age
+        neighbourhood
+        cityName
       }
       hobbies {
         id
         name
+      }
+      events {
+        id
+        title
+        description
+        imageUrl
+        locationName
+        scheduledDate
+        pointsReward
+        visibility
+        goingCount
+        creator {
+          id
+          username
+          photoUrl
+        }
+        rsvps {
+          id
+          response
+          user {
+            id
+            username
+            photoUrl
+          }
+        }
+        hobbies {
+          id
+          name
+        }
+      }
+      memberships {
+        id
+        joinedAt
+        user {
+          id
+          username
+          photoUrl
+          bio
+          age
+          neighbourhood
+          cityName
+          hobbies {
+            id
+            name
+          }
+        }
       }
     }
   }
@@ -348,6 +403,18 @@ export const GET_COMMUNITY_BY_ID = gql`
  */
 export const REMOVE_COMMUNITY_MEMBER = gql`
   mutation RemoveCommunityMember($communityId: Int!, $userId: Int!) {
+    removeCommunityMember(communityId: $communityId, userId: $userId) {
+      success
+      message
+    }
+  }
+`;
+
+/**
+ * Mutation to leave a circle (removes current user from community).
+ */
+export const LEAVE_COMMUNITY = gql`
+  mutation LeaveCommunity($communityId: Int!, $userId: Int!) {
     removeCommunityMember(communityId: $communityId, userId: $userId) {
       success
       message

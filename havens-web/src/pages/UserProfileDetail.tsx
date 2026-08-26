@@ -6,6 +6,7 @@ import { useApp } from '../context/AppContext';
 import { Avatar } from '../components/Avatar';
 import {
   GET_USER_BY_ID,
+  GET_USER_BY_USERNAME,
   GET_COMMUNITY_BY_ID,
   GET_COMMUNITY_MEMBERS,
   REMOVE_COMMUNITY_MEMBER,
@@ -30,7 +31,7 @@ import {
 } from 'lucide-react';
 
 export const UserProfileDetailView: React.FC = () => {
-  const { userId } = useParams<{ userId: string }>();
+  const { username, userId } = useParams<{ username?: string; userId?: string }>();
   const [searchParams] = useSearchParams();
   const circleId = searchParams.get('circleId');
   const navigate = useNavigate();
@@ -43,17 +44,29 @@ export const UserProfileDetailView: React.FC = () => {
   const [actionErrorMsg, setActionErrorMsg] = useState<string | null>(null);
   const [hasRemovedMember, setHasRemovedMember] = useState(false);
 
-  const targetUserId = userId ? parseInt(userId, 10) : 0;
+  const rawParam = username || userId || '';
+  const userIdentifier = rawParam.startsWith('@') ? rawParam.substring(1) : rawParam;
+  const isNumericOnly = /^\d+$/.test(userIdentifier);
   const targetCircleId = circleId ? parseInt(circleId, 10) : 0;
 
-  // 1. Fetch Target User Data
+  // 1. Fetch Target User Data by Username or Handle
   const {
-    data: userData,
-    loading: userLoading,
-    error: userError,
+    data: userByUsernameData,
+    loading: userByUsernameLoading,
+    error: userByUsernameError,
+  } = useQuery(GET_USER_BY_USERNAME, {
+    variables: { username: userIdentifier },
+    skip: !userIdentifier,
+    fetchPolicy: 'cache-and-network',
+  });
+
+  // Fallback query by numeric ID if needed
+  const {
+    data: userByIdData,
+    loading: userByIdLoading,
   } = useQuery(GET_USER_BY_ID, {
-    variables: { id: targetUserId },
-    skip: !targetUserId,
+    variables: { id: isNumericOnly ? parseInt(userIdentifier, 10) : 0 },
+    skip: !isNumericOnly || Boolean(userByUsernameData?.userByUsername),
     fetchPolicy: 'cache-and-network',
   });
 
@@ -73,6 +86,10 @@ export const UserProfileDetailView: React.FC = () => {
     skip: !targetCircleId,
     fetchPolicy: 'cache-and-network',
   });
+
+  const targetUser = userByUsernameData?.userByUsername || userByIdData?.userById;
+  const userLoading = userByUsernameLoading || (isNumericOnly && userByIdLoading && !targetUser);
+  const userError = !targetUser && !userLoading;
 
   // 4. Remove Member from Circle Mutation
   const [removeMemberMutation] = useMutation(REMOVE_COMMUNITY_MEMBER, {
@@ -113,10 +130,9 @@ export const UserProfileDetailView: React.FC = () => {
     },
   });
 
-  const targetUser = userData?.userById;
   const circle = circleData?.communityById;
 
-  const isSelf = currentUser && String(currentUser.id) === String(targetUserId);
+  const isSelf = currentUser && targetUser && String(currentUser.id) === String(targetUser.id);
   const isCircleCreator =
     circle && currentUser && String(circle.creator?.id) === String(currentUser.id);
   const isTargetCircleCreator =
@@ -131,20 +147,20 @@ export const UserProfileDetailView: React.FC = () => {
   );
 
   const handleConfirmRemove = () => {
-    if (!targetCircleId || !targetUserId) return;
+    if (!targetCircleId || !targetUser?.id) return;
     setIsRemoving(true);
     setActionErrorMsg(null);
     removeMemberMutation({
       variables: {
         communityId: targetCircleId,
-        userId: targetUserId,
+        userId: Number(targetUser.id),
       },
     });
   };
 
   const handleBack = () => {
     if (circleId) {
-      navigate(`/social?tab=circles`);
+      navigate(`/circle/${circleId}`);
     } else {
       navigate(-1);
     }

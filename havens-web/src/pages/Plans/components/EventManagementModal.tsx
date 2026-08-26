@@ -10,6 +10,7 @@ import {
   GET_EVENT_RSVPS,
   UPDATE_EVENT,
   GENERATE_CLOUDINARY_SIGNATURE,
+  MY_COMMUNITIES,
 } from '../../../graphql/operations'
 import {
   SERIF,
@@ -537,7 +538,13 @@ export const EventManagementModal: React.FC<EventManagementModalProps> = ({
                     return (
                       <div
                         key={rsvp.id}
-                        className="p-4 rounded-2xl border border-[#E2DBD0] bg-white hover:border-[#2D5A3D]/40 transition-all flex flex-col justify-between gap-3 shadow-2xs hover:shadow-xs"
+                        onClick={() => {
+                          if (attendee?.id || attendee?.username) {
+                            onClose()
+                            navigate(`/profile/${attendee?.username || attendee?.id}`)
+                          }
+                        }}
+                        className="p-4 rounded-2xl border border-[#E2DBD0] bg-white hover:border-[#2D5A3D]/40 transition-all flex flex-col justify-between gap-3 shadow-2xs hover:shadow-xs cursor-pointer group"
                       >
                         <div className="flex items-start gap-3">
                           <Avatar
@@ -549,7 +556,7 @@ export const EventManagementModal: React.FC<EventManagementModalProps> = ({
                           />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5">
-                              <h4 className="text-sm font-semibold text-stone-900 truncate">
+                              <h4 className="text-sm font-semibold text-stone-900 truncate group-hover:text-[#2D5A3D] transition-colors">
                                 @{attendee?.username || 'member'}
                               </h4>
                               {attendee?.age ? (
@@ -587,7 +594,8 @@ export const EventManagementModal: React.FC<EventManagementModalProps> = ({
 
                           <button
                             type="button"
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation()
                               onClose()
                               navigate('/chat')
                             }}
@@ -722,7 +730,7 @@ export const EventManagementModal: React.FC<EventManagementModalProps> = ({
               {/* Visibility */}
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider mb-2 text-[#2C2C2C]">
-                  Event Visibility
+                  Event Visibility & Audience
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {visOptions.map((opt) => (
@@ -750,6 +758,44 @@ export const EventManagementModal: React.FC<EventManagementModalProps> = ({
                     </button>
                   ))}
                 </div>
+
+                {/* Circle Selection Dropdown (Only when Circle Only is active) */}
+                {visibility === 'community_only' && (
+                  <div className="mt-4 p-4 rounded-2xl bg-[#FAF8F5] border border-[#E2DBD0] space-y-3 animate-in fade-in">
+                    <div className="flex items-center gap-2">
+                      <Users className="w-4 h-4 text-[#2D5A3D]" />
+                      <label className="text-xs font-bold text-stone-900">
+                        Target Circle <span className="text-rose-500">*</span>
+                      </label>
+                    </div>
+
+                    {userCircles.length > 0 ? (
+                      <div className="space-y-2">
+                        <select
+                          value={selectedCommunityId || userCircles[0]?.id || ''}
+                          onChange={(e) => setSelectedCommunityId(Number(e.target.value))}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-[#E2DBD0] bg-white text-xs font-semibold text-stone-800 focus:outline-none focus:border-[#2D5A3D] cursor-pointer shadow-2xs"
+                        >
+                          {userCircles.map((circle: any) => (
+                            <option key={circle.id} value={circle.id}>
+                              🌿 {circle.name} ({circle.memberCount || 1} members)
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-[11px] text-[#8a8278]">
+                          Only joined members of this Circle will be able to discover and RSVP to this plan.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl text-xs space-y-1">
+                        <p className="font-bold">No Circles Joined Yet</p>
+                        <p className="text-[11px] text-amber-800">
+                          Join or create a circle in the Social tab to host circle-exclusive gatherings.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Form Action Buttons */}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_RECOMMENDED_CIRCLES, SEARCH_COMMUNITIES, DELETE_COMMUNITY } from '../../../graphql/operations';
 import { useAuth } from '../../../context/AuthContext';
@@ -46,6 +47,7 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
   myHobbies = [],
   onActionStatus,
 }) => {
+  const navigate = useNavigate();
   const { user: currentUser } = useAuth();
   const [exploringCircle, setExploringCircle] = useState<Circle | null>(null);
   const [managingCircle, setManagingCircle] = useState<Circle | null>(null);
@@ -344,7 +346,7 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
               return (
                 <div
                   key={circle.id}
-                  onClick={() => setExploringCircle(circle)}
+                  onClick={() => navigate(`/circle/${circle.id}`)}
                   className="group bg-white border border-[#E2DBD0] hover:border-[#2D5A3D]/50 rounded-3xl p-5 sm:p-5.5 flex flex-col justify-between shadow-xs hover:shadow-md transition-all duration-200 cursor-pointer"
                 >
                   <div>
@@ -447,6 +449,18 @@ export const CirclesTab: React.FC<CirclesTabProps> = ({
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/circle/${circle.id}`);
+                        }}
+                        className="px-3 py-2 rounded-xl bg-[#FAF8F5] hover:bg-white border border-[#E2DBD0] hover:border-[#2D5A3D]/40 text-stone-700 hover:text-[#2D5A3D] text-xs font-semibold transition-all shadow-2xs cursor-pointer"
+                        title="View full circle details"
+                      >
+                        View More
+                      </button>
+
                       {isCreator ? (
                         <button
                           type="button"

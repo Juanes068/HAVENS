@@ -972,7 +972,7 @@ class CreateEvent(graphene.Mutation):
     message = graphene.String(description="Status or validation error message.")
 
     # Allowed visibility choices from Event model definitions
-    VALID_VISIBILITY = {v[0] for v in Event.VISIBILITY_CHOICES}
+    VALID_VISIBILITY = {'public', 'friends_only', 'community_only', 'community', 'private'}
 
     @classmethod
     @login_required
@@ -982,10 +982,10 @@ class CreateEvent(graphene.Mutation):
                ageRange='All Ages', minAge=None, maxAge=None, hobbyIds=None):
         """Validate input parameters and create Event record."""
         try:
+            vis_normalized = 'community_only' if visibility in ['community', 'community_only', 'circle'] else visibility
             # Validate visibility choice against model constraints
-            if visibility not in cls.VALID_VISIBILITY:
-                return cls(event=None, success=False,
-                           message=f"Invalid visibility '{visibility}'. Must be one of: {', '.join(sorted(cls.VALID_VISIBILITY))}")
+            if vis_normalized not in {'public', 'friends_only', 'community_only', 'private'}:
+                vis_normalized = 'public'
 
             # Validate that scheduled date is not set in the past
             event_date = scheduledDate or timezone.now()
@@ -995,6 +995,9 @@ class CreateEvent(graphene.Mutation):
 
             user = info.context.user
             community = Community.objects.get(id=communityId) if communityId else None
+            if community and vis_normalized != 'public':
+                vis_normalized = 'community_only'
+
             event = Event.objects.create(
                 title=title.strip(),
                 description=description.strip() if description else '',
@@ -1003,7 +1006,7 @@ class CreateEvent(graphene.Mutation):
                 community=community,
                 creator=user,
                 points_reward=pointsReward,
-                visibility=visibility,
+                visibility=vis_normalized,
                 image_url=imageUrl.strip() if imageUrl else None,
                 location_name=locationName or '',
                 scheduled_date=event_date,

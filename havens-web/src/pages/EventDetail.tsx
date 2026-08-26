@@ -155,11 +155,21 @@ export const EventDetailPageView: React.FC = () => {
         (r: any) => String(r.user?.id) === String(currentUser?.id)
       )?.response;
 
+  const [attendanceFilter, setAttendanceFilter] = useState<'all' | 'going' | 'maybe'>('going');
+
   // RSVP lists
   const goingRsvps = (event?.rsvps || []).filter((r: any) => r.response === 'going');
   const maybeRsvps = (event?.rsvps || []).filter((r: any) => r.response === 'maybe');
+  const allRsvps = (event?.rsvps || []).filter((r: any) => r.response === 'going' || r.response === 'maybe');
   const goingCount = goingRsvps.length || event?.goingCount || 0;
   const maybeCount = maybeRsvps.length;
+
+  const displayedAttendees =
+    attendanceFilter === 'going'
+      ? goingRsvps
+      : attendanceFilter === 'maybe'
+      ? maybeRsvps
+      : allRsvps;
 
   const handleRsvpToggle = async (targetResponse: 'going' | 'maybe') => {
     const nextResponse = userResponse === targetResponse ? 'pass' : targetResponse;
@@ -436,7 +446,7 @@ export const EventDetailPageView: React.FC = () => {
           {event.creator && (
             <div className="p-4 sm:p-5 rounded-2xl bg-[#FAF8F5] border border-[#E2DBD0]/70 flex items-center justify-between gap-4">
               <div className="flex items-center gap-3.5">
-                <Link to={`/profile/${event.creator.id}`} className="shrink-0 group">
+                <Link to={`/profile/${event.creator.username || event.creator.id}`} className="shrink-0 group">
                   <Avatar
                     name={event.creator.username}
                     photoUrl={event.creator.photoUrl}
@@ -447,7 +457,7 @@ export const EventDetailPageView: React.FC = () => {
                 <div>
                   <div className="flex items-center gap-1.5">
                     <Link
-                      to={`/profile/${event.creator.id}`}
+                      to={`/profile/${event.creator.username || event.creator.id}`}
                       className="text-sm font-bold text-stone-900 hover:text-[#2D5A3D] transition-colors"
                     >
                       @{event.creator.username}
@@ -461,7 +471,7 @@ export const EventDetailPageView: React.FC = () => {
               </div>
 
               <Link
-                to={`/profile/${event.creator.id}`}
+                to={`/profile/${event.creator.username || event.creator.id}`}
                 className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-[#E2DBD0] bg-white hover:bg-[#F4EEE2] text-xs font-bold text-stone-700 transition-colors shadow-2xs"
               >
                 <span>View Profile</span>
@@ -500,42 +510,72 @@ export const EventDetailPageView: React.FC = () => {
       </div>
 
       {/* ───────────────────────────────────────────────────────────── */}
-      {/* SECTION 2: ATTENDANCE DIRECTORY */}
+      {/* SECTION 2: ATTENDANCE & RSVP DIRECTORY */}
       {/* ───────────────────────────────────────────────────────────── */}
-      <div className="p-6 sm:p-8 rounded-3xl bg-white border border-[#E2DBD0] shadow-xs space-y-5">
-        <div className="flex items-center justify-between gap-4">
+      <div className="p-6 sm:p-8 rounded-3xl bg-white border border-[#E2DBD0] shadow-xs space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h3 className="text-lg font-serif font-bold text-stone-900">
               Attendance Directory
             </h3>
             <p className="text-xs text-[#8a8278] mt-0.5">
-              People who have confirmed attendance or expressed interest
+              Verified community members attending or considering this gathering
             </p>
           </div>
 
-          <div className="flex items-center gap-2 text-xs font-bold text-stone-700">
-            <span className="px-3 py-1 rounded-full bg-[#eaf3ed] text-[#2D5A3D] border border-[#2D5A3D]/20">
-              👥 {goingCount} Going
-            </span>
-            {maybeCount > 0 && (
-              <span className="px-3 py-1 rounded-full bg-amber-50 text-amber-900 border border-amber-200">
-                · {maybeCount} Maybe
-              </span>
-            )}
+          {/* Granular Filter Tabs */}
+          <div className="flex items-center gap-1.5 p-1 bg-[#FAF8F5] border border-[#E2DBD0] rounded-2xl shrink-0">
+            <button
+              type="button"
+              onClick={() => setAttendanceFilter('going')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                attendanceFilter === 'going'
+                  ? 'bg-[#2D5A3D] text-white shadow-2xs'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              <Check className="w-3.5 h-3.5" />
+              <span>Confirmed ({goingCount})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setAttendanceFilter('maybe')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                attendanceFilter === 'maybe'
+                  ? 'bg-amber-500 text-white shadow-2xs'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+              <span>Maybe ({maybeCount})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setAttendanceFilter('all')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                attendanceFilter === 'all'
+                  ? 'bg-stone-800 text-white shadow-2xs'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              <span>All ({goingCount + maybeCount})</span>
+            </button>
           </div>
         </div>
 
-        {/* Attendees Grid */}
-        {(event.rsvps && event.rsvps.length > 0) || (event.attendees && event.attendees.length > 0) ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-2">
-            {(event.rsvps || []).map((rsvp: any) => {
+        {/* Display Filtered Attendees Grid */}
+        {displayedAttendees.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-1">
+            {displayedAttendees.map((rsvp: any) => {
               const u = rsvp.user;
               if (!u) return null;
               const isGoing = rsvp.response === 'going';
               return (
                 <Link
                   key={rsvp.id}
-                  to={`/profile/${u.id}`}
+                  to={`/profile/${u.username || u.id}`}
                   className="p-3.5 rounded-2xl border border-[#E2DBD0] bg-[#FAF8F5] hover:border-[#2D5A3D]/50 hover:bg-white transition-all flex items-center justify-between gap-3 shadow-2xs group"
                 >
                   <div className="flex items-center gap-3 min-w-0">
@@ -558,13 +598,23 @@ export const EventDetailPageView: React.FC = () => {
                   </div>
 
                   <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                    className={`text-[10px] font-bold px-2.5 py-1 rounded-full shrink-0 flex items-center gap-1 ${
                       isGoing
-                        ? 'bg-[#eaf3ed] text-[#2D5A3D] border border-[#2D5A3D]/20'
-                        : 'bg-amber-100 text-amber-900 border border-amber-200'
+                        ? 'bg-[#eaf3ed] text-[#2D5A3D] border border-[#2D5A3D]/25'
+                        : 'bg-amber-100 text-amber-900 border border-amber-300'
                     }`}
                   >
-                    {isGoing ? 'Going' : 'Maybe'}
+                    {isGoing ? (
+                      <>
+                        <Check className="w-2.5 h-2.5" />
+                        <span>Confirmed</span>
+                      </>
+                    ) : (
+                      <>
+                        <HelpCircle className="w-2.5 h-2.5" />
+                        <span>Interested</span>
+                      </>
+                    )}
                   </span>
                 </Link>
               );
@@ -572,8 +622,16 @@ export const EventDetailPageView: React.FC = () => {
           </div>
         ) : (
           <div className="text-center py-8 px-4 rounded-2xl bg-[#FAF8F5] border border-[#E2DBD0]/60 space-y-2">
-            <p className="text-xs text-[#8a8278]">No RSVPs recorded yet.</p>
-            <p className="text-xs font-semibold text-[#2D5A3D]">Be the first to confirm attendance!</p>
+            <p className="text-xs text-[#8a8278]">
+              {attendanceFilter === 'going'
+                ? 'No confirmed attendees yet.'
+                : attendanceFilter === 'maybe'
+                ? 'No members marked maybe yet.'
+                : 'No RSVPs recorded yet.'}
+            </p>
+            {attendanceFilter === 'going' && (
+              <p className="text-xs font-semibold text-[#2D5A3D]">Be the first to confirm attendance!</p>
+            )}
           </div>
         )}
       </div>

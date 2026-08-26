@@ -77,6 +77,52 @@ export const GET_USER_BY_ID = gql`
 `;
 
 /**
+ * Query to fetch complete profile details of a target user by username or handle.
+ */
+export const GET_USER_BY_USERNAME = gql`
+  query GetUserByUsername($username: String!) {
+    userByUsername(username: $username) {
+      id
+      username
+      email
+      totalPoints
+      bio
+      dateOfBirth
+      age
+      neighbourhood
+      cityName
+      photoUrl
+      inviteCode
+      createdCirclesCount
+      hobbies {
+        id
+        name
+        category {
+          id
+          name
+        }
+      }
+      sharedHobbies {
+        id
+        name
+        category {
+          id
+          name
+        }
+      }
+      relatedHobbies {
+        id
+        name
+        category {
+          id
+          name
+        }
+      }
+    }
+  }
+`;
+
+/**
  * Query to fetch recommended users (strictly location-filtered by Haversine radius & ranked by affinity).
  */
 export const GET_ALL_USERS = gql`

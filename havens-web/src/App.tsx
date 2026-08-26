@@ -12,6 +12,7 @@ import { SavedView } from './pages/Saved'
 import { ProfileSettingsView } from './pages/ProfileSettings'
 import { UserProfileDetailView } from './pages/UserProfileDetail'
 import { EventDetailPageView } from './pages/EventDetail'
+import { CircleDetailPageView } from './pages/CircleDetail'
 import { ChatHubView } from './pages/ChatHub'
 import { TermsPage } from './pages/Terms'
 
@@ -37,10 +38,12 @@ export default function App() {
             <Route path="/calendar" element={<CalendarView />} />
             <Route path="/saved" element={<SavedView />} />
             <Route path="/profile" element={<ProfileSettingsView />} />
-            <Route path="/profile/:userId" element={<UserProfileDetailView />} />
-            <Route path="/user/:userId" element={<UserProfileDetailView />} />
+            <Route path="/profile/:username" element={<UserProfileDetailView />} />
+            <Route path="/user/:username" element={<UserProfileDetailView />} />
             <Route path="/event/:eventId" element={<EventDetailPageView />} />
             <Route path="/events/:eventId" element={<EventDetailPageView />} />
+            <Route path="/circle/:circleId" element={<CircleDetailPageView />} />
+            <Route path="/circles/:circleId" element={<CircleDetailPageView />} />
           </Route>
 
           {/* Fallback Route */}

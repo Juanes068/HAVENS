@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../context/AuthContext'
 import { useApp } from '../../../context/AppContext'
+import { Avatar } from '../../../components/Avatar'
 import {
   Calendar,
   Sparkles,
@@ -76,8 +77,10 @@ const PlanCardItem: React.FC<{
   const displayHobbies = (plan.hobbies || []).slice(0, 4)
   const remainingCount = Math.max(0, (plan.hobbies?.length || 0) - 4)
 
-  const goingCount = (plan.rsvps || []).filter((r: any) => r.response === 'going').length || plan.goingCount || plan.going || 0
-  const maybeCount = (plan.rsvps || []).filter((r: any) => r.response === 'maybe').length || 0
+  const goingAttendees = (plan.rsvps || []).filter((r: any) => r.response === 'going')
+  const maybeAttendees = (plan.rsvps || []).filter((r: any) => r.response === 'maybe')
+  const goingCount = goingAttendees.length || plan.goingCount || plan.going || 0
+  const maybeCount = maybeAttendees.length || 0
 
   const isHost = plan.role === 'hosting'
   const userResponse = plan.userResponse || (isHost ? 'hosting' : undefined)
@@ -216,20 +219,48 @@ const PlanCardItem: React.FC<{
             )}
           </div>
         )}
+
+        {/* Attendance Avatars Stack & Roster Preview */}
+        <div className="pt-2.5 pb-2 border-t border-[#E2DBD0]/60 flex items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-2 min-w-0">
+            {goingAttendees.length > 0 ? (
+              <div className="flex items-center -space-x-2 overflow-hidden shrink-0">
+                {goingAttendees.slice(0, 4).map((rsvp: any) => (
+                  <Avatar
+                    key={rsvp.id || rsvp.user?.id}
+                    name={rsvp.user?.username || 'Attendee'}
+                    photoUrl={rsvp.user?.photoUrl}
+                    size="sm"
+                    className="w-6 h-6 rounded-full border-2 border-white shadow-2xs"
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="w-6 h-6 rounded-full bg-[#FAF8F5] border border-[#E2DBD0] flex items-center justify-center text-stone-400 shrink-0">
+                <Users className="w-3.5 h-3.5" />
+              </div>
+            )}
+            <span className="text-[11px] font-bold text-stone-800 truncate">
+              {goingCount > 0
+                ? `${goingCount} confirmed ${goingCount === 1 ? 'attendee' : 'attendees'}`
+                : 'No attendees yet'}
+            </span>
+          </div>
+
+          {maybeCount > 0 && (
+            <span className="text-[10px] font-bold text-amber-900 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-full shrink-0">
+              {maybeCount} maybe
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Footer with RSVP summary & Action Buttons */}
-      <div className="flex items-center justify-between pt-3 border-t border-[#E2DBD0]/60 gap-2" onClick={(e) => e.stopPropagation()}>
+      <div className="flex items-center justify-between pt-2.5 border-t border-[#E2DBD0]/40 gap-2" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-1.5 text-xs font-semibold text-stone-700">
-          <span className="flex items-center gap-1 text-[#2D5A3D]">
-            <span className="w-2 h-2 rounded-full bg-[#2D5A3D]" />
-            <span>{goingCount} going</span>
+          <span className="text-[11px] font-bold text-[#2D5A3D]">
+            {isHost ? '👑 You are Host' : userResponse === 'going' ? '✓ You are Going' : userResponse === 'maybe' ? '❓ Marked Maybe' : 'Gathering'}
           </span>
-          {maybeCount > 0 && (
-            <span className="text-[#C47B5A] font-medium text-[11px]">
-              · {maybeCount} maybe
-            </span>
-          )}
         </div>
 
         <div className="flex items-center gap-1.5">

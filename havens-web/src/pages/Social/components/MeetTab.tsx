@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@apollo/client';
+import { useNavigate } from 'react-router-dom';
 import { computeAffinity } from '../utils/ignoreStorage';
 import { Avatar } from '../../../components/Avatar';
-import { Zap, Sparkles, Compass, Search } from 'lucide-react';
+import { Zap, Sparkles, Compass, Search, UserCheck } from 'lucide-react';
 import { UserProfileModal } from './UserProfileModal';
 import { useAuth } from '../../../context/AuthContext';
 import { SEARCH_USERS } from '../../../graphql/operations';
@@ -67,6 +68,7 @@ export const SuggestionCard: React.FC<{
   onIgnore,
   onExplore,
 }) => {
+  const navigate = useNavigate();
   // Use backend computed match percentage or calculate client-side fallback
   const affinity = usr.matchPercentage ?? computeAffinity(myHobbies, usr.hobbies);
 
@@ -96,7 +98,7 @@ export const SuggestionCard: React.FC<{
 
   return (
     <div
-      onClick={() => onExplore(usr)}
+      onClick={() => navigate(`/profile/${usr.username || usr.id}`)}
       className={`group bg-white border border-[#E2DBD0] hover:border-[#2D5A3D]/50 rounded-3xl p-5 sm:p-5.5 flex flex-col justify-between shadow-xs hover:shadow-md transition-all duration-200 cursor-pointer ${
         isFading ? 'opacity-0 scale-95 translate-y-3' : 'opacity-100 scale-100'
       }`}
@@ -207,6 +209,18 @@ export const SuggestionCard: React.FC<{
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
+        </button>
+
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            navigate(`/profile/${usr.username || usr.id}`);
+          }}
+          className="px-3 py-2.5 rounded-xl border border-[#E2DBD0] hover:border-[#2D5A3D]/50 text-stone-700 hover:text-[#2D5A3D] bg-[#FAF8F5] hover:bg-white text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1 shrink-0 shadow-2xs"
+          title="View full profile"
+        >
+          <span>View More</span>
         </button>
 
         {isSent ? (
