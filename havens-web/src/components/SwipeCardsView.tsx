@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useMutation } from '@apollo/client';
 import { SWIPE_EVENT } from '../graphql/operations';
 import { Avatar } from './Avatar';
-import { Check, HelpCircle, RefreshCw, Compass, Calendar, MapPin, Sparkles } from 'lucide-react';
+import { Check, HelpCircle, Compass, Calendar, MapPin, Sparkles } from 'lucide-react';
 
 export interface EventItem {
   id: string;
@@ -203,7 +203,7 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [currentIndex, activeEvents, currentEvent]);
+  }, [activeEvents, currentEvent]);
 
   // MOUSE & TOUCH DRAG MECHANICS
   const handleStart = (clientX: number, clientY: number) => {
@@ -237,16 +237,9 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
     }
   };
 
-  const handleResetStack = () => {
-    setCurrentIndex(0);
-    setSessionSkippedIds([]);
-    setDragOffset({ x: 0, y: 0 });
-    if (onRefetch) onRefetch();
-  };
-
-  if (!currentEvent || currentIndex >= activeEvents.length) {
+  if (!currentEvent) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[520px] max-w-md mx-auto p-8 text-center bg-white border border-[#E2DBD0] rounded-3xl shadow-sm space-y-6 antialiased">
+      <div className="flex flex-col items-center justify-center min-h-[520px] max-w-md mx-auto p-8 text-center bg-white border border-[#E2DBD0] rounded-3xl shadow-sm space-y-4 antialiased">
         <div className="w-16 h-16 rounded-full bg-[#eaf3ed] text-[#2D5A3D] flex items-center justify-center shadow-xs">
           <Compass className="w-8 h-8 text-[#2D5A3D]" />
         </div>
@@ -255,17 +248,9 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
             You're All Caught Up!
           </h3>
           <p className="text-xs text-[#8a8278] mt-2 leading-relaxed">
-            No more unswiped events in your area. Press Reset or switch to Map mode to explore markers.
+            No more unswiped events in your area. Switch to Interactive Map mode to explore all local gathering pins and markers!
           </p>
         </div>
-        <button
-          type="button"
-          onClick={handleResetStack}
-          className="px-6 py-3 rounded-xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center gap-2"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span>Reset Swipe Stack</span>
-        </button>
       </div>
     );
   }
