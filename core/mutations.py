@@ -24,12 +24,12 @@ from graphql import GraphQLError
 from .types import (
     UserType, CommunityType, EventType, TicketType, ParticipationType,
     InvitationCodeType, CommunityMembershipType, EventRSVPType,
-    FriendshipType, MatchType, MessageType,
+    FriendshipType, MatchType, MessageType, CircleMessageType,
 )
 from .models import (
     Community, Event, Ticket, Participation, UserProfile,
     InvitationCode, CommunityMembership, EventRSVP, Friendship,
-    Match, Message, HobbyCategory, Hobby,
+    Match, Message, CircleMessage, HobbyCategory, Hobby,
 )
 from .decorators import login_required
 import logging
@@ -527,6 +527,69 @@ class SendMessage(graphene.Mutation):
         try:
             msg = Message.objects.create(match=match, sender=sender, content=content)
             return cls(message=msg, success=True, message_field="Message sent")
+        except Exception as e:
+            return cls(message=None, success=False, message_field=str(e))
+
+
+class SendCircleMessage(graphene.Mutation):
+    """Send a group chat message to a specific Circle."""
+
+    class Arguments:
+        circle_id = graphene.ID(required=True, description="Primary key ID of the target Circle/Community.")
+        content = graphene.String(required=True, description="Message text content.")
+
+    message = graphene.Field(CircleMessageType, description="Created CircleMessage object.")
+    success = graphene.Boolean(description="Indicates whether the message was sent successfully.")
+    message_field = graphene.String(description="Status or validation error message.")
+
+    @classmethod
+    @login_required
+    def mutate(cls, root, info, circle_id, content):
+        """Validate Circle membership and post message to Circle group chat.
+
+        Args:
+            root: Root GraphQL object.
+            info (graphene.ResolveInfo): Execution context.
+            circle_id (int | str): ID of target Circle.
+            content (str): Text message content.
+
+        Returns:
+            SendCircleMessage: Mutation payload.
+        """
+        sender = info.context.user
+        text = (content or '').strip()
+        if not text:
+            return cls(message=None, success=False, message_field="Message content cannot be empty.")
+
+        circle_pk = int(circle_id) if str(circle_id).isdigit() else 0
+        if not circle_pk:
+            return cls(message=None, success=False, message_field="Invalid Circle ID.")
+
+        try:
+            community = Community.objects.get(id=circle_pk)
+        except Community.DoesNotExist:
+            return cls(message=None, success=False, message_field="Circle not found.")
+
+        # Strict security authorization: caller must be a confirmed member or the creator
+        is_member = (
+            CommunityMembership.objects.filter(user=sender, community=community).exists()
+            or community.creator == sender
+            or sender.is_staff
+        )
+        if not is_member:
+            return cls(
+                message=None,
+                success=False,
+                message_field="Access denied: You must be a confirmed member of this Circle to send messages in its group chat."
+            )
+
+        try:
+            msg = CircleMessage.objects.create(
+                circle=community,
+                sender=sender,
+                content=text,
+            )
+            return cls(message=msg, success=True, message_field="Message sent successfully.")
         except Exception as e:
             return cls(message=None, success=False, message_field=str(e))
 
@@ -1455,6 +1518,7 @@ class Mutation(graphene.ObjectType):
     send_connect_request = SendConnectRequest.Field(description="Initiate an async connection request with another user.")
     respond_connect_request = RespondConnectRequest.Field(description="Accept or decline an incoming connection request.")
     send_message = SendMessage.Field(description="Send a message in an active match thread.")
+    send_circle_message = SendCircleMessage.Field(description="Send a group chat message to a Circle.")
 
     # ── Cloud Media Direct Uploads ──────────────────────────────────────────
     presigned_url = PresignedURL.Field(description="Obtain an AWS S3 presigned POST URL.")

@@ -422,4 +422,48 @@ export const LEAVE_COMMUNITY = gql`
   }
 `;
 
+/**
+ * Query to fetch group chat message history for a specific Circle.
+ */
+export const GET_CIRCLE_MESSAGES = gql`
+  query GetCircleMessages($circleId: ID!, $limit: Int, $offset: Int) {
+    getCircleMessages(circleId: $circleId, limit: $limit, offset: $offset) {
+      id
+      content
+      createdAt
+      sender {
+        id
+        username
+        photoUrl
+        neighbourhood
+        cityName
+      }
+    }
+  }
+`;
+
+/**
+ * Mutation to send a group chat message to a Circle.
+ */
+export const SEND_CIRCLE_MESSAGE = gql`
+  mutation SendCircleMessage($circleId: ID!, $content: String!) {
+    sendCircleMessage(circleId: $circleId, content: $content) {
+      success
+      messageField
+      message {
+        id
+        content
+        createdAt
+        sender {
+          id
+          username
+          photoUrl
+          neighbourhood
+          cityName
+        }
+      }
+    }
+  }
+`;
+
 

@@ -1,6 +1,6 @@
 from django.test import TestCase
 from django.contrib.auth.models import User
-from core.models import UserProfile, HobbyCategory, Hobby, Match, Community
+from core.models import UserProfile, HobbyCategory, Hobby, Match, Community, CommunityMembership, CircleMessage
 from core.utils import haversine_km, calculate_user_recommendations, calculate_circle_recommendations
 from havens.schema import schema
 
@@ -438,5 +438,159 @@ class MatchingEngineAndAsyncLogicTests(TestCase):
 
         # Circle remains intact
         self.assertEqual(Community.objects.filter(id=circle.id).count(), 1)
+
+
+class CircleGroupChatTests(TestCase):
+    def setUp(self):
+        # Create Users
+        self.creator = User.objects.create_user(username="creator_user", email="creator@havens.com", password="password123")
+        self.member = User.objects.create_user(username="member_user", email="member@havens.com", password="password123")
+        self.outsider = User.objects.create_user(username="outsider_user", email="outsider@havens.com", password="password123")
+
+        # Create Circle
+        self.circle = Community.objects.create(
+            name="AI Innovators Club",
+            subdomain="ai-innovators",
+            description="Discussing AI advancements and LLMs.",
+            creator=self.creator
+        )
+        # Add creator and member to memberships
+        CommunityMembership.objects.create(user=self.creator, community=self.circle)
+        CommunityMembership.objects.create(user=self.member, community=self.circle)
+
+    def _get_context(self, user):
+        class MockContext:
+            def __init__(self, u):
+                self.user = u
+                self.is_authenticated = True
+        return MockContext(user)
+
+    def test_send_circle_message_success_as_member(self):
+        """A confirmed member of the Circle can successfully post a group message."""
+        ctx = self._get_context(self.member)
+        mutation = f"""
+        mutation {{
+            sendCircleMessage(circleId: {self.circle.id}, content: "Hello everyone in AI Innovators!") {{
+                success
+                messageField
+                message {{
+                    id
+                    content
+                    sender {{
+                        username
+                    }}
+                    circle {{
+                        name
+                    }}
+                }}
+            }}
+        }}
+        """
+        res = schema.execute(mutation, context_value=ctx)
+        self.assertIsNone(res.errors)
+        data = res.data['sendCircleMessage']
+        self.assertTrue(data['success'])
+        self.assertEqual(data['message']['content'], "Hello everyone in AI Innovators!")
+        self.assertEqual(data['message']['sender']['username'], "member_user")
+        self.assertEqual(data['message']['circle']['name'], "AI Innovators Club")
+        self.assertEqual(CircleMessage.objects.filter(circle=self.circle).count(), 1)
+
+    def test_send_circle_message_success_as_creator(self):
+        """The Circle creator can post messages to the group chat."""
+        ctx = self._get_context(self.creator)
+        mutation = f"""
+        mutation {{
+            sendCircleMessage(circleId: {self.circle.id}, content: "Welcome to the group chat!") {{
+                success
+                messageField
+                message {{
+                    id
+                    content
+                    sender {{
+                        username
+                    }}
+                }}
+            }}
+        }}
+        """
+        res = schema.execute(mutation, context_value=ctx)
+        self.assertIsNone(res.errors)
+        self.assertTrue(res.data['sendCircleMessage']['success'])
+        self.assertEqual(res.data['sendCircleMessage']['message']['content'], "Welcome to the group chat!")
+
+    def test_send_circle_message_forbidden_for_non_member(self):
+        """A non-member cannot post messages to the Circle group chat and receives failure."""
+        ctx = self._get_context(self.outsider)
+        mutation = f"""
+        mutation {{
+            sendCircleMessage(circleId: {self.circle.id}, content: "I am an outsider trying to spam.") {{
+                success
+                messageField
+            }}
+        }}
+        """
+        res = schema.execute(mutation, context_value=ctx)
+        self.assertIsNone(res.errors)
+        self.assertFalse(res.data['sendCircleMessage']['success'])
+        self.assertIn("Access denied", res.data['sendCircleMessage']['messageField'])
+        self.assertEqual(CircleMessage.objects.filter(circle=self.circle).count(), 0)
+
+    def test_send_circle_message_empty_content_validation(self):
+        """Sending empty or whitespace-only message returns failure with validation message."""
+        ctx = self._get_context(self.member)
+        mutation = f"""
+        mutation {{
+            sendCircleMessage(circleId: {self.circle.id}, content: "   ") {{
+                success
+                messageField
+            }}
+        }}
+        """
+        res = schema.execute(mutation, context_value=ctx)
+        self.assertIsNone(res.errors)
+        self.assertFalse(res.data['sendCircleMessage']['success'])
+        self.assertIn("cannot be empty", res.data['sendCircleMessage']['messageField'])
+
+    def test_get_circle_messages_success_as_member(self):
+        """A confirmed member can retrieve the chronological chat history."""
+        # Create some messages
+        CircleMessage.objects.create(circle=self.circle, sender=self.creator, content="First message")
+        CircleMessage.objects.create(circle=self.circle, sender=self.member, content="Second message")
+
+        ctx = self._get_context(self.member)
+        query = f"""
+        query {{
+            getCircleMessages(circleId: {self.circle.id}) {{
+                id
+                content
+                sender {{
+                    username
+                }}
+            }}
+        }}
+        """
+        res = schema.execute(query, context_value=ctx)
+        self.assertIsNone(res.errors)
+        messages = res.data['getCircleMessages']
+        self.assertEqual(len(messages), 2)
+        self.assertEqual(messages[0]['content'], "First message")
+        self.assertEqual(messages[1]['content'], "Second message")
+
+    def test_get_circle_messages_forbidden_for_non_member(self):
+        """A non-member receives an empty list when attempting to read private Circle chat."""
+        CircleMessage.objects.create(circle=self.circle, sender=self.creator, content="Private Circle discussion")
+
+        ctx = self._get_context(self.outsider)
+        query = f"""
+        query {{
+            getCircleMessages(circleId: {self.circle.id}) {{
+                id
+                content
+            }}
+        }}
+        """
+        res = schema.execute(query, context_value=ctx)
+        self.assertIsNone(res.errors)
+        self.assertEqual(res.data['getCircleMessages'], [])
 
 

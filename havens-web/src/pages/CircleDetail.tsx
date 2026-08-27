@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation } from '@apollo/client';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import { Avatar } from '../components/Avatar';
+import { CircleGroupChat } from '../components/CircleGroupChat';
 import {
   GET_COMMUNITY_BY_ID,
   JOIN_COMMUNITY,
@@ -30,13 +31,36 @@ import {
   Tag,
   Clock,
   Compass,
+  MessageSquare,
 } from 'lucide-react';
 
 export const CircleDetailPageView: React.FC = () => {
   const { circleId } = useParams<{ circleId: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user: currentUser } = useAuth();
   const { t } = useApp();
+
+  const tabParam = searchParams.get('tab');
+  const [activeTab, setActiveTabState] = useState<'overview' | 'chat' | 'gatherings' | 'members'>(
+    tabParam === 'chat' || tabParam === 'gatherings' || tabParam === 'members' ? tabParam : 'overview'
+  );
+
+  const handleTabChange = (tab: 'overview' | 'chat' | 'gatherings' | 'members') => {
+    setActiveTabState(tab);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (tab === 'overview') {
+          next.delete('tab');
+        } else {
+          next.set('tab', tab);
+        }
+        return next;
+      },
+      { replace: true }
+    );
+  };
 
   const [managingCircle, setManagingCircle] = useState<any | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -364,7 +388,7 @@ export const CircleDetailPageView: React.FC = () => {
             </div>
 
             {/* Main Interactive Action Buttons */}
-            <div className="flex items-center gap-3 shrink-0">
+            <div className="flex items-center gap-2.5 flex-wrap shrink-0">
               <button
                 type="button"
                 disabled={isJoining || isLeaving}
@@ -388,6 +412,19 @@ export const CircleDetailPageView: React.FC = () => {
                     <span>Join Circle</span>
                   </>
                 )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleTabChange('chat')}
+                className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs ${
+                  activeTab === 'chat'
+                    ? 'bg-[#2D5A3D] text-white shadow-xs'
+                    : 'bg-[#FAF8F5] hover:bg-[#F4EEE2] border border-[#E2DBD0] text-stone-800'
+                }`}
+              >
+                <MessageSquare className={`w-3.5 h-3.5 ${activeTab === 'chat' ? 'text-white' : 'text-[#2D5A3D]'}`} />
+                <span>Group Chat</span>
               </button>
 
               <button
@@ -430,9 +467,84 @@ export const CircleDetailPageView: React.FC = () => {
       </div>
 
       {/* ───────────────────────────────────────────────────────────── */}
-      {/* SECTION 2: ORGANIZER & HOST CARD */}
+      {/* SECTION TABS NAVIGATION */}
       {/* ───────────────────────────────────────────────────────────── */}
-      {circle.creator && (
+      <div className="flex items-center gap-2 p-1.5 bg-white border border-[#E2DBD0] rounded-2xl shadow-2xs overflow-x-auto">
+        <button
+          type="button"
+          onClick={() => handleTabChange('overview')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shrink-0 ${
+            activeTab === 'overview'
+              ? 'bg-[#2D5A3D] text-white shadow-2xs'
+              : 'text-stone-600 hover:text-stone-900 hover:bg-[#FAF8F5]'
+          }`}
+        >
+          <Compass className="w-3.5 h-3.5" />
+          <span>Overview</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleTabChange('chat')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shrink-0 ${
+            activeTab === 'chat'
+              ? 'bg-[#2D5A3D] text-white shadow-2xs'
+              : 'text-stone-600 hover:text-stone-900 hover:bg-[#FAF8F5]'
+          }`}
+        >
+          <MessageSquare className="w-3.5 h-3.5" />
+          <span>Group Chat</span>
+          {isJoined && (
+            <span className="w-2 h-2 rounded-full bg-emerald-400" />
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleTabChange('gatherings')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shrink-0 ${
+            activeTab === 'gatherings'
+              ? 'bg-[#2D5A3D] text-white shadow-2xs'
+              : 'text-stone-600 hover:text-stone-900 hover:bg-[#FAF8F5]'
+          }`}
+        >
+          <Calendar className="w-3.5 h-3.5" />
+          <span>Gatherings ({circle.events?.length || 0})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleTabChange('members')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shrink-0 ${
+            activeTab === 'members'
+              ? 'bg-[#2D5A3D] text-white shadow-2xs'
+              : 'text-stone-600 hover:text-stone-900 hover:bg-[#FAF8F5]'
+          }`}
+        >
+          <Users className="w-3.5 h-3.5" />
+          <span>Members ({memberships.length})</span>
+        </button>
+      </div>
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* TAB CONTENT: GROUP CHAT */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {activeTab === 'chat' && (
+        <CircleGroupChat
+          circleId={circle.id}
+          circleName={circle.name}
+          isMember={isJoined}
+          isCreator={isCreator}
+          creatorId={circle.creator?.id}
+          onJoinClick={handleJoinToggle}
+          isJoining={isJoining}
+        />
+      )}
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* TAB CONTENT: ORGANIZER & HOST CARD (Overview only) */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {activeTab === 'overview' && circle.creator && (
         <div className="p-6 rounded-3xl bg-white border border-[#E2DBD0] shadow-xs space-y-3">
           <h3 className="text-xs font-bold uppercase tracking-wider text-[#8a8278]">
             Circle Founder & Organizer
@@ -485,266 +597,270 @@ export const CircleDetailPageView: React.FC = () => {
       )}
 
       {/* ───────────────────────────────────────────────────────────── */}
-      {/* SECTION 3: CIRCLE-EXCLUSIVE GATHERINGS & PLANS */}
+      {/* TAB CONTENT: CIRCLE GATHERINGS & PLANS */}
       {/* ───────────────────────────────────────────────────────────── */}
-      <div className="p-6 sm:p-8 rounded-3xl bg-white border border-[#E2DBD0] shadow-xs space-y-6">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h3 className="text-lg font-serif font-bold text-stone-900">
-              Circle Gatherings & Plans
-            </h3>
-            <p className="text-xs text-[#8a8278] mt-0.5">
-              Exclusive meetups and gatherings organized by members of {circle.name}
-            </p>
-          </div>
+      {(activeTab === 'overview' || activeTab === 'gatherings') && (
+        <div className="p-6 sm:p-8 rounded-3xl bg-white border border-[#E2DBD0] shadow-xs space-y-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-serif font-bold text-stone-900">
+                Circle Gatherings & Plans
+              </h3>
+              <p className="text-xs text-[#8a8278] mt-0.5">
+                Exclusive meetups and gatherings organized by members of {circle.name}
+              </p>
+            </div>
 
-          <button
-            type="button"
-            onClick={() => navigate(`/plans?create=true&circleId=${circle.id}`)}
-            className="px-4 py-2 rounded-2xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
-          >
-            <PlusCircle className="w-3.5 h-3.5" />
-            <span>Create Plan</span>
-          </button>
-        </div>
-
-        {circle.events && circle.events.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {circle.events.map((ev: any) => {
-              const eventDate = ev.scheduledDate
-                ? new Date(ev.scheduledDate).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    hour: 'numeric',
-                    minute: '2-digit',
-                  })
-                : 'Date TBD';
-
-              return (
-                <div
-                  key={ev.id}
-                  onClick={() => navigate(`/event/${ev.id}`)}
-                  className="rounded-2xl border border-[#E2DBD0] bg-[#FAF8F5] hover:border-[#2D5A3D]/50 hover:bg-white p-4.5 flex flex-col justify-between gap-3 shadow-2xs hover:shadow-xs transition-all cursor-pointer group"
-                >
-                  <div className="space-y-2.5">
-                    {ev.imageUrl && (
-                      <div className="w-full h-32 rounded-xl overflow-hidden bg-stone-100">
-                        <img src={ev.imageUrl} alt={ev.title} className="w-full h-full object-cover group-hover:scale-103 transition-transform" />
-                      </div>
-                    )}
-                    <div className="flex items-center gap-1.5 text-xs text-[#2D5A3D] font-bold">
-                      <Clock className="w-3.5 h-3.5" />
-                      <span>{eventDate}</span>
-                    </div>
-
-                    <h4 className="text-sm font-bold text-stone-900 truncate group-hover:text-[#2D5A3D] transition-colors">
-                      {ev.title}
-                    </h4>
-
-                    {ev.locationName && (
-                      <p className="text-xs text-[#8a8278] truncate flex items-center gap-1">
-                        <MapPin className="w-3 h-3 text-[#C47B5A] shrink-0" />
-                        <span className="truncate">{ev.locationName}</span>
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="pt-2.5 border-t border-[#E2DBD0]/60 flex items-center justify-between text-xs">
-                    <span className="font-semibold text-stone-700">
-                      👥 {ev.goingCount || 0} attending
-                    </span>
-                    <span className="font-bold text-[#2D5A3D] group-hover:underline">
-                      Details →
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="text-center py-10 px-4 rounded-2xl bg-[#FAF8F5] border border-[#E2DBD0]/60 space-y-2">
-            <Calendar className="w-8 h-8 text-[#8a8278] mx-auto opacity-60" />
-            <p className="text-xs font-semibold text-stone-800">No gatherings currently scheduled.</p>
-            <p className="text-xs text-[#8a8278]">
-              Be the first to schedule a coffee chat, workshop, or outdoor meetup for this circle!
-            </p>
             <button
               type="button"
               onClick={() => navigate(`/plans?create=true&circleId=${circle.id}`)}
-              className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#2D5A3D] text-white text-xs font-bold hover:bg-[#3d7a55] transition-colors cursor-pointer shadow-2xs"
+              className="px-4 py-2 rounded-2xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
             >
               <PlusCircle className="w-3.5 h-3.5" />
-              <span>Schedule Gathering</span>
+              <span>Create Plan</span>
             </button>
           </div>
-        )}
-      </div>
 
-      {/* ───────────────────────────────────────────────────────────── */}
-      {/* SECTION 4: MEMBERS DIRECTORY */}
-      {/* ───────────────────────────────────────────────────────────── */}
-      <div className="p-6 sm:p-8 rounded-3xl bg-white border border-[#E2DBD0] shadow-xs space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h3 className="text-lg font-serif font-bold text-stone-900">
-              Members Directory ({memberships.length})
-            </h3>
-            <p className="text-xs text-[#8a8278] mt-0.5">
-              People who have joined {circle.name}
-            </p>
-          </div>
+          {circle.events && circle.events.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {circle.events.map((ev: any) => {
+                const eventDate = ev.scheduledDate
+                  ? new Date(ev.scheduledDate).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: 'numeric',
+                      minute: '2-digit',
+                    })
+                  : 'Date TBD';
 
-          {/* Member Search Bar */}
-          {memberships.length > 2 && (
-            <div className="relative max-w-xs w-full">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8a8278]" />
-              <input
-                type="text"
-                value={memberSearchQuery}
-                onChange={(e) => setMemberSearchQuery(e.target.value)}
-                placeholder="Filter members by name..."
-                className="w-full pl-10 pr-8 py-2 rounded-2xl bg-[#FAF8F5] border border-[#E2DBD0] text-xs text-stone-900 focus:outline-none focus:border-[#2D5A3D] shadow-2xs transition-colors"
-              />
-              {memberSearchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setMemberSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-xs font-bold cursor-pointer"
-                >
-                  ✕
-                </button>
-              )}
+                return (
+                  <div
+                    key={ev.id}
+                    onClick={() => navigate(`/event/${ev.id}`)}
+                    className="rounded-2xl border border-[#E2DBD0] bg-[#FAF8F5] hover:border-[#2D5A3D]/50 hover:bg-white p-4.5 flex flex-col justify-between gap-3 shadow-2xs hover:shadow-xs transition-all cursor-pointer group"
+                  >
+                    <div className="space-y-2.5">
+                      {ev.imageUrl && (
+                        <div className="w-full h-32 rounded-xl overflow-hidden bg-stone-100">
+                          <img src={ev.imageUrl} alt={ev.title} className="w-full h-full object-cover group-hover:scale-103 transition-transform" />
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1.5 text-xs text-[#2D5A3D] font-bold">
+                        <Clock className="w-3.5 h-3.5" />
+                        <span>{eventDate}</span>
+                      </div>
+
+                      <h4 className="text-sm font-bold text-stone-900 truncate group-hover:text-[#2D5A3D] transition-colors">
+                        {ev.title}
+                      </h4>
+
+                      {ev.locationName && (
+                        <p className="text-xs text-[#8a8278] truncate flex items-center gap-1">
+                          <MapPin className="w-3 h-3 text-[#C47B5A] shrink-0" />
+                          <span className="truncate">{ev.locationName}</span>
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="pt-2.5 border-t border-[#E2DBD0]/60 flex items-center justify-between text-xs">
+                      <span className="font-semibold text-stone-700">
+                        👥 {ev.goingCount || 0} attending
+                      </span>
+                      <span className="font-bold text-[#2D5A3D] group-hover:underline">
+                        Details →
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-10 px-4 rounded-2xl bg-[#FAF8F5] border border-[#E2DBD0]/60 space-y-2">
+              <Calendar className="w-8 h-8 text-[#8a8278] mx-auto opacity-60" />
+              <p className="text-xs font-semibold text-stone-800">No gatherings currently scheduled.</p>
+              <p className="text-xs text-[#8a8278]">
+                Be the first to schedule a coffee chat, workshop, or outdoor meetup for this circle!
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate(`/plans?create=true&circleId=${circle.id}`)}
+                className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#2D5A3D] text-white text-xs font-bold hover:bg-[#3d7a55] transition-colors cursor-pointer shadow-2xs"
+              >
+                <PlusCircle className="w-3.5 h-3.5" />
+                <span>Schedule Gathering</span>
+              </button>
             </div>
           )}
         </div>
+      )}
 
-        {/* Members Grid */}
-        {filteredMembers.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
-            {filteredMembers.map((m: any) => {
-              const u = m.user;
-              if (!u) return null;
-              const isMemberHost = circle.creator && String(circle.creator.id) === String(u.id);
-              const isSelf = currentUser && String(currentUser.id) === String(u.id);
-              const joinedFormatted = m.joinedAt
-                ? new Date(m.joinedAt).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                  })
-                : null;
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* TAB CONTENT: MEMBERS DIRECTORY */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {(activeTab === 'overview' || activeTab === 'members') && (
+        <div className="p-6 sm:p-8 rounded-3xl bg-white border border-[#E2DBD0] shadow-xs space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-serif font-bold text-stone-900">
+                Members Directory ({memberships.length})
+              </h3>
+              <p className="text-xs text-[#8a8278] mt-0.5">
+                People who have joined {circle.name}
+              </p>
+            </div>
 
-              return (
-                <div
-                  key={m.id}
-                  onClick={() => navigate(`/profile/${u.username || u.id}?circleId=${circle.id}`)}
-                  className="p-4 rounded-2xl border border-[#E2DBD0] bg-[#FAF8F5] hover:border-[#2D5A3D]/50 hover:bg-white transition-all flex flex-col justify-between gap-3 shadow-2xs hover:shadow-xs cursor-pointer group"
-                >
-                  <div className="flex items-start gap-3 min-w-0">
-                    <Avatar
-                      name={u.username}
-                      photoUrl={u.photoUrl}
-                      size="md"
-                      className="w-11 h-11 rounded-full border border-white shadow-2xs shrink-0"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <h4 className="text-xs font-bold text-stone-900 truncate group-hover:text-[#2D5A3D] transition-colors">
-                          @{u.username}
-                        </h4>
-                        {isMemberHost && (
-                          <span className="text-[9px] font-bold bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.2 rounded-md">
-                            Host
-                          </span>
+            {/* Member Search Bar */}
+            {memberships.length > 2 && (
+              <div className="relative max-w-xs w-full">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8a8278]" />
+                <input
+                  type="text"
+                  value={memberSearchQuery}
+                  onChange={(e) => setMemberSearchQuery(e.target.value)}
+                  placeholder="Filter members by name..."
+                  className="w-full pl-10 pr-8 py-2 rounded-2xl bg-[#FAF8F5] border border-[#E2DBD0] text-xs text-stone-900 focus:outline-none focus:border-[#2D5A3D] shadow-2xs transition-colors"
+                />
+                {memberSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setMemberSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-xs font-bold cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Members Grid */}
+          {filteredMembers.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
+              {filteredMembers.map((m: any) => {
+                const u = m.user;
+                if (!u) return null;
+                const isMemberHost = circle.creator && String(circle.creator.id) === String(u.id);
+                const isSelf = currentUser && String(currentUser.id) === String(u.id);
+                const joinedFormatted = m.joinedAt
+                  ? new Date(m.joinedAt).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                    })
+                  : null;
+
+                return (
+                  <div
+                    key={m.id}
+                    onClick={() => navigate(`/profile/${u.username || u.id}?circleId=${circle.id}`)}
+                    className="p-4 rounded-2xl border border-[#E2DBD0] bg-[#FAF8F5] hover:border-[#2D5A3D]/50 hover:bg-white transition-all flex flex-col justify-between gap-3 shadow-2xs hover:shadow-xs cursor-pointer group"
+                  >
+                    <div className="flex items-start gap-3 min-w-0">
+                      <Avatar
+                        name={u.username}
+                        photoUrl={u.photoUrl}
+                        size="md"
+                        className="w-11 h-11 rounded-full border border-white shadow-2xs shrink-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h4 className="text-xs font-bold text-stone-900 truncate group-hover:text-[#2D5A3D] transition-colors">
+                            @{u.username}
+                          </h4>
+                          {isMemberHost && (
+                            <span className="text-[9px] font-bold bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.2 rounded-md">
+                              Host
+                            </span>
+                          )}
+                          {isSelf && (
+                            <span className="text-[9px] font-bold bg-[#eaf3ed] text-[#2D5A3D] px-1.5 py-0.2 rounded-md">
+                              You
+                            </span>
+                          )}
+                        </div>
+
+                        {(u.neighbourhood || u.cityName) && (
+                          <p className="text-[11px] text-[#8a8278] truncate mt-0.5">
+                            📍 {u.neighbourhood || u.cityName}
+                          </p>
                         )}
-                        {isSelf && (
-                          <span className="text-[9px] font-bold bg-[#eaf3ed] text-[#2D5A3D] px-1.5 py-0.2 rounded-md">
-                            You
-                          </span>
+
+                        {u.bio && (
+                          <p className="text-[11px] text-stone-600 line-clamp-1 italic mt-1">
+                            "{u.bio}"
+                          </p>
                         )}
                       </div>
-
-                      {(u.neighbourhood || u.cityName) && (
-                        <p className="text-[11px] text-[#8a8278] truncate mt-0.5">
-                          📍 {u.neighbourhood || u.cityName}
-                        </p>
-                      )}
-
-                      {u.bio && (
-                        <p className="text-[11px] text-stone-600 line-clamp-1 italic mt-1">
-                          "{u.bio}"
-                        </p>
-                      )}
                     </div>
-                  </div>
 
-                  {/* Footer with Joined Date & Creator Controls */}
-                  <div className="pt-2 border-t border-[#E2DBD0]/60 flex items-center justify-between text-[10px] text-[#8a8278] gap-2">
-                    {joinedFormatted && (
-                      <span className="flex items-center gap-1 truncate">
-                        <Calendar className="w-3 h-3 text-[#8a8278] shrink-0" />
-                        <span className="truncate">Joined {joinedFormatted}</span>
-                      </span>
-                    )}
+                    {/* Footer with Joined Date & Creator Controls */}
+                    <div className="pt-2 border-t border-[#E2DBD0]/60 flex items-center justify-between text-[10px] text-[#8a8278] gap-2">
+                      {joinedFormatted && (
+                        <span className="flex items-center gap-1 truncate">
+                          <Calendar className="w-3 h-3 text-[#8a8278] shrink-0" />
+                          <span className="truncate">Joined {joinedFormatted}</span>
+                        </span>
+                      )}
 
-                    <div className="flex items-center gap-2 ml-auto" onClick={(e) => e.stopPropagation()}>
-                      {isCreator && !isMemberHost && !isSelf && (
-                        confirmRemoveId === u.id ? (
-                          <div className="flex items-center gap-1 animate-in fade-in">
+                      <div className="flex items-center gap-2 ml-auto" onClick={(e) => e.stopPropagation()}>
+                        {isCreator && !isMemberHost && !isSelf && (
+                          confirmRemoveId === u.id ? (
+                            <div className="flex items-center gap-1 animate-in fade-in">
+                              <button
+                                type="button"
+                                disabled={removingMemberId === u.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveMember(Number(u.id));
+                                }}
+                                className="px-2 py-0.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] transition-colors cursor-pointer shadow-2xs"
+                              >
+                                {removingMemberId === u.id ? 'Removing...' : 'Confirm'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setConfirmRemoveId(null);
+                                }}
+                                className="px-1.5 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] transition-colors cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
                             <button
                               type="button"
-                              disabled={removingMemberId === u.id}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleRemoveMember(Number(u.id));
+                                setConfirmRemoveId(u.id);
                               }}
-                              className="px-2 py-0.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] transition-colors cursor-pointer shadow-2xs"
+                              className="px-2 py-0.5 rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-semibold text-[10px] transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                              title="Remove member from circle"
                             >
-                              {removingMemberId === u.id ? 'Removing...' : 'Confirm'}
+                              <UserMinus className="w-2.5 h-2.5" />
+                              <span>Remove</span>
                             </button>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setConfirmRemoveId(null);
-                              }}
-                              className="px-1.5 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] transition-colors cursor-pointer"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setConfirmRemoveId(u.id);
-                            }}
-                            className="px-2 py-0.5 rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-semibold text-[10px] transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
-                            title="Remove member from circle"
-                          >
-                            <UserMinus className="w-2.5 h-2.5" />
-                            <span>Remove</span>
-                          </button>
-                        )
-                      )}
+                          )
+                        )}
 
-                      <span className="font-bold text-[#2D5A3D] group-hover:underline">
-                        View Profile →
-                      </span>
+                        <span className="font-bold text-[#2D5A3D] group-hover:underline">
+                          View Profile →
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="text-center py-10 px-4 rounded-2xl bg-[#FAF8F5] border border-[#E2DBD0]/60 space-y-1">
-            <p className="text-xs text-[#8a8278]">
-              {memberSearchQuery ? `No members found matching "${memberSearchQuery}".` : 'No members joined yet.'}
-            </p>
-          </div>
-        )}
-      </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-10 px-4 rounded-2xl bg-[#FAF8F5] border border-[#E2DBD0]/60 space-y-1">
+              <p className="text-xs text-[#8a8278]">
+                {memberSearchQuery ? `No members found matching "${memberSearchQuery}".` : 'No members joined yet.'}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ───────────────────────────────────────────────────────────── */}
       {/* MANAGEMENT MODAL (If Host wants to edit details) */}

@@ -1,6 +1,7 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Avatar } from './Avatar'
+import { Facepile } from './Facepile'
 import { HelpCircle, Clock, Crown, Check, Share2 } from 'lucide-react'
 
 export interface ScheduledEvent {
@@ -184,14 +185,18 @@ export const ScheduledEventCard: React.FC<ScheduledEventCardProps> = ({
               <span className="shrink-0">{timeFormatted}</span>
               <span>·</span>
               <span className="truncate">📍 {event.locationName || 'Vancouver, BC'}</span>
-              {(event.goingCount !== undefined || (event.attendees && event.attendees.length > 0)) && (
-                <>
-                  <span>·</span>
-                  <span className="text-[#2D5A3D] font-semibold shrink-0">
-                    👥 {event.goingCount || event.attendees?.length || 1} Going
-                  </span>
-                </>
-              )}
+            </div>
+
+            {/* Attendees Facepile */}
+            <div className="mb-2" onClick={(e) => e.stopPropagation()}>
+              <Facepile
+                attendees={event.attendees}
+                rsvps={event.rsvps}
+                totalGoingCount={event.goingCount}
+                size="xs"
+                max={4}
+                showLabel={true}
+              />
             </div>
 
             {/* Hobbies / Passions (Strictly Max 4) */}

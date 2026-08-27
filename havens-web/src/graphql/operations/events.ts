@@ -38,6 +38,7 @@ export const GET_ALL_EVENTS = gql`
       rsvps {
         id
         response
+        rsvp_status
         createdAt
         user {
           id
@@ -85,6 +86,7 @@ export const GET_MY_CREATED_EVENTS = gql`
       rsvps {
         id
         response
+        rsvp_status
         createdAt
         updatedAt
         user {
@@ -112,6 +114,7 @@ export const GET_EVENT_RSVPS = gql`
     eventRsvps(eventId: $eventId) {
       id
       response
+      rsvp_status
       createdAt
       updatedAt
       user {
@@ -174,6 +177,7 @@ export const GET_EVENT_BY_ID = gql`
       rsvps {
         id
         response
+        rsvp_status
         createdAt
         updatedAt
         user {
@@ -322,6 +326,7 @@ export const UPDATE_EVENT = gql`
         rsvps {
           id
           response
+          rsvp_status
           createdAt
           updatedAt
           user {
@@ -385,6 +390,7 @@ export const MY_RSVPS = gql`
         rsvps {
           id
           response
+          rsvp_status
           createdAt
           updatedAt
           user {

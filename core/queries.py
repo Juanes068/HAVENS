@@ -17,6 +17,7 @@ Key Features & Business Logic:
 """
 
 import graphene
+from graphql import GraphQLError
 from django.contrib.auth.models import User
 from django.db import models as django_models
 from django.db.models import F, Value, Q, Count
@@ -25,13 +26,13 @@ from django.utils import timezone
 from .types import (
     UserType, UserProfileType, CommunityType, CommunityMembershipType,
     EventType, TicketType, ParticipationType, InvitationCodeType,
-    EventRSVPType, FriendshipType, MatchType, MessageType,
+    EventRSVPType, FriendshipType, MatchType, MessageType, CircleMessageType,
     HobbyCategoryType, HobbyType,
 )
 from .models import (
     Community, Event, Ticket, Participation, UserProfile,
     CommunityMembership, InvitationCode, EventRSVP, Friendship,
-    Match, Message, HobbyCategory, Hobby,
+    Match, Message, CircleMessage, HobbyCategory, Hobby,
 )
 from .utils import filter_events_by_radius, calculate_user_recommendations, calculate_circle_recommendations
 from .decorators import login_required
@@ -292,6 +293,22 @@ class Query(graphene.ObjectType):
         MessageType,
         match_id=graphene.Int(required=True),
         description="Retrieve the message history for a match (restricted to participants of the match)."
+    )
+
+    # ── Feature: Circle Group Chat ──────────────────────────────────────────────
+    get_circle_messages = graphene.List(
+        CircleMessageType,
+        circle_id=graphene.ID(required=True, description="Primary key ID of the target Circle."),
+        limit=graphene.Int(required=False, description="Max number of messages to return."),
+        offset=graphene.Int(required=False, default_value=0, description="Offset starting index for pagination."),
+        description="Retrieve group chat message history for a specific Circle (restricted to confirmed Circle members)."
+    )
+    circle_messages = graphene.List(
+        CircleMessageType,
+        circle_id=graphene.ID(required=True, description="Primary key ID of the target Circle."),
+        limit=graphene.Int(required=False, description="Max number of messages to return."),
+        offset=graphene.Int(required=False, default_value=0, description="Offset starting index for pagination."),
+        description="Alias to retrieve group chat message history for a specific Circle."
     )
 
     # ── Feature 7: Extended Profile ─────────────────────────────────────────────
@@ -1170,3 +1187,52 @@ class Query(graphene.ObjectType):
             except UserProfile.DoesNotExist:
                 return None
         return None
+
+    # ── Feature: Circle Group Chat ──────────────────────────────────────────────
+    def resolve_get_circle_messages(self, info, circle_id, limit=None, offset=0):
+        """Retrieve chat messages within a Circle group chat thread.
+
+        Enforces strict privacy: caller must be an authenticated confirmed member or creator.
+        Returns an empty list if unauthorized or not a member.
+
+        Args:
+            info (graphene.ResolveInfo): Execution context.
+            circle_id (int): Primary key ID of the Community/Circle.
+            limit (int, optional): Max messages to fetch.
+            offset (int, optional): Offset index.
+
+        Returns:
+            list[CircleMessage] | QuerySet: Messages in the circle chat thread.
+        """
+        user = info.context.user
+        if not user or not user.is_authenticated:
+            return []
+
+        circle_pk = int(circle_id) if str(circle_id).isdigit() else 0
+        if not circle_pk:
+            return []
+
+        try:
+            community = Community.objects.get(id=circle_pk)
+        except Community.DoesNotExist:
+            return []
+
+        # Strict security authorization: Must be confirmed member or creator
+        is_member = (
+            CommunityMembership.objects.filter(user=user, community=community).exists()
+            or community.creator == user
+            or user.is_staff
+        )
+        if not is_member:
+            return []
+
+        qs = CircleMessage.objects.filter(circle=community).select_related('sender', 'sender__profile').order_by('created_at')
+        if offset:
+            qs = qs[offset:]
+        if limit:
+            qs = qs[:limit]
+        return qs
+
+    def resolve_circle_messages(self, info, circle_id, limit=None, offset=0):
+        """Alias resolver for get_circle_messages."""
+        return Query.resolve_get_circle_messages(self, info, circle_id, limit, offset)

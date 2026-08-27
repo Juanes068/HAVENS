@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation } from '@apollo/client';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import { Avatar } from '../components/Avatar';
+import { Facepile, getEarthyAvatarColor } from '../components/Facepile';
 import {
   GET_EVENT_BY_ID,
   SWIPE_EVENT,
@@ -157,12 +158,52 @@ export const EventDetailPageView: React.FC = () => {
 
   const [attendanceFilter, setAttendanceFilter] = useState<'all' | 'going' | 'maybe'>('going');
 
-  // RSVP lists
-  const goingRsvps = (event?.rsvps || []).filter((r: any) => r.response === 'going');
-  const maybeRsvps = (event?.rsvps || []).filter((r: any) => r.response === 'maybe');
-  const allRsvps = (event?.rsvps || []).filter((r: any) => r.response === 'going' || r.response === 'maybe');
-  const goingCount = goingRsvps.length || event?.goingCount || 0;
-  const maybeCount = maybeRsvps.length;
+  // RSVP lists and dynamic derived counters
+  const { goingRsvps, maybeRsvps, allRsvps, goingCount, maybeCount } = useMemo(() => {
+    const rawRsvps: any[] = event?.rsvps || [];
+    const seen = new Set<string>();
+    const going: any[] = [];
+    const maybe: any[] = [];
+
+    rawRsvps.forEach((r: any) => {
+      if (!r) return;
+      const status = (r.rsvp_status || r.rsvpStatus || r.response || '').toLowerCase();
+      const uId = String(r.user?.id || r.user?.username || r.id);
+      if (status === 'going' && !seen.has(uId)) {
+        seen.add(uId);
+        going.push(r);
+      } else if (status === 'maybe' && !seen.has(uId)) {
+        seen.add(uId);
+        maybe.push(r);
+      }
+    });
+
+    if (Array.isArray(event?.attendees)) {
+      event.attendees.forEach((att: any) => {
+        if (!att) return;
+        const uId = String(att.id || att.username);
+        if (!seen.has(uId)) {
+          seen.add(uId);
+          going.push({
+            id: `att-${uId}`,
+            response: 'going',
+            rsvp_status: 'going',
+            user: att,
+          });
+        }
+      });
+    }
+
+    const gCount = going.length || event?.goingCount || 0;
+    const mCount = maybe.length;
+    return {
+      goingRsvps: going,
+      maybeRsvps: maybe,
+      allRsvps: [...going, ...maybe],
+      goingCount: gCount,
+      maybeCount: mCount,
+    };
+  }, [event]);
 
   const displayedAttendees =
     attendanceFilter === 'going'
@@ -480,6 +521,27 @@ export const EventDetailPageView: React.FC = () => {
             </div>
           )}
 
+          {/* Attendees Facepile Overview */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-[#FAF8F5] border border-[#E2DBD0]/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-stone-500">
+                Attendees Facepile
+              </p>
+              <p className="text-xs text-[#8a8278] mt-0.5">
+                Members confirmed going or interested in this gathering
+              </p>
+            </div>
+            <Facepile
+              attendees={event.attendees}
+              rsvps={event.rsvps}
+              totalGoingCount={goingCount}
+              size="md"
+              max={6}
+              showLabel={true}
+              ringColorClass="ring-white"
+            />
+          </div>
+
           {/* Description Section */}
           <div className="space-y-2 pt-2">
             <h3 className="text-base font-serif font-bold text-stone-900">About Gathering</h3>
@@ -582,6 +644,7 @@ export const EventDetailPageView: React.FC = () => {
                     <Avatar
                       name={u.username}
                       photoUrl={u.photoUrl}
+                      color={getEarthyAvatarColor(u.username)}
                       size="md"
                       className="w-10 h-10 rounded-full border border-white shadow-2xs shrink-0"
                     />

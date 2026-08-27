@@ -1,5 +1,6 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Facepile, ParticipantProfile, RawRsvpItem } from './Facepile'
 
 export interface DiscoverPlan {
   id: number
@@ -14,6 +15,8 @@ export interface DiscoverPlan {
   mutualsFriends: number
   img: string
   tags: string[]
+  attendees?: ParticipantProfile[]
+  rsvps?: RawRsvpItem[]
 }
 
 interface EventCardProps {
@@ -126,16 +129,26 @@ export const EventCard: React.FC<EventCardProps> = ({ plan, isSaved, onToggleSav
         )}
       </div>
 
-      {/* Footer */}
-      <div className="flex items-center justify-between pt-3 border-t border-[#E2DBD0]/60" onClick={(e) => e.stopPropagation()}>
-        <span className="text-xs text-stone-600 font-medium">👥 {plan.going || 1} going</span>
+      {/* Footer with Facepile */}
+      <div className="flex items-center justify-between pt-3 border-t border-[#E2DBD0]/60 gap-2" onClick={(e) => e.stopPropagation()}>
+        <div className="min-w-0 flex-1">
+          <Facepile
+            attendees={plan.attendees}
+            rsvps={plan.rsvps}
+            totalGoingCount={plan.going}
+            size="sm"
+            max={3}
+            showLabel={true}
+          />
+        </div>
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation()
             if (onSelect) onSelect(plan)
+            else navigate(`/event/${plan.id}`)
           }}
-          className="px-4 py-2 rounded-xl bg-[#2D5A3D] text-white text-xs font-bold hover:bg-[#3d7a55] transition-colors shadow-2xs hover:shadow-xs cursor-pointer"
+          className="px-3.5 py-1.5 rounded-xl bg-[#2D5A3D] text-white text-xs font-bold hover:bg-[#3d7a55] transition-colors shadow-2xs hover:shadow-xs cursor-pointer shrink-0"
         >
           View Details
         </button>
@@ -143,3 +156,4 @@ export const EventCard: React.FC<EventCardProps> = ({ plan, isSaved, onToggleSav
     </div>
   )
 }
+

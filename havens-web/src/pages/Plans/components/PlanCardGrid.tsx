@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../context/AuthContext'
 import { useApp } from '../../../context/AppContext'
 import { Avatar } from '../../../components/Avatar'
+import { Facepile } from '../../../components/Facepile'
 import {
   Calendar,
   Sparkles,
@@ -220,38 +221,16 @@ const PlanCardItem: React.FC<{
           </div>
         )}
 
-        {/* Attendance Avatars Stack & Roster Preview */}
-        <div className="pt-2.5 pb-2 border-t border-[#E2DBD0]/60 flex items-center justify-between gap-2 text-xs">
-          <div className="flex items-center gap-2 min-w-0">
-            {goingAttendees.length > 0 ? (
-              <div className="flex items-center -space-x-2 overflow-hidden shrink-0">
-                {goingAttendees.slice(0, 4).map((rsvp: any) => (
-                  <Avatar
-                    key={rsvp.id || rsvp.user?.id}
-                    name={rsvp.user?.username || 'Attendee'}
-                    photoUrl={rsvp.user?.photoUrl}
-                    size="sm"
-                    className="w-6 h-6 rounded-full border-2 border-white shadow-2xs"
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="w-6 h-6 rounded-full bg-[#FAF8F5] border border-[#E2DBD0] flex items-center justify-center text-stone-400 shrink-0">
-                <Users className="w-3.5 h-3.5" />
-              </div>
-            )}
-            <span className="text-[11px] font-bold text-stone-800 truncate">
-              {goingCount > 0
-                ? `${goingCount} confirmed ${goingCount === 1 ? 'attendee' : 'attendees'}`
-                : 'No attendees yet'}
-            </span>
-          </div>
-
-          {maybeCount > 0 && (
-            <span className="text-[10px] font-bold text-amber-900 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-full shrink-0">
-              {maybeCount} maybe
-            </span>
-          )}
+        {/* Attendance Facepile Stack */}
+        <div className="pt-2.5 pb-2 border-t border-[#E2DBD0]/60 flex items-center justify-between gap-2 text-xs" onClick={(e) => e.stopPropagation()}>
+          <Facepile
+            attendees={plan.attendees}
+            rsvps={plan.rsvps}
+            totalGoingCount={goingCount}
+            size="sm"
+            max={4}
+            showLabel={true}
+          />
         </div>
       </div>
 

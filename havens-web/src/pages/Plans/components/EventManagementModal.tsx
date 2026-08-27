@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation } from '@apollo/client'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../../../context/AuthContext'
 import { LocationInput, LocationData } from '../../../components/LocationInput'
 import { Avatar } from '../../../components/Avatar'
+import { Facepile, getEarthyAvatarColor } from '../../../components/Facepile'
 import {
   GET_ALL_EVENTS,
   GET_MY_CREATED_EVENTS,
@@ -148,19 +149,61 @@ export const EventManagementModal: React.FC<EventManagementModalProps> = ({
     },
   })
 
-  // Combine and categorize RSVPs
+  // Combine and categorize RSVPs with strict Going / Maybe filtering
   const rsvpsList = useMemo(() => {
-    const raw: any[] = rsvpsData?.eventRsvps || plan?.rsvps || []
-    return raw.filter((r) => r.response === 'going' || r.response === 'maybe')
+    const rawRsvps: any[] = rsvpsData?.eventRsvps || plan?.rsvps || []
+    const seenUserIds = new Set<string>()
+    const normalized: any[] = []
+
+    // 1. Process RSVP objects
+    rawRsvps.forEach((r) => {
+      if (!r) return
+      const status = (r.rsvp_status || r.rsvpStatus || r.response || '').toLowerCase()
+      if (status === 'going' || status === 'maybe') {
+        const uId = String(r.user?.id || r.user?.username || r.id)
+        if (!seenUserIds.has(uId)) {
+          seenUserIds.add(uId)
+          normalized.push({
+            id: r.id,
+            response: status,
+            rsvp_status: status,
+            user: r.user,
+          })
+        }
+      }
+    })
+
+    // 2. If attendees array exists on plan, include confirmed going attendees not yet in list
+    if (Array.isArray(plan?.attendees)) {
+      plan.attendees.forEach((att: any) => {
+        if (!att) return
+        const uId = String(att.id || att.username)
+        if (!seenUserIds.has(uId)) {
+          seenUserIds.add(uId)
+          normalized.push({
+            id: `att-${att.id || att.username}`,
+            response: 'going',
+            rsvp_status: 'going',
+            user: att,
+          })
+        }
+      })
+    }
+
+    return normalized
   }, [rsvpsData, plan])
 
   const goingAttendees = useMemo(() => {
-    return rsvpsList.filter((r) => r.response === 'going')
+    return rsvpsList.filter((r) => (r.rsvp_status || r.response) === 'going')
   }, [rsvpsList])
 
   const maybeAttendees = useMemo(() => {
-    return rsvpsList.filter((r) => r.response === 'maybe')
+    return rsvpsList.filter((r) => (r.rsvp_status || r.response) === 'maybe')
   }, [rsvpsList])
+
+  const goingCount = goingAttendees.length || (plan as any)?.goingCount || (plan as any)?.going || 0
+  const maybeCount = maybeAttendees.length
+  const totalCount = goingCount + maybeCount
 
   const filteredAttendees = useMemo(() => {
     if (rsvpFilter === 'going') return goingAttendees
@@ -427,7 +470,7 @@ export const EventManagementModal: React.FC<EventManagementModalProps> = ({
                   }`}
                 >
                   <p className="text-[11px] font-bold text-[#8a8278] uppercase">Total Responses</p>
-                  <p className="text-2xl font-bold text-stone-900 mt-1">{rsvpsList.length}</p>
+                  <p className="text-2xl font-bold text-stone-900 mt-1">{totalCount}</p>
                 </div>
 
                 <div
@@ -442,7 +485,7 @@ export const EventManagementModal: React.FC<EventManagementModalProps> = ({
                     <p className="text-[11px] font-bold text-[#2D5A3D] uppercase">Confirmed (Going)</p>
                     <CheckCircle2 className="w-3.5 h-3.5 text-[#2D5A3D]" />
                   </div>
-                  <p className="text-2xl font-bold text-[#2D5A3D] mt-1">{goingAttendees.length}</p>
+                  <p className="text-2xl font-bold text-[#2D5A3D] mt-1">{goingCount}</p>
                 </div>
 
                 <div
@@ -457,16 +500,35 @@ export const EventManagementModal: React.FC<EventManagementModalProps> = ({
                     <p className="text-[11px] font-bold text-[#C47B5A] uppercase">Interested (Maybe)</p>
                     <HelpCircle className="w-3.5 h-3.5 text-[#C47B5A]" />
                   </div>
-                  <p className="text-2xl font-bold text-[#C47B5A] mt-1">{maybeAttendees.length}</p>
+                  <p className="text-2xl font-bold text-[#C47B5A] mt-1">{maybeCount}</p>
                 </div>
               </div>
+
+              {/* Visual Facepile Overview */}
+              {rsvpsList.length > 0 && (
+                <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-[#E2DBD0]/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold text-stone-800">Confirmed & Interested Facepile</p>
+                    <p className="text-[11px] text-[#8a8278]">Click any avatar to view their community profile</p>
+                  </div>
+                  <Facepile
+                    attendees={plan?.attendees}
+                    rsvps={rsvpsList}
+                    totalGoingCount={goingCount}
+                    size="md"
+                    max={6}
+                    showLabel={true}
+                    ringColorClass="ring-white"
+                  />
+                </div>
+              )}
 
               {/* Filter Sub-Tabs */}
               <div className="flex items-center justify-between pb-2 border-b border-[#E2DBD0]/60">
                 <h3 className="text-sm font-bold text-stone-900 font-serif">
-                  {rsvpFilter === 'all' && `All Guests Directory (${rsvpsList.length})`}
-                  {rsvpFilter === 'going' && `Confirmed Attendees (${goingAttendees.length})`}
-                  {rsvpFilter === 'maybe' && `Tentative / Interested (${maybeAttendees.length})`}
+                  {rsvpFilter === 'all' && `All Guests Directory (${totalCount})`}
+                  {rsvpFilter === 'going' && `Confirmed Attendees (${goingCount})`}
+                  {rsvpFilter === 'maybe' && `Tentative / Interested (${maybeCount})`}
                 </h3>
 
                 <div className="flex items-center gap-1 text-xs">
@@ -477,7 +539,7 @@ export const EventManagementModal: React.FC<EventManagementModalProps> = ({
                       rsvpFilter === 'all' ? 'bg-[#2D5A3D] text-white' : 'text-[#8a8278] hover:bg-[#F0EAE0]'
                     }`}
                   >
-                    All
+                    All ({totalCount})
                   </button>
                   <button
                     type="button"
@@ -486,7 +548,7 @@ export const EventManagementModal: React.FC<EventManagementModalProps> = ({
                       rsvpFilter === 'going' ? 'bg-[#2D5A3D] text-white' : 'text-[#8a8278] hover:bg-[#F0EAE0]'
                     }`}
                   >
-                    Going
+                    Going ({goingCount})
                   </button>
                   <button
                     type="button"
@@ -495,7 +557,7 @@ export const EventManagementModal: React.FC<EventManagementModalProps> = ({
                       rsvpFilter === 'maybe' ? 'bg-[#2D5A3D] text-white' : 'text-[#8a8278] hover:bg-[#F0EAE0]'
                     }`}
                   >
-                    Maybe
+                    Maybe ({maybeCount})
                   </button>
                 </div>
               </div>
@@ -533,7 +595,7 @@ export const EventManagementModal: React.FC<EventManagementModalProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {filteredAttendees.map((rsvp: any) => {
                     const attendee = rsvp.user
-                    const isGoing = rsvp.response === 'going'
+                    const isGoing = (rsvp.rsvp_status || rsvp.response) === 'going'
 
                     return (
                       <div
@@ -541,7 +603,7 @@ export const EventManagementModal: React.FC<EventManagementModalProps> = ({
                         onClick={() => {
                           if (attendee?.id || attendee?.username) {
                             onClose()
-                            navigate(`/profile/${attendee?.username || attendee?.id}`)
+                            navigate(`/profile/${encodeURIComponent(attendee?.username || attendee?.id)}`)
                           }
                         }}
                         className="p-4 rounded-2xl border border-[#E2DBD0] bg-white hover:border-[#2D5A3D]/40 transition-all flex flex-col justify-between gap-3 shadow-2xs hover:shadow-xs cursor-pointer group"
@@ -550,9 +612,9 @@ export const EventManagementModal: React.FC<EventManagementModalProps> = ({
                           <Avatar
                             name={attendee?.username || 'Guest'}
                             photoUrl={attendee?.photoUrl}
-                            color="#2D5A3D"
+                            color={getEarthyAvatarColor(attendee?.username)}
                             size="md"
-                            className="w-11 h-11 border border-white shadow-2xs rounded-full shrink-0"
+                            className="w-11 h-11 border border-white shadow-2xs rounded-full shrink-0 group-hover:scale-105 transition-transform"
                           />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5">

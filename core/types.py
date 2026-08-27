@@ -4,7 +4,7 @@ from django.contrib.auth.models import User
 from .models import (
     Community, Event, Ticket, Participation, UserProfile,
     CommunityMembership, InvitationCode, EventRSVP, Friendship,
-    Match, Message, HobbyCategory, Hobby,
+    Match, Message, CircleMessage, HobbyCategory, Hobby,
 )
 
 
@@ -286,6 +286,8 @@ class InvitationCodeType(DjangoObjectType):
 class EventRSVPType(DjangoObjectType):
     user = graphene.Field(UserType)
     event = graphene.Field(lambda: EventType)
+    rsvp_status = graphene.String(name='rsvp_status')
+    rsvpStatus = graphene.String(name='rsvpStatus')
 
     class Meta:
         model = EventRSVP
@@ -296,6 +298,12 @@ class EventRSVPType(DjangoObjectType):
 
     def resolve_event(self, info):
         return self.event
+
+    def resolve_rsvp_status(self, info):
+        return self.response
+
+    def resolve_rsvpStatus(self, info):
+        return self.response
 
 
 class EventType(DjangoObjectType):
@@ -447,3 +455,22 @@ class MessageType(DjangoObjectType):
     class Meta:
         model = Message
         fields = ("id", "match", "sender", "content", "created_at", "is_read")
+
+
+class CircleMessageType(DjangoObjectType):
+    sender = graphene.Field(UserType)
+    circle = graphene.Field(lambda: CommunityType)
+    createdAt = graphene.DateTime()
+
+    class Meta:
+        model = CircleMessage
+        fields = ("id", "circle", "sender", "content", "created_at")
+
+    def resolve_sender(self, info):
+        return self.sender
+
+    def resolve_circle(self, info):
+        return self.circle
+
+    def resolve_createdAt(self, info):
+        return self.created_at

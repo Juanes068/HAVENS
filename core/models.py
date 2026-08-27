@@ -275,3 +275,18 @@ class Message(models.Model):
 
     def __str__(self):
         return f"Msg from {self.sender.username} in match {self.match.id}"
+
+
+class CircleMessage(models.Model):
+    circle = models.ForeignKey(Community, on_delete=models.CASCADE, related_name='circle_messages')
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='circle_messages_sent')
+    content = models.TextField()
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['created_at']
+        verbose_name = 'Circle Message'
+        verbose_name_plural = 'Circle Messages'
+
+    def __str__(self):
+        return f"Msg from {self.sender.username} in circle '{self.circle.name}' ({self.created_at})"

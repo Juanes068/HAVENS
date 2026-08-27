@@ -1,5 +1,7 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Avatar } from './Avatar';
+import { Facepile, getEarthyAvatarColor } from './Facepile';
 import { Clock, MapPin, Star, Crown, X, Share2 } from 'lucide-react';
 
 export interface EventDetailModalProps {
@@ -134,20 +136,26 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
         {/* Host row */}
         {event.creator && (
           <div className="flex items-center justify-between p-3 rounded-2xl bg-[#FDFBF7] border border-[#E2DBD0]/60">
-            <div className="flex items-center gap-3">
+            <Link
+              to={`/profile/${encodeURIComponent(event.creator.username)}`}
+              onClick={(e) => e.stopPropagation()}
+              className="flex items-center gap-3 group"
+              title={`View @${event.creator.username}'s profile`}
+            >
               <Avatar
                 name={event.creator.username || 'Host'}
                 photoUrl={event.creator.photoUrl}
-                color="#2D5A3D"
+                color={getEarthyAvatarColor(event.creator.username)}
                 size="md"
+                className="group-hover:scale-105 transition-transform"
               />
               <div>
-                <p className="text-xs font-semibold text-stone-900">
+                <p className="text-xs font-semibold text-stone-900 group-hover:text-[#2D5A3D] transition-colors">
                   @{event.creator.username}
                 </p>
                 <p className="text-[10px] text-stone-500">Event Organizer</p>
               </div>
-            </div>
+            </Link>
             <button
               type="button"
               onClick={handleShare}
@@ -158,6 +166,22 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
             </button>
           </div>
         )}
+
+        {/* Attendees Facepile */}
+        <div className="p-3.5 rounded-2xl bg-[#FAF8F5] border border-[#E2DBD0]/60 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-bold text-stone-700">Attendees</p>
+            <p className="text-[10px] text-[#8a8278]">Confirmed or interested</p>
+          </div>
+          <Facepile
+            attendees={event.attendees}
+            rsvps={event.rsvps}
+            totalGoingCount={event.goingCount || event.going}
+            size="sm"
+            max={5}
+            showLabel={true}
+          />
+        </div>
 
         {/* Date, Time & Location Details */}
         <div className="space-y-2 text-xs">

@@ -3,6 +3,7 @@ import { useQuery, useMutation } from '@apollo/client'
 import { useNavigate } from 'react-router-dom'
 import { SectionHeading } from '../components/SectionHeading'
 import { Avatar } from '../components/Avatar'
+import { Facepile, ParticipantProfile, RawRsvpItem } from '../components/Facepile'
 import { EventDetailModal } from '../components/EventDetailModal'
 import {
   GET_ALL_EVENTS,
@@ -51,6 +52,8 @@ interface UnifiedSavedPlan {
   }
   hobbies?: { id: string | number; name: string }[]
   going?: number
+  attendees?: ParticipantProfile[]
+  rsvps?: RawRsvpItem[]
   rsvpStatus?: 'going' | 'maybe' | 'pass' | null
   isBookmarked: boolean
   rsvpCreatedAt?: string
@@ -198,6 +201,8 @@ export const SavedView: React.FC = () => {
           creator: evt.creator,
           hobbies: evt.hobbies,
           going: evt.going || 1,
+          attendees: evt.attendees,
+          rsvps: evt.rsvps,
           rsvpStatus: (rsvpInfo?.response as any) || null,
           rsvpCreatedAt: rsvpInfo?.createdAt,
           isBookmarked: normalizedBookmarkSet.has(id),
@@ -227,6 +232,9 @@ export const SavedView: React.FC = () => {
             ageRange: r.event.ageRange || 'All Ages',
             creator: r.event.creator,
             hobbies: r.event.hobbies,
+            going: r.event.going || 1,
+            attendees: r.event.attendees,
+            rsvps: r.event.rsvps,
             rsvpStatus: resp as any,
             rsvpCreatedAt: r.createdAt,
             isBookmarked: normalizedBookmarkSet.has(id),
@@ -635,23 +643,27 @@ export const SavedView: React.FC = () => {
                     </div>
                   )}
                 </div>
-
                 {/* Card Footer: Interactive RSVP Response Modifier Bar */}
                 <div
                   className="pt-3 border-t border-[#E2DBD0]/60 space-y-2"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-stone-600">
-                      👥 {plan.going} {plan.going === 1 ? 'attendee' : 'attendees'}
-                    </span>
+                  <div className="flex items-center justify-between text-xs gap-2">
+                    <Facepile
+                      attendees={plan.attendees}
+                      rsvps={plan.rsvps}
+                      totalGoingCount={plan.going}
+                      size="xs"
+                      max={3}
+                      showLabel={true}
+                    />
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation()
                         navigate(`/discover?event=${plan.id}`)
                       }}
-                      className="text-[#2D5A3D] hover:underline font-bold text-[11px] flex items-center gap-1 cursor-pointer"
+                      className="text-[#2D5A3D] hover:underline font-bold text-[11px] flex items-center gap-1 cursor-pointer shrink-0"
                     >
                       <MapPin className="w-3 h-3" />
                       <span>View on Map</span>

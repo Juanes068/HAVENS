@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation } from '@apollo/client';
 import { SWIPE_EVENT } from '../graphql/operations';
 import { Avatar } from './Avatar';
+import { Facepile } from './Facepile';
 import { Check, HelpCircle, Compass, Calendar, MapPin, Sparkles } from 'lucide-react';
 
 export interface EventItem {
@@ -413,41 +415,39 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
 
             {/* Bottom Event Details Bar */}
             <div className="space-y-3 z-10">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center justify-between gap-2 flex-wrap pointer-events-auto">
                 {currentEvent.creator && (
-                  <div className="flex items-center gap-2.5 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
+                  <Link
+                    to={`/profile/${encodeURIComponent(currentEvent.creator.username)}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-2.5 bg-black/50 hover:bg-black/70 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/15 transition-all shadow-xs cursor-pointer group"
+                    title={`View @${currentEvent.creator.username}'s profile`}
+                  >
                     <Avatar
                       name={currentEvent.creator.username}
                       photoUrl={currentEvent.creator.photoUrl}
                       size="sm"
-                      className="w-6 h-6"
+                      className="w-6 h-6 rounded-full group-hover:scale-105 transition-transform"
                     />
-                    <span className="text-xs font-semibold text-white/90">
+                    <span className="text-xs font-semibold text-white/90 group-hover:text-emerald-300 transition-colors">
                       @{currentEvent.creator.username}
                     </span>
-                  </div>
+                  </Link>
                 )}
 
-                {/* Going Attendees Preview & Count */}
-                {((currentEvent.goingCount && currentEvent.goingCount > 0) || (currentEvent.attendees && currentEvent.attendees.length > 0)) && (
-                  <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
-                    <div className="flex items-center -space-x-1.5">
-                      {(currentEvent.attendees || []).slice(0, 3).map((att: any) => (
-                        <Avatar
-                          key={att.id}
-                          name={att.username}
-                          photoUrl={att.photoUrl}
-                          size="xs"
-                          className="w-5 h-5 rounded-full border border-white/40"
-                          title={`@${att.username}`}
-                        />
-                      ))}
-                    </div>
-                    <span className="text-[11px] font-bold text-emerald-300">
-                      👥 {currentEvent.goingCount || currentEvent.attendees?.length || 1} Going
-                    </span>
-                  </div>
-                )}
+                {/* Facepile for Going & Maybe Attendees */}
+                <div className="bg-black/50 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/15">
+                  <Facepile
+                    attendees={currentEvent.attendees}
+                    rsvps={currentEvent.rsvps}
+                    totalGoingCount={currentEvent.goingCount}
+                    size="xs"
+                    max={3}
+                    showLabel={true}
+                    ringColorClass="ring-black/40"
+                    className="text-white text-[11px]"
+                  />
+                </div>
               </div>
 
 

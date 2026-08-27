@@ -15,10 +15,11 @@
  */
 
 import React, { useState, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { useQuery, useMutation } from '@apollo/client'
 import { SectionHeading } from './SectionHeading'
 import { Avatar } from './Avatar'
+import { Facepile, getEarthyAvatarColor } from './Facepile'
 import { ScheduledEventCard, ScheduledEvent } from './ScheduledEventCard'
 import { MY_RSVPS, GET_ALL_EVENTS, SWIPE_EVENT } from '../graphql/operations'
 import { useAuth } from '../context/AuthContext'
@@ -738,29 +739,37 @@ export const CalendarTab: React.FC = () => {
               )}
 
               {/* Going Attendees List */}
-              {selectedEvent.attendees && selectedEvent.attendees.length > 0 && (
+              {((selectedEvent.attendees && selectedEvent.attendees.length > 0) || (selectedEvent.rsvps && selectedEvent.rsvps.length > 0)) && (
                 <div className="space-y-2 p-3 rounded-2xl bg-[#FAF8F5] border border-[#E2DBD0]/60">
                   <div className="flex items-center justify-between text-xs font-bold text-stone-800">
                     <span className="flex items-center gap-1.5 text-[#2D5A3D]">
                       <Users className="w-3.5 h-3.5" />
-                      <span>Going ({selectedEvent.goingCount || selectedEvent.attendees.length})</span>
+                      <span>Going ({selectedEvent.goingCount || selectedEvent.attendees?.length || 1})</span>
                     </span>
                     <span className="text-[10px] text-stone-500 font-normal">Confirmed Attendees</span>
                   </div>
                   <div className="flex items-center gap-1.5 overflow-x-auto py-1">
-                    {selectedEvent.attendees.map((att: any) => (
-                      <div key={att.id} className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-xl border border-[#E2DBD0] shrink-0 shadow-2xs">
+                    {(selectedEvent.attendees || []).map((att: any) => (
+                      <Link
+                        key={att.id}
+                        to={`/profile/${encodeURIComponent(att.username)}`}
+                        className="flex items-center gap-1.5 bg-white hover:bg-[#FAF8F5] px-2.5 py-1 rounded-xl border border-[#E2DBD0] shrink-0 shadow-2xs group transition-colors cursor-pointer"
+                        title={`View @${att.username}'s profile`}
+                      >
                         <Avatar
                           name={att.username}
                           photoUrl={att.photoUrl}
+                          color={getEarthyAvatarColor(att.username)}
                           size="xs"
-                          className="w-5 h-5 rounded-full"
+                          className="w-5 h-5 rounded-full group-hover:scale-105 transition-transform"
                         />
-                        <span className="text-[11px] font-semibold text-stone-800">@{att.username}</span>
+                        <span className="text-[11px] font-semibold text-stone-800 group-hover:text-[#2D5A3D] transition-colors">
+                          @{att.username}
+                        </span>
                         {att.age && (
                           <span className="text-[9px] text-stone-500 font-medium">{att.age}y</span>
                         )}
-                      </div>
+                      </Link>
                     ))}
                   </div>
                 </div>
