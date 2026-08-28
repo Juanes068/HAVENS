@@ -1,0 +1,137 @@
+# Production Docker Compose for Havens on Hostinger VPS
+# Usage: docker compose -f docker-compose.prod.yml up -d --build
+
+services:
+
+  db:
+    image: mysql:8.0
+    restart: always
+    environment:
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p${DB_PASSWORD}"]
+      timeout: 5s
+      retries: 5
+      interval: 3s
+      start_period: 60s
+    volumes:
+      - db_data:/var/lib/mysql
+    # No exposed ports in production — only internal Docker network access
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    # No exposed ports in production
+
+  web:
+    container_name: havens-web-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    command: >
+      sh -c "
+        pip install -r requirements.txt &&
+        python manage.py migrate --noinput &&
+        python manage.py collectstatic --noinput &&
+        gunicorn havens.wsgi:application --config gunicorn.conf.py
+      "
+    expose:
+      - "8000"   # Internal only — Nginx proxies to this
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      - DJANGO_ENV=production
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=db
+      - DB_PORT=3306
+      - REDIS_URL=redis://redis:6379/1
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    volumes:
+      - static_files:/app/staticfiles
+      - media_files:/app/media
+
+  celery:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    command: >
+      sh -c "
+        pip install -r requirements.txt &&
+        celery -A havens worker -l info --concurrency=2
+      "
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      - DJANGO_ENV=production
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=db
+      - DB_PORT=3306
+      - REDIS_URL=redis://redis:6379/1
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+
+  frontend:
+    container_name: havens-frontend-build
+    build:
+      context: ./havens-web
+      dockerfile: Dockerfile.prod
+      args:
+        - VITE_API_URL=https://api.havensapp.com/graphql/
+        - VITE_GOOGLE_MAPS_API_KEY=${VITE_GOOGLE_MAPS_API_KEY}
+    volumes:
+      - frontend_dist:/app/dist   # Built files shared to Nginx
+    restart: "no"    # Run-once builder — Nginx serves the static files
+
+  nginx:
+    image: nginx:alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/havensapp.conf:/etc/nginx/conf.d/havensapp.conf:ro
+      - static_files:/app/staticfiles:ro
+      - media_files:/app/media:ro
+      - frontend_dist:/var/www/havensapp:ro
+      - certbot_www:/var/www/certbot:ro
+      - certbot_conf:/etc/letsencrypt:ro
+    depends_on:
+      - web
+      - frontend
+
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - certbot_www:/var/www/certbot
+      - certbot_conf:/etc/letsencrypt
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+
+volumes:
+  db_data:
+  redis_data:
+  static_files:
+  media_files:
+  frontend_dist:
+  certbot_www:
+  certbot_conf:

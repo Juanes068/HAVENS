@@ -14,15 +14,22 @@ load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# ─── Environment ─────────────────────────────────────────────────────────────
+DJANGO_ENV = os.getenv('DJANGO_ENV', 'development')  # 'production' | 'development'
+IS_PRODUCTION = DJANGO_ENV == 'production'
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-1i+8@nmrdq-h6&!8kvujkn%hjqtx8^=pmzfvsrt-b^2!b&tfy&')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 't')
+DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 't') if not IS_PRODUCTION else False
 
 # Parse allowed hosts list safely from environment
-ALLOWED_HOSTS = [host.strip() for host in os.getenv('ALLOWED_HOSTS', '*').split(',') if host.strip()]
+_ALLOWED_HOSTS_DEFAULT = (
+    'havensapp.com,www.havensapp.com,api.havensapp.com,localhost,127.0.0.1,web'
+    if IS_PRODUCTION else '*'
+)
+ALLOWED_HOSTS = [host.strip() for host in os.getenv('ALLOWED_HOSTS', _ALLOWED_HOSTS_DEFAULT).split(',') if host.strip()]
 
 # Application definition
 
@@ -33,7 +40,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'core', 
+    'core',
     'graphene_django',
     'corsheaders',
 ]
@@ -41,6 +48,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',  # CorsMiddleware must be at the top of MIDDLEWARE
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # Serve static files efficiently in production
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -113,7 +121,20 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = 'static/'
+# ─── Static & Media Files ────────────────────────────────────────────────────
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'  # Collected by `collectstatic` for Nginx / WhiteNoise
+
+# WhiteNoise: compress and serve static files with long-lived cache headers in production
+STATICFILES_STORAGE = (
+    'whitenoise.storage.CompressedManifestStaticFilesStorage'
+    if IS_PRODUCTION
+    else 'django.contrib.staticfiles.storage.StaticFilesStorage'
+)
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 AUTHENTICATION_BACKENDS = [
@@ -146,16 +167,35 @@ JWT_REFRESH_EXPIRATION_DELTA = timedelta(days=7)
 JWT_ALLOW_REFRESH = True
 JWT_VERIFY_EXPIRATION = True
 
-# CORS Configuration - Strict Allowed Origins
+# ─── CORS Configuration ──────────────────────────────────────────────────────
 CORS_ALLOW_ALL_ORIGINS = False
 
 CORS_ALLOWED_ORIGINS = [
+    # Production domains
+    "https://havensapp.com",
+    "https://www.havensapp.com",
+    "https://api.havensapp.com",
+    # Local development
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:8081",  # Metro bundler for Expo / React Native
 ]
+
+CORS_ALLOW_CREDENTIALS = True
+
+# ─── HTTPS / Security Headers (Production only) ──────────────────────────────
+if IS_PRODUCTION:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = False  # Nginx handles HTTPS redirect — don't redirect again in Django
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 
 # ─── Email Configuration ────────────────────────────────────────────────────
 # Set EMAIL_HOST in .env to enable real SMTP delivery (e.g. SendGrid, Mailgun, AWS SES).

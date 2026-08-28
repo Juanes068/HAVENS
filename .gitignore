@@ -45,3 +45,12 @@ pnpm-debug.log*
 *.xlsx
 *.xls
 *.csv
+
+# Production environment files (contain sensitive credentials)
+havens-web/.env.production
+staticfiles/
+media/
+
+# SSL certificates (managed on VPS)
+nginx/certs/
+certbot/
