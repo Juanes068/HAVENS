@@ -1,4 +1,5 @@
 import signal
+import threading
 from django.conf import settings
 from graphene_django.views import GraphQLView
 from graphql import ExecutionResult, GraphQLError
@@ -31,7 +32,11 @@ class SecureGraphQLView(GraphQLView):
                 request, data, query, variables, operation_name, show_graphiql
             )
 
-        if hasattr(signal, 'SIGALRM') and hasattr(signal, 'setitimer'):
+        if (
+            hasattr(signal, 'SIGALRM')
+            and hasattr(signal, 'setitimer')
+            and threading.current_thread() is threading.main_thread()
+        ):
             def handle_timeout(signum, frame):
                 raise QueryTimeoutException(f"Query execution timed out after {timeout} seconds.")
 
