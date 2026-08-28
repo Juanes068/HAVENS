@@ -29,10 +29,18 @@ export const getAuthToken = (): string | null => {
 };
 
 /**
- * HTTP Link pointing to the local Django GraphQL backend server.
+ * HTTP Link pointing to the Django GraphQL backend.
+ * Uses VITE_API_URL in production (https://api.havensapp.com/graphql/)
+ * with automatic fallback based on current hostname.
  */
+const GRAPHQL_ENDPOINT =
+  import.meta.env.VITE_API_URL ||
+  (typeof window !== 'undefined' && window.location.hostname.includes('havensapp.com')
+    ? 'https://api.havensapp.com/graphql/'
+    : 'http://localhost:8000/graphql/');
+
 const httpLink = createHttpLink({
-  uri: 'http://localhost:8000/graphql/',
+  uri: GRAPHQL_ENDPOINT,
 });
 
 /**
