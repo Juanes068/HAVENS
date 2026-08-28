@@ -82,6 +82,16 @@ class Command(BaseCommand):
             help="Validate and parse file without persisting changes to the database.",
         )
         parser.add_argument(
+            "--update",
+            action="store_true",
+            help="Update existing events if an event with the same title already exists.",
+        )
+        parser.add_argument(
+            "--clear",
+            action="store_true",
+            help="Delete all existing events before importing.",
+        )
+        parser.add_argument(
             "--atomic",
             action="store_true",
             help="Execute import within a single transaction; rolls back all imports if any row fails.",
@@ -121,6 +131,8 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         file_path = options["file_path"]
         dry_run = options["dry_run"]
+        is_update = options["update"]
+        is_clear = options["clear"]
         is_atomic = options["atomic"]
         sheet_name = options.get("sheet")
         default_creator_val = options.get("default_creator")
@@ -134,6 +146,10 @@ class Command(BaseCommand):
         self.stdout.write(self.style.MIGRATE_HEADING(f"==> Starting Bulk Event Import from: {file_path}"))
         if dry_run:
             self.stdout.write(self.style.WARNING("[DRY RUN MODE] No changes will be saved to the database."))
+
+        if is_clear and not dry_run:
+            deleted_count, _ = Event.objects.all().delete()
+            self.stdout.write(self.style.WARNING(f"Cleared {deleted_count} existing event record(s) from database."))
 
         # 1. Resolve default creator if provided
         default_creator = self._resolve_user(default_creator_val) if default_creator_val else None
@@ -165,12 +181,32 @@ class Command(BaseCommand):
                     )
 
                     if not dry_run:
-                        event = Event.objects.create(**event_data)
-                        if hobby_instances:
-                            event.hobbies.set(hobby_instances)
-                        self.stdout.write(
-                            self.style.SUCCESS(f"  [Row {idx}] Imported: '{event.title}' (ID: {event.id})")
-                        )
+                        existing_event = None
+                        if is_update:
+                            existing_event = Event.objects.filter(
+                                title=event_data["title"],
+                                scheduled_date__date=event_data["scheduled_date"].date()
+                            ).first() or Event.objects.filter(
+                                title=event_data["title"],
+                                location_name=event_data["location_name"]
+                            ).first()
+
+                        if existing_event:
+                            for k, v in event_data.items():
+                                setattr(existing_event, k, v)
+                            existing_event.save()
+                            if hobby_instances:
+                                existing_event.hobbies.set(hobby_instances)
+                            self.stdout.write(
+                                self.style.SUCCESS(f"  [Row {idx}] Updated: '{existing_event.title}' (ID: {existing_event.id})")
+                            )
+                        else:
+                            event = Event.objects.create(**event_data)
+                            if hobby_instances:
+                                event.hobbies.set(hobby_instances)
+                            self.stdout.write(
+                                self.style.SUCCESS(f"  [Row {idx}] Imported: '{event.title}' (ID: {event.id})")
+                            )
                     else:
                         self.stdout.write(
                             self.style.SUCCESS(f"  [Row {idx}] Validated: '{event_data.get('title')}'")
@@ -199,7 +235,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.MIGRATE_HEADING("IMPORT SUMMARY"))
         self.stdout.write("=" * 60)
         self.stdout.write(f"Total Rows Processed : {len(rows)}")
-        self.stdout.write(self.style.SUCCESS(f"Successfully Imported: {imported_count}"))
+        self.stdout.write(self.style.SUCCESS(f"Successfully Processed: {imported_count}"))
         if failed_count > 0:
             self.stdout.write(self.style.ERROR(f"Failed Rows          : {failed_count}"))
             self.stdout.write("\nDetailed Failure Log:")
@@ -289,6 +325,87 @@ class Command(BaseCommand):
                     return val
         return default
 
+    @staticmethod
+    def _auto_geocode(location_name: str, title: str) -> Tuple[float, float]:
+        """Infer geographic coordinates for well-known venues/neighborhoods or fallback to Vancouver center."""
+        combined = f"{location_name} {title}".lower()
+
+        # Known regional venues and neighborhoods
+        if "30 ft" in combined or "30 foot" in combined or "lynn canyon" in combined:
+            return 49.3432, -123.0195
+        if "grouse" in combined:
+            return 49.3799, -123.0998
+        if "hastings park" in combined or "pne" in combined:
+            return 49.2825, -123.0378
+        if "maplewood" in combined or "seymour river" in combined:
+            return 49.3106, -123.0039
+        if "granville" in combined:
+            return 49.2796, -123.1235
+        if "david lam" in combined or "pacific blvd" in combined:
+            return 49.2721, -123.1245
+        if "bcit" in combined or "seymour st" in combined:
+            return 49.2838, -123.1147
+        if "burrard queen" in combined:
+            return 49.2747, -123.1118
+        if "moose's down under" in combined or "pender st" in combined:
+            return 49.2857, -123.1171
+        if "bodhi meditation" in combined or "richmond" in combined or "alderbridge" in combined:
+            return 49.1764, -123.1438
+        if "north vancouver" in combined or "14th st w" in combined:
+            return 49.3218, -123.0768
+        if "kingsway" in combined:
+            return 49.2605, -123.0955
+        if "burnaby" in combined:
+            return 49.2813, -123.0135
+        if "kitsilano" in combined or "kits" in combined:
+            return 49.2684, -123.1683
+        if "stanley park" in combined:
+            return 49.3017, -123.1417
+        if "yaletown" in combined:
+            return 49.2750, -123.1215
+        if "gastown" in combined:
+            return 49.2831, -123.1070
+
+        # Fallback default: Downtown Vancouver
+        return 49.2827, -123.1207
+
+    @staticmethod
+    def _auto_image_url(title: str, hobbies_str: str, location_name: str) -> str:
+        """Provide a high-resolution stock photo when none is provided in the Excel sheet."""
+        combined = f"{title} {hobbies_str} {location_name}".lower()
+
+        if "cold plunge" in combined or "dip" in combined or "pool" in combined or "swim" in combined:
+            return "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=1200&q=80"
+        if "yoga" in combined or "stretch" in combined:
+            return "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=1200&q=80"
+        if "volleyball" in combined or "beach" in combined:
+            return "https://images.unsplash.com/photo-1612872087720-bb876e2e67d1?auto=format&fit=crop&w=1200&q=80"
+        if "farm" in combined or "fall festival" in combined or "autumn" in combined:
+            return "https://images.unsplash.com/photo-1500595046743-cd271d694d30?auto=format&fit=crop&w=1200&q=80"
+        if "dj" in combined or "electronic" in combined or "nightlife" in combined:
+            return "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=1200&q=80"
+        if "bike" in combined or "cycling" in combined:
+            return "https://images.unsplash.com/photo-1485965120184-e220f721d03e?auto=format&fit=crop&w=1200&q=80"
+        if "toastmasters" in combined or "entrepreneur" in combined or "business" in combined or "networking" in combined:
+            return "https://images.unsplash.com/photo-1515187029135-18ee286d815b?auto=format&fit=crop&w=1200&q=80"
+        if "boat" in combined or "cruise" in combined or "yacht" in combined or "sail" in combined:
+            return "https://images.unsplash.com/photo-1569263979104-865ab7cd8d17?auto=format&fit=crop&w=1200&q=80"
+        if "singles" in combined or "mixer" in combined or "dating" in combined:
+            return "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=1200&q=80"
+        if "meditation" in combined or "mindfulness" in combined or "zen" in combined:
+            return "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=1200&q=80"
+        if "poker" in combined or "cards" in combined or "pub" in combined or "game" in combined:
+            return "https://images.unsplash.com/photo-1511193311914-0346f16efe90?auto=format&fit=crop&w=1200&q=80"
+        if "disco" in combined or "dance" in combined or "party" in combined:
+            return "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=1200&q=80"
+        if "coffee" in combined or "cafe" in combined:
+            return "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=1200&q=80"
+        if "hiking" in combined or "trail" in combined or "outdoor" in combined:
+            return "https://images.unsplash.com/photo-1551632811-561732d1e306?auto=format&fit=crop&w=1200&q=80"
+
+        # General high quality event banner
+        return "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=1200&q=80"
+
     def _parse_row(
         self,
         row: Dict[str, Any],
@@ -321,23 +438,31 @@ class Command(BaseCommand):
         lat_raw = self._get_val(row, "latitude", "lat")
         lng_raw = self._get_val(row, "longitude", "lng", "lon")
 
-        latitude = default_lat
+        latitude = None
         if lat_raw is not None and not self._is_nan(lat_raw):
             try:
                 lat_float = float(lat_raw)
-                if not (math.isnan(lat_float) or math.isinf(lat_float)):
+                if not (math.isnan(lat_float) or math.isinf(lat_float)) and lat_float != 0.0:
                     latitude = lat_float
             except (ValueError, TypeError):
-                latitude = default_lat
+                pass
 
-        longitude = default_lng
+        longitude = None
         if lng_raw is not None and not self._is_nan(lng_raw):
             try:
                 lng_float = float(lng_raw)
-                if not (math.isnan(lng_float) or math.isinf(lng_float)):
+                if not (math.isnan(lng_float) or math.isinf(lng_float)) and lng_float != 0.0:
                     longitude = lng_float
             except (ValueError, TypeError):
+                pass
+
+        # Auto-geocode if missing or 0.0
+        if latitude is None or longitude is None or (latitude == 0.0 and longitude == 0.0):
+            if default_lat != 0.0 or default_lng != 0.0:
+                latitude = default_lat
                 longitude = default_lng
+            else:
+                latitude, longitude = self._auto_geocode(location_name, title)
 
         # 5. Creator
         creator_raw = self._get_val(row, "creator_id", "creator", "creator_username", "user", "user_id")
@@ -358,12 +483,18 @@ class Command(BaseCommand):
         visibility_raw = self._get_val(row, "visibility", default=default_visibility)
         visibility = self._normalize_visibility(visibility_raw, default_visibility)
 
-        # 9. Image URL
-        image_url = self._get_val(row, "image_url", "image", "photo_url", "photo", default=None)
-        if image_url:
-            image_url = str(image_url).strip()[:500]
+        # 9. Hobbies (Parsed early to assist image detection)
+        hobbies_raw = self._get_val(row, "hobbies", "hobby_names", "hobby_ids", "tags", "categories")
+        hobbies = self._resolve_hobbies(hobbies_raw) if hobbies_raw else []
 
-        # 10. Age Range & Min/Max Age
+        # 10. Image URL
+        image_url = self._get_val(row, "image_url", "image", "photo_url", "photo", default=None)
+        if image_url and not self._is_nan(image_url):
+            image_url = str(image_url).strip()[:500]
+        else:
+            image_url = self._auto_image_url(title, str(hobbies_raw or ""), location_name)
+
+        # 11. Age Range & Min/Max Age
         age_range_raw = self._get_val(row, "age_range", "age_limit", default="All Ages")
         age_range = str(age_range_raw).strip()[:100] if age_range_raw else "All Ages"
 
@@ -371,10 +502,6 @@ class Command(BaseCommand):
         max_age_raw = self._get_val(row, "max_age", "maximum_age")
 
         min_age, max_age = self._parse_min_max_age(min_age_raw, max_age_raw, age_range)
-
-        # 11. Hobbies
-        hobbies_raw = self._get_val(row, "hobbies", "hobby_names", "hobby_ids", "tags", "categories")
-        hobbies = self._resolve_hobbies(hobbies_raw) if hobbies_raw else []
 
         event_data = {
             "title": title,
