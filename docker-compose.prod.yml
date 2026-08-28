@@ -114,8 +114,8 @@ services:
       - static_files:/app/staticfiles:ro
       - media_files:/app/media:ro
       - frontend_dist:/var/www/havensapp:ro
-      - certbot_www:/var/www/certbot:ro
-      - certbot_conf:/etc/letsencrypt:ro
+      - /var/www/certbot:/var/www/certbot:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       - web
       - frontend
@@ -123,8 +123,8 @@ services:
   certbot:
     image: certbot/certbot
     volumes:
-      - certbot_www:/var/www/certbot
-      - certbot_conf:/etc/letsencrypt
+      - /var/www/certbot:/var/www/certbot
+      - /etc/letsencrypt:/etc/letsencrypt
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
 
 volumes:
@@ -133,5 +133,3 @@ volumes:
   static_files:
   media_files:
   frontend_dist:
-  certbot_www:
-  certbot_conf:
