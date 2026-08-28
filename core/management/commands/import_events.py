@@ -50,6 +50,7 @@ USAGE EXAMPLES:
 import os
 import csv
 import re
+import math
 import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -208,6 +209,23 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS("All rows processed with zero errors!"))
         self.stdout.write("=" * 60 + "\n")
 
+    @staticmethod
+    def _is_nan(val: Any) -> bool:
+        """Check if a value is None, NaN, NaT, inf, or an empty string."""
+        if val is None:
+            return True
+        if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
+            return True
+        if isinstance(val, str) and val.strip().lower() in ("nan", "none", "null", "nat", ""):
+            return True
+        try:
+            import pandas as pd
+            if pd.isna(val):
+                return True
+        except (ImportError, TypeError, ValueError):
+            pass
+        return False
+
     def _load_file_rows(self, file_path: str, sheet_name: Optional[str] = None) -> List[Dict[str, Any]]:
         """Load tabular data from Excel (.xlsx, .xls) or CSV (.csv)."""
         ext = os.path.splitext(file_path)[1].lower()
@@ -223,9 +241,19 @@ class Command(BaseCommand):
             try:
                 sheet = sheet_name if sheet_name is not None else 0
                 df = pd.read_excel(file_path, sheet_name=sheet)
-                # Fill NaN with None for clean dictionary conversion
+                df = df.replace([float("inf"), float("-inf")], None)
                 df = df.where(pd.notnull(df), None)
-                return df.to_dict(orient="records")
+                raw_records = df.to_dict(orient="records")
+                # Deep clean to ensure NO float('nan') or pd.NA slips through
+                cleaned_records = []
+                for row in raw_records:
+                    cleaned_row = {}
+                    for k, v in row.items():
+                        if k is None:
+                            continue
+                        cleaned_row[k] = None if self._is_nan(v) else v
+                    cleaned_records.append(cleaned_row)
+                return cleaned_records
             except Exception as e:
                 raise CommandError(f"Failed to parse Excel file '{file_path}': {e}")
 
@@ -235,8 +263,11 @@ class Command(BaseCommand):
                 with open(file_path, mode="r", encoding="utf-8-sig") as csvfile:
                     reader = csv.DictReader(csvfile)
                     for row in reader:
-                        # Normalize empty string values to None
-                        cleaned = {k.strip(): (v.strip() if isinstance(v, str) else v) for k, v in row.items() if k}
+                        cleaned = {
+                            k.strip(): (None if self._is_nan(v) else (v.strip() if isinstance(v, str) else v))
+                            for k, v in row.items()
+                            if k
+                        }
                         rows.append(cleaned)
                 return rows
             except Exception as e:
@@ -254,9 +285,7 @@ class Command(BaseCommand):
             k_norm = key.strip().lower().replace(" ", "_")
             if k_norm in normalized_row:
                 val = normalized_row[k_norm]
-                if val is not None:
-                    if isinstance(val, str) and val.strip() == "":
-                        continue
+                if not self._is_nan(val):
                     return val
         return default
 
@@ -289,14 +318,26 @@ class Command(BaseCommand):
         location_name = self._get_val(row, "location", "location_name", "venue", "address", default="")
         location_name = str(location_name).strip()[:300] if location_name else ""
 
-        lat_raw = self._get_val(row, "latitude", "lat", default=default_lat)
-        lng_raw = self._get_val(row, "longitude", "lng", "lon", default=default_lng)
-        try:
-            latitude = float(lat_raw) if lat_raw is not None else default_lat
-            longitude = float(lng_raw) if lng_raw is not None else default_lng
-        except (ValueError, TypeError):
-            latitude = default_lat
-            longitude = default_lng
+        lat_raw = self._get_val(row, "latitude", "lat")
+        lng_raw = self._get_val(row, "longitude", "lng", "lon")
+
+        latitude = default_lat
+        if lat_raw is not None and not self._is_nan(lat_raw):
+            try:
+                lat_float = float(lat_raw)
+                if not (math.isnan(lat_float) or math.isinf(lat_float)):
+                    latitude = lat_float
+            except (ValueError, TypeError):
+                latitude = default_lat
+
+        longitude = default_lng
+        if lng_raw is not None and not self._is_nan(lng_raw):
+            try:
+                lng_float = float(lng_raw)
+                if not (math.isnan(lng_float) or math.isinf(lng_float)):
+                    longitude = lng_float
+            except (ValueError, TypeError):
+                longitude = default_lng
 
         # 5. Creator
         creator_raw = self._get_val(row, "creator_id", "creator", "creator_username", "user", "user_id")
