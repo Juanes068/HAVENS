@@ -129,6 +129,9 @@ GRAPHENE = {
     'FORMAT_ERROR': 'core.utils.format_graphql_error',
 }
 
+# GraphQL query hardening
+GRAPHQL_MAX_QUERY_DEPTH = int(os.getenv('GRAPHQL_MAX_QUERY_DEPTH', '5'))
+
 CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://redis:6379/0')
 CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://redis:6379/0')
 
@@ -180,3 +183,7 @@ else:
 
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Havens <welcome@havens.app>')
 SERVER_EMAIL = os.getenv('SERVER_EMAIL', DEFAULT_FROM_EMAIL)
+
+# ─── GraphQL Security & Execution Controls ─────────────────────────────────
+GRAPHQL_MAX_QUERY_DEPTH = int(os.getenv('GRAPHQL_MAX_QUERY_DEPTH', '5'))
+GRAPHQL_EXECUTION_TIMEOUT = float(os.getenv('GRAPHQL_EXECUTION_TIMEOUT', '5.0'))

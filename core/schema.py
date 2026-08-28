@@ -16,7 +16,13 @@ Architecture:
         3. Mutation Resolvers (`core.mutations`):
            Encapsulate write operations (Auth, Invitations, RSVPs, Friendships, Messaging,
            Media upload signatures, Account Security).
-        4. Root Schema Aggregation (`core.schema` & `havens.schema`):
+        4. Authorization (`core.decorators`, `core.permissions`):
+           JWT authentication is enforced at the resolver level via `@login_required` and
+           object-level permission helpers — not only at the HTTP middleware layer.
+        5. Query Validation (`core.graphql_validation`):
+           AST depth limits and introspection blocking are enforced in `SecureGraphQLView`
+           before resolvers execute.
+        6. Root Schema Aggregation (`core.schema` & `havens.schema`):
            Exposes `Query` and `Mutation` to graphene.Schema.
 
 Exports:

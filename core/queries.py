@@ -36,6 +36,15 @@ from .models import (
 )
 from .utils import filter_events_by_radius, calculate_user_recommendations, calculate_circle_recommendations
 from .decorators import login_required
+from .permissions import (
+    get_request_user,
+    get_user_visible_events_q,
+    require_authenticated_user,
+    require_event_access,
+    require_owner_or_staff,
+    user_can_view_event_rsvps,
+    user_is_community_member,
+)
 
 
 class Query(graphene.ObjectType):
@@ -347,22 +356,13 @@ class Query(graphene.ObjectType):
         return Hobby.objects.select_related('category').all()
 
     def resolve_my_profile(self, info):
-        """Fetch the currently authenticated user entity.
+        """Fetch the currently authenticated user entity."""
+        return require_authenticated_user(info)
 
-        Args:
-            info (graphene.ResolveInfo): Execution context containing request and user auth state.
-
-        Returns:
-            User | None: The Django User instance if authenticated; otherwise None.
-        """
-        user = info.context.user
-        if user and user.is_authenticated:
-            return user
-        return None
-
+    @login_required
     def resolve_all_users(self, info, radius_km=50.0, latitude=None, longitude=None, limit=None, offset=0):
         """Fetch users ordered by shared hobby affinity and geographic distance with pagination."""
-        user = info.context.user
+        user = require_authenticated_user(info)
         return calculate_user_recommendations(
             user=user,
             latitude=latitude,
@@ -372,9 +372,10 @@ class Query(graphene.ObjectType):
             offset=offset
         )
 
+    @login_required
     def resolve_get_recommended_users(self, info, radius_km=50.0, latitude=None, longitude=None, limit=None, offset=0):
         """Location-first recommendation resolver filtering by radius and ranking by affinity score with pagination."""
-        user = info.context.user
+        user = require_authenticated_user(info)
         return calculate_user_recommendations(
             user=user,
             latitude=latitude,
@@ -384,9 +385,10 @@ class Query(graphene.ObjectType):
             offset=offset
         )
 
+    @login_required
     def resolve_recommended_users(self, info, radius_km=50.0, latitude=None, longitude=None, limit=None, offset=0):
         """Alias for location-first user recommendations with pagination."""
-        user = info.context.user
+        user = require_authenticated_user(info)
         return calculate_user_recommendations(
             user=user,
             latitude=latitude,
@@ -440,13 +442,15 @@ class Query(graphene.ObjectType):
                     pass
             return None
 
+    @login_required
     def resolve_search_users(self, info, query, limit=50, offset=0):
         """Global search for user profiles across the entire database ignoring location, radius, and match affinity."""
+        require_authenticated_user(info)
         q = (query or '').strip()
         if not q:
             return User.objects.none()
 
-        user = info.context.user
+        user = get_request_user(info)
         qs = User.objects.filter(
             Q(username__icontains=q) |
             Q(first_name__icontains=q) |
@@ -498,9 +502,10 @@ class Query(graphene.ObjectType):
             qs = qs[:limit]
         return qs
 
+    @login_required
     def resolve_recommended_circles(self, info, radius_km=50.0, latitude=None, longitude=None, limit=None, offset=0):
         """Retrieve recommended circles/communities with limit/offset pagination."""
-        user = info.context.user
+        user = require_authenticated_user(info)
         results = calculate_circle_recommendations(
             user=user,
             latitude=latitude,
@@ -513,9 +518,10 @@ class Query(graphene.ObjectType):
             results = results[:limit]
         return results
 
+    @login_required
     def resolve_get_recommended_circles(self, info, radius_km=50.0, latitude=None, longitude=None, limit=None, offset=0):
         """Location-first recommendation resolver with limit/offset pagination."""
-        user = info.context.user
+        user = require_authenticated_user(info)
         results = calculate_circle_recommendations(
             user=user,
             latitude=latitude,
@@ -569,8 +575,20 @@ class Query(graphene.ObjectType):
             qs = qs[:limit]
         return qs
 
+    @login_required
     def resolve_community_members(self, info, community_id):
         """Retrieve all joined members of a specific circle with user and profile data."""
+        user = require_authenticated_user(info)
+        try:
+            community = Community.objects.get(id=community_id)
+        except Community.DoesNotExist:
+            return []
+
+        if not (user.is_staff or user_is_community_member(user, community)):
+            raise GraphQLError(
+                "Permission denied. You must be a member of this Circle to view its members."
+            )
+
         return (
             CommunityMembership.objects
             .filter(community_id=community_id)
@@ -617,28 +635,16 @@ class Query(graphene.ObjectType):
         Returns:
             django.db.models.QuerySet[Event]: Filtered and ranked event feed.
         """
-        # ── 1. User & Auth Resolution with Debug Logging ────────────────────
-        # Handle cases where context wraps a standard Django request or Graphene context
-        user = getattr(info.context, 'user', None)
-        if (user is None or not getattr(user, 'is_authenticated', False)) and hasattr(info.context, 'request'):
-            req_user = getattr(info.context.request, 'user', None)
-            if req_user is not None:
-                user = req_user
-
-        if not user or not user.is_authenticated:
-            print("🔴 BACKEND WARNING: Token received but user is still Anonymous. Check Middleware!")
-            return Event.objects.none()
-        else:
-            print(f"🟢 BACKEND SUCCESS: User recognized as {user.username}")
-
+        user = require_authenticated_user(info)
         now = timezone.now()
 
-        # ── 2. Base QuerySet: upcoming events only ───────────────────────────
+        # ── 2. Base QuerySet: upcoming events only & visibility filtering ───
         queryset = (
             Event.objects
             .select_related('community', 'creator')
             .prefetch_related('hobbies')
             .filter(scheduled_date__gte=now)
+            .filter(get_user_visible_events_q(user))
         )
 
         # ── 3. Exclude Own Events & Confirmed Attendance ─────────────────────
@@ -743,30 +749,11 @@ class Query(graphene.ObjectType):
         Returns:
             django.db.models.QuerySet[Event]: Filtered Event QuerySet.
         """
-        user = getattr(info.context, 'user', None)
-        if (user is None or not getattr(user, 'is_authenticated', False)) and hasattr(info.context, 'request'):
-            req_user = getattr(info.context.request, 'user', None)
-            if req_user is not None:
-                user = req_user
-
-        if not user or not user.is_authenticated:
-            print("🔴 BACKEND WARNING: Token received but user is still Anonymous. Check Middleware!")
-        else:
-            print(f"🟢 BACKEND SUCCESS: User recognized as {user.username}")
-
+        user = get_request_user(info)
         queryset = Event.objects.select_related('community', 'creator').prefetch_related('hobbies').all()
 
         # Strict Visibility & Community Access Control
-        if user and user.is_authenticated:
-            if not user.is_staff:
-                user_community_ids = CommunityMembership.objects.filter(user=user).values_list('community_id', flat=True)
-                queryset = queryset.filter(
-                    Q(visibility='public') |
-                    Q(creator=user) |
-                    Q(visibility__in=['community_only', 'community'], community_id__in=user_community_ids)
-                )
-        else:
-            queryset = queryset.filter(visibility='public')
+        queryset = queryset.filter(get_user_visible_events_q(user))
 
         # Filter by specific organizer/creator
         if creator_id is not None:
@@ -863,31 +850,30 @@ class Query(graphene.ObjectType):
         return queryset
 
     def resolve_event_by_id(self, info, id):
-        """Retrieve a single event by primary key ID.
-
-        Args:
-            info (graphene.ResolveInfo): Execution context.
-            id (int): Primary key ID of the event.
-
-        Returns:
-            Event | None: Event model instance if found; otherwise None.
-        """
+        """Retrieve a single event by primary key ID with visibility enforcement."""
         try:
-            return Event.objects.get(id=id)
+            event = Event.objects.select_related('community', 'creator').get(id=id)
         except Event.DoesNotExist:
             return None
 
+        require_event_access(info, event)
+        return event
+
+    @login_required
     def resolve_events_by_community(self, info, community_id):
-        """Retrieve all events hosted within a given community ID.
+        """Retrieve all events hosted within a given community ID."""
+        user = require_authenticated_user(info)
+        try:
+            community = Community.objects.get(id=community_id)
+        except Community.DoesNotExist:
+            return Event.objects.none()
 
-        Args:
-            info (graphene.ResolveInfo): Execution context.
-            community_id (int): Primary key ID of the community.
+        if not (user.is_staff or user_is_community_member(user, community)):
+            raise GraphQLError(
+                "Permission denied. You must be a member of this Circle to view its events."
+            )
 
-        Returns:
-            django.db.models.QuerySet[Event]: Events belonging to the community.
-        """
-        return Event.objects.filter(community_id=community_id)
+        return Event.objects.filter(community_id=community_id).select_related('community', 'creator')
 
     @login_required
     def resolve_all_tickets(self, info):
@@ -909,39 +895,26 @@ class Query(graphene.ObjectType):
 
     @login_required
     def resolve_ticket_by_id(self, info, id):
-        """Retrieve a single ticket by ID with ownership verification.
-
-        Args:
-            info (graphene.ResolveInfo): Execution context.
-            id (int): Primary key of the ticket.
-
-        Returns:
-            Ticket | None: The Ticket object if the caller is the owner or staff; otherwise None.
-        """
-        user = info.context.user
+        """Retrieve a single ticket by ID with ownership verification."""
+        user = require_authenticated_user(info)
         try:
             ticket = Ticket.objects.get(id=id)
-            if ticket.user == user or user.is_staff:
-                return ticket
-            return None
         except Ticket.DoesNotExist:
             return None
 
+        if ticket.user == user or user.is_staff:
+            return ticket
+
+        raise GraphQLError("Permission denied. You can only access your own tickets.")
+
     @login_required
     def resolve_tickets_by_user(self, info, user_id):
-        """Retrieve tickets for a target user ID with privacy enforcement.
-
-        Args:
-            info (graphene.ResolveInfo): Execution context.
-            user_id (int): Target user ID.
-
-        Returns:
-            django.db.models.QuerySet[Ticket]: Tickets if caller matches user_id or is staff; otherwise empty.
-        """
-        user = info.context.user
+        """Retrieve tickets for a target user ID with privacy enforcement."""
+        user = require_authenticated_user(info)
         if user.id == user_id or user.is_staff:
             return Ticket.objects.filter(user_id=user_id).select_related('user', 'event')
-        return Ticket.objects.none()
+
+        raise GraphQLError("Permission denied. You can only access your own tickets.")
 
     @login_required
     def resolve_all_participations(self, info):
@@ -960,39 +933,26 @@ class Query(graphene.ObjectType):
 
     @login_required
     def resolve_participation_by_id(self, info, id):
-        """Retrieve a single participation record by ID with ownership enforcement.
-
-        Args:
-            info (graphene.ResolveInfo): Execution context.
-            id (int): Primary key ID of the participation.
-
-        Returns:
-            Participation | None: Participation instance if caller is owner or staff; else None.
-        """
-        user = info.context.user
+        """Retrieve a single participation record by ID with ownership enforcement."""
+        user = require_authenticated_user(info)
         try:
             part = Participation.objects.get(id=id)
-            if part.user == user or user.is_staff:
-                return part
-            return None
         except Participation.DoesNotExist:
             return None
 
+        if part.user == user or user.is_staff:
+            return part
+
+        raise GraphQLError("Permission denied. You can only access your own participation records.")
+
     @login_required
     def resolve_participations_by_user(self, info, user_id):
-        """Retrieve participation records for a specific user ID.
-
-        Args:
-            info (graphene.ResolveInfo): Execution context.
-            user_id (int): Primary key ID of the target user.
-
-        Returns:
-            django.db.models.QuerySet[Participation]: Participations if caller matches user_id or is staff.
-        """
-        user = info.context.user
+        """Retrieve participation records for a specific user ID."""
+        user = require_authenticated_user(info)
         if user.id == user_id or user.is_staff:
             return Participation.objects.filter(user_id=user_id).select_related('user', 'event')
-        return Participation.objects.none()
+
+        raise GraphQLError("Permission denied. You can only access your own participation records.")
 
     # ── Feature 1: Invitations ──────────────────────────────────────────────────
     @login_required
@@ -1009,7 +969,6 @@ class Query(graphene.ObjectType):
         return InvitationCode.objects.filter(created_by=user).order_by('-created_at')
 
     # ── Feature 3: Friendships ──────────────────────────────────────────────────
-    @login_required
     @login_required
     def resolve_my_friends(self, info, limit=None, offset=0):
         """Retrieve confirmed friends for the authenticated user with pagination support."""
@@ -1065,8 +1024,21 @@ class Query(graphene.ObjectType):
     # ── Feature 4: Event RSVPs ──────────────────────────────────────────────────
     @login_required
     def resolve_event_rsvps(self, info, event_id):
-        """Retrieve all RSVP records for a specific event with user profiles."""
-        return EventRSVP.objects.filter(event_id=event_id).select_related('user', 'user__profile', 'event').order_by('-updated_at')
+        """Retrieve RSVP records for an event (creator, attendee, or community member only)."""
+        user = require_authenticated_user(info)
+        try:
+            event = Event.objects.select_related('community').get(id=event_id)
+        except Event.DoesNotExist:
+            return EventRSVP.objects.none()
+
+        if not user_can_view_event_rsvps(user, event):
+            raise GraphQLError(
+                "Permission denied. You do not have access to this event's RSVP list."
+            )
+
+        return EventRSVP.objects.filter(event_id=event_id).select_related(
+            'user', 'user__profile', 'event'
+        ).order_by('-updated_at')
 
     @login_required
     def resolve_my_rsvps(self, info):
@@ -1145,94 +1117,65 @@ class Query(graphene.ObjectType):
 
     @login_required
     def resolve_messages_by_match(self, info, match_id):
-        """Retrieve chat messages within a match thread.
-
-        Enforces privacy by ensuring the requester is one of the two participants.
-
-        Args:
-            info (graphene.ResolveInfo): Execution context.
-            match_id (int): Primary key ID of the Match thread.
-
-        Returns:
-            list[Message] | django.db.models.QuerySet[Message]: Messages in the thread, or empty list if unauthorized.
-        """
-        user = info.context.user
+        """Retrieve chat messages within a match thread (participants only)."""
+        user = require_authenticated_user(info)
         try:
             match = Match.objects.get(id=match_id)
-            # Authorize: ensure requester is a member of the matched pair
-            if user != match.user1 and user != match.user2:
-                return []
-            return Message.objects.filter(match_id=match_id).select_related('sender', 'match')
         except Match.DoesNotExist:
             return []
+
+        if user != match.user1 and user != match.user2:
+            raise GraphQLError("Permission denied. You are not a participant in this match.")
+
+        return Message.objects.filter(match_id=match_id).select_related('sender', 'match')
 
     # ── Feature 7: User Profile ─────────────────────────────────────────────────
     @login_required
     def resolve_user_profile_by_id(self, info, user_id):
-        """Retrieve extended UserProfile data for a target user ID.
+        """Retrieve extended UserProfile data with object-level access control."""
+        user = require_authenticated_user(info)
+        if user.id != user_id and not user.is_staff:
+            raise GraphQLError("Permission denied. You can only access your own extended profile data.")
 
-        Enforces access control: callers can only access their own profile unless they have staff status.
-
-        Args:
-            info (graphene.ResolveInfo): Execution context.
-            user_id (int): Primary key ID of the target user.
-
-        Returns:
-            UserProfile | None: The UserProfile instance if permitted; otherwise None.
-        """
-        user = info.context.user
-        if user.id == user_id or user.is_staff:
-            try:
-                return UserProfile.objects.get(user_id=user_id)
-            except UserProfile.DoesNotExist:
-                return None
-        return None
+        try:
+            return UserProfile.objects.get(user_id=user_id)
+        except UserProfile.DoesNotExist:
+            return None
 
     # ── Feature: Circle Group Chat ──────────────────────────────────────────────
+    @login_required
     def resolve_get_circle_messages(self, info, circle_id, limit=None, offset=0):
-        """Retrieve chat messages within a Circle group chat thread.
-
-        Enforces strict privacy: caller must be an authenticated confirmed member or creator.
-        Returns an empty list if unauthorized or not a member.
-
-        Args:
-            info (graphene.ResolveInfo): Execution context.
-            circle_id (int): Primary key ID of the Community/Circle.
-            limit (int, optional): Max messages to fetch.
-            offset (int, optional): Offset index.
-
-        Returns:
-            list[CircleMessage] | QuerySet: Messages in the circle chat thread.
-        """
-        user = info.context.user
-        if not user or not user.is_authenticated:
-            return []
+        """Retrieve chat messages within a Circle group chat thread (members only)."""
+        user = require_authenticated_user(info)
 
         circle_pk = int(circle_id) if str(circle_id).isdigit() else 0
         if not circle_pk:
-            return []
+            raise GraphQLError("Invalid Circle ID.")
 
         try:
             community = Community.objects.get(id=circle_pk)
         except Community.DoesNotExist:
             return []
 
-        # Strict security authorization: Must be confirmed member or creator
         is_member = (
-            CommunityMembership.objects.filter(user=user, community=community).exists()
-            or community.creator == user
+            user_is_community_member(user, community)
             or user.is_staff
         )
         if not is_member:
-            return []
+            raise GraphQLError(
+                "Permission denied. You must be a member of this Circle to view messages."
+            )
 
-        qs = CircleMessage.objects.filter(circle=community).select_related('sender', 'sender__profile').order_by('created_at')
+        qs = CircleMessage.objects.filter(circle=community).select_related(
+            'sender', 'sender__profile'
+        ).order_by('created_at')
         if offset:
             qs = qs[offset:]
         if limit:
             qs = qs[:limit]
         return qs
 
+    @login_required
     def resolve_circle_messages(self, info, circle_id, limit=None, offset=0):
         """Alias resolver for get_circle_messages."""
         return Query.resolve_get_circle_messages(self, info, circle_id, limit, offset)

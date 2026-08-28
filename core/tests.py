@@ -1,6 +1,6 @@
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.contrib.auth.models import User
-from core.models import UserProfile, HobbyCategory, Hobby, Match, Community, CommunityMembership, CircleMessage
+from core.models import UserProfile, HobbyCategory, Hobby, Match, Community, CommunityMembership, CircleMessage, Event, Ticket
 from core.utils import haversine_km, calculate_user_recommendations, calculate_circle_recommendations
 from havens.schema import schema
 
@@ -577,7 +577,7 @@ class CircleGroupChatTests(TestCase):
         self.assertEqual(messages[1]['content'], "Second message")
 
     def test_get_circle_messages_forbidden_for_non_member(self):
-        """A non-member receives an empty list when attempting to read private Circle chat."""
+        """A non-member is denied access when attempting to read Circle chat."""
         CircleMessage.objects.create(circle=self.circle, sender=self.creator, content="Private Circle discussion")
 
         ctx = self._get_context(self.outsider)
@@ -590,7 +590,322 @@ class CircleGroupChatTests(TestCase):
         }}
         """
         res = schema.execute(query, context_value=ctx)
+        self.assertIsNotNone(res.errors)
+        self.assertIn("Permission denied", str(res.errors[0].message))
+
+
+class GraphQLIntrospectionSecurityTests(TestCase):
+    INTROSPECTION_QUERY = """
+    {
+      __schema {
+        types {
+          name
+        }
+      }
+    }
+    """
+
+    @override_settings(DEBUG=True)
+    def test_introspection_allowed_when_debug_enabled(self):
+        response = self.client.post(
+            '/graphql/',
+            data={'query': self.INTROSPECTION_QUERY},
+            content_type='application/json',
+        )
+        payload = response.json()
+        messages = ' '.join(
+            error.get('message', '') for error in payload.get('errors', [])
+        ).lower()
+        self.assertNotIn('introspection has been disabled', messages)
+
+    @override_settings(DEBUG=False)
+    def test_introspection_blocked_in_production(self):
+        response = self.client.post(
+            '/graphql/',
+            data={'query': self.INTROSPECTION_QUERY},
+            content_type='application/json',
+        )
+        payload = response.json()
+        self.assertIn('errors', payload)
+        messages = ' '.join(
+            error.get('message', '') for error in payload['errors']
+        ).lower()
+        self.assertIn('introspection', messages)
+
+    @override_settings(DEBUG=False)
+    def test_normal_query_allowed_in_production(self):
+        response = self.client.post(
+            '/graphql/',
+            data={'query': '{ hello }'},
+            content_type='application/json',
+        )
+        payload = response.json()
+        self.assertEqual(payload['data']['hello'], 'Havens API v1')
+
+
+class GraphQLResolverAuthorizationTests(TestCase):
+    def setUp(self):
+        self.user_a = User.objects.create_user(username="auth_user_a", email="a@test.com", password="password123")
+        self.user_b = User.objects.create_user(username="auth_user_b", email="b@test.com", password="password123")
+        UserProfile.objects.create(user=self.user_a)
+        UserProfile.objects.create(user=self.user_b)
+
+        self.community = Community.objects.create(
+            name="Private Circle",
+            subdomain="private-circle-auth",
+            creator=self.user_a,
+        )
+        CommunityMembership.objects.create(user=self.user_a, community=self.community)
+
+        self.community_event = Event.objects.create(
+            title="Members Only Meetup",
+            description="Community-only event",
+            latitude=4.6,
+            longitude=-74.0,
+            creator=self.user_a,
+            community=self.community,
+            visibility="community_only",
+        )
+        self.public_event = Event.objects.create(
+            title="Public Meetup",
+            description="Open event",
+            latitude=4.6,
+            longitude=-74.0,
+            creator=self.user_a,
+            visibility="public",
+        )
+
+    def _context(self, user):
+        class MockContext:
+            def __init__(self, u):
+                self.user = u
+                self.is_authenticated = bool(u)
+        return MockContext(user)
+
+    def _anonymous_context(self):
+        from django.contrib.auth.models import AnonymousUser
+        return self._context(AnonymousUser())
+
+    def test_my_profile_requires_authentication(self):
+        res = schema.execute("query { myProfile { id username } }", context_value=self._anonymous_context())
+        self.assertIsNotNone(res.errors)
+        self.assertIn("Authentication required", str(res.errors[0].message))
+
+    def test_search_users_requires_authentication(self):
+        res = schema.execute(
+            'query { searchUsers(query: "auth") { id username } }',
+            context_value=self._anonymous_context(),
+        )
+        self.assertIsNotNone(res.errors)
+        self.assertIn("Authentication required", str(res.errors[0].message))
+
+    def test_community_only_event_hidden_from_non_member(self):
+        res = schema.execute(
+            f'query {{ eventById(id: {self.community_event.id}) {{ id title }} }}',
+            context_value=self._context(self.user_b),
+        )
+        self.assertIsNotNone(res.errors)
+        self.assertIn("Permission denied", str(res.errors[0].message))
+
+    def test_public_event_visible_without_auth(self):
+        res = schema.execute(
+            f'query {{ eventById(id: {self.public_event.id}) {{ id title }} }}',
+            context_value=self._anonymous_context(),
+        )
         self.assertIsNone(res.errors)
-        self.assertEqual(res.data['getCircleMessages'], [])
+        self.assertEqual(res.data['eventById']['title'], "Public Meetup")
+
+    def test_ticket_access_denied_for_other_user(self):
+        ticket = Ticket.objects.create(user=self.user_a, event=self.public_event, status='confirmed')
+        res = schema.execute(
+            f'query {{ ticketById(id: {ticket.id}) {{ id }} }}',
+            context_value=self._context(self.user_b),
+        )
+        self.assertIsNotNone(res.errors)
+        self.assertIn("Permission denied", str(res.errors[0].message))
+
+    def test_community_members_requires_membership(self):
+        res = schema.execute(
+            f'query {{ communityMembers(communityId: {self.community.id}) {{ id }} }}',
+            context_value=self._context(self.user_b),
+        )
+        self.assertIsNotNone(res.errors)
+        self.assertIn("Permission denied", str(res.errors[0].message))
+
+    def test_friends_only_event_visibility(self):
+        from core.models import Event, Friendship
+        friends_event = Event.objects.create(
+            title="Friends Only Meetup",
+            description="Exclusive to friends",
+            latitude=4.6,
+            longitude=-74.0,
+            creator=self.user_a,
+            visibility="friends_only",
+        )
+        # Before friendship: user_b cannot access friends_only event
+        res_before = schema.execute(
+            f'query {{ eventById(id: {friends_event.id}) {{ id title }} }}',
+            context_value=self._context(self.user_b),
+        )
+        self.assertIsNotNone(res_before.errors)
+
+        res_all_before = schema.execute(
+            'query { allEvents { id title } }',
+            context_value=self._context(self.user_b),
+        )
+        self.assertIsNone(res_all_before.errors)
+        titles_before = [e['title'] for e in res_all_before.data['allEvents']]
+        self.assertNotIn("Friends Only Meetup", titles_before)
+
+        # Establish accepted friendship
+        Friendship.objects.create(from_user=self.user_a, to_user=self.user_b, status='accepted')
+
+        # After friendship: user_b can access friends_only event
+        res_after = schema.execute(
+            f'query {{ eventById(id: {friends_event.id}) {{ id title }} }}',
+            context_value=self._context(self.user_b),
+        )
+        self.assertIsNone(res_after.errors)
+        self.assertEqual(res_after.data['eventById']['title'], "Friends Only Meetup")
+
+    def test_nested_community_memberships_restricted_to_members(self):
+        query = f'query {{ communityById(id: {self.community.id}) {{ id memberships {{ id }} }} }}'
+        res_non_member = schema.execute(query, context_value=self._context(self.user_b))
+        self.assertIsNone(res_non_member.errors)
+        self.assertEqual(res_non_member.data['communityById']['memberships'], [])
+
+        res_member = schema.execute(query, context_value=self._context(self.user_a))
+        self.assertIsNone(res_member.errors)
+        self.assertEqual(len(res_member.data['communityById']['memberships']), 1)
+
+    def test_nested_event_rsvps_and_attendees_restricted(self):
+        query = f'query {{ eventById(id: {self.community_event.id}) {{ id attendees {{ id }} rsvps {{ id }} }} }}'
+        res = schema.execute(query, context_value=self._context(self.user_b))
+        # user_b lacks event access so top level eventById throws permission error
+        self.assertIsNotNone(res.errors)
+
+    def test_date_of_birth_pii_protection(self):
+        import datetime
+        self.user_a.profile.date_of_birth = datetime.date(1995, 5, 20)
+        self.user_a.profile.save()
+
+        query = f'query {{ userById(id: {self.user_a.id}) {{ id dateOfBirth }} }}'
+        res_other = schema.execute(query, context_value=self._context(self.user_b))
+        self.assertIsNone(res_other.errors)
+        self.assertIsNone(res_other.data['userById']['dateOfBirth'])
+
+        res_self = schema.execute(query, context_value=self._context(self.user_a))
+        self.assertIsNone(res_self.errors)
+        self.assertEqual(res_self.data['userById']['dateOfBirth'], "1995-05-20")
+
+
+class GraphQLQueryDepthTests(TestCase):
+    def _deep_query(self, levels):
+        """Build a query that nests `creator` selections `levels` deep."""
+        nested = " ".join(["creator {"] * levels) + "username" + " }" * levels
+        return f"{{ allCommunities {{ {nested} }} }}"
+
+    @override_settings(DEBUG=True)
+    def test_shallow_query_allowed(self):
+        response = self.client.post(
+            '/graphql/',
+            data={'query': '{ hello }'},
+            content_type='application/json',
+        )
+        payload = response.json()
+        self.assertNotIn('errors', payload)
+        self.assertEqual(payload['data']['hello'], 'Havens API v1')
+
+    @override_settings(DEBUG=True, GRAPHQL_MAX_QUERY_DEPTH=5)
+    def test_query_within_depth_limit_allowed(self):
+        response = self.client.post(
+            '/graphql/',
+            data={'query': self._deep_query(4)},
+            content_type='application/json',
+        )
+        payload = response.json()
+        messages = ' '.join(
+            error.get('message', '') for error in payload.get('errors', [])
+        ).lower()
+        self.assertNotIn('maximum operation depth', messages)
+
+    @override_settings(DEBUG=True, GRAPHQL_MAX_QUERY_DEPTH=5)
+    def test_query_exceeding_depth_limit_blocked(self):
+        response = self.client.post(
+            '/graphql/',
+            data={'query': self._deep_query(6)},
+            content_type='application/json',
+        )
+        payload = response.json()
+        self.assertIn('errors', payload)
+        messages = ' '.join(
+            error.get('message', '') for error in payload['errors']
+        ).lower()
+        self.assertIn('maximum operation depth', messages)
+
+
+class GraphQLRateLimitAndTimeoutTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import User
+        self.user_a = User.objects.create_user(username="timeout_user", email="timeout@test.com", password="password123")
+
+    @override_settings(GRAPHQL_EXECUTION_TIMEOUT=0.1)
+    def test_query_execution_timeout(self):
+        """Queries taking longer than GRAPHQL_EXECUTION_TIMEOUT return a timeout error."""
+        import time
+        from unittest.mock import patch
+
+        self.client.force_login(self.user_a)
+        def slow_get_user(info):
+            time.sleep(0.3)
+            return self.user_a
+
+        with patch('core.permissions.get_request_user', slow_get_user):
+            response = self.client.post(
+                '/graphql/',
+                data={'query': '{ searchUsers(query: "test") { id } }'},
+                content_type='application/json',
+            )
+            payload = response.json()
+            self.assertIn('errors', payload)
+            messages = ' '.join(
+                error.get('message', '') for error in payload['errors']
+            ).lower()
+            self.assertIn('timed out', messages)
+
+    def test_rate_limit_middleware_blocks_excessive_requests(self):
+        """Excessive requests trigger HTTP 429 RATE_LIMIT_EXCEEDED response."""
+        from django.core.cache import cache
+        cache.clear()
+
+        payload_data = {'query': 'mutation { tokenAuth(username: "testuser", password: "password") { token } }'}
+        for i in range(10):
+            res = self.client.post(
+                '/graphql/',
+                data=payload_data,
+                content_type='application/json',
+                HTTP_X_FORWARDED_FOR=f"192.168.1.{i+1}"
+            )
+
+        # Send 11th request from the same IP to hit the limit
+        target_ip = "192.168.1.1"
+        for _ in range(10):
+            self.client.post(
+                '/graphql/',
+                data=payload_data,
+                content_type='application/json',
+                HTTP_X_FORWARDED_FOR=target_ip
+            )
+
+        res_limited = self.client.post(
+            '/graphql/',
+            data=payload_data,
+            content_type='application/json',
+            HTTP_X_FORWARDED_FOR=target_ip
+        )
+        self.assertEqual(res_limited.status_code, 429)
+        payload = res_limited.json()
+        self.assertEqual(payload['errors'][0]['code'], 'RATE_LIMIT_EXCEEDED')
+        cache.clear()
 
 

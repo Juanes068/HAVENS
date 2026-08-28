@@ -6,6 +6,7 @@ from .models import (
     CommunityMembership, InvitationCode, EventRSVP, Friendship,
     Match, Message, CircleMessage, HobbyCategory, Hobby,
 )
+from .permissions import user_is_community_member, user_can_view_event_rsvps
 
 
 class HobbyType(DjangoObjectType):
@@ -104,11 +105,14 @@ class UserType(DjangoObjectType):
             return ""
 
     def resolve_dateOfBirth(self, info):
-        try:
-            profile = getattr(self, 'profile', None) or UserProfile.objects.get(user=self)
-            return profile.date_of_birth
-        except UserProfile.DoesNotExist:
-            return None
+        user = info.context.user
+        if user and user.is_authenticated and (user.id == self.id or user.is_staff):
+            try:
+                profile = getattr(self, 'profile', None) or UserProfile.objects.get(user=self)
+                return profile.date_of_birth
+            except UserProfile.DoesNotExist:
+                return None
+        return None
 
     def resolve_age(self, info):
         try:
@@ -253,6 +257,9 @@ class CommunityType(DjangoObjectType):
         return self.memberships.count()
 
     def resolve_memberships(self, info):
+        user = info.context.user
+        if not (user and user.is_authenticated and (user.is_staff or user_is_community_member(user, self))):
+            return CommunityMembership.objects.none()
         return self.memberships.select_related('user', 'user__profile').prefetch_related('user__profile__hobbies').order_by('-joined_at')
 
     def resolve_imageUrl(self, info):
@@ -352,10 +359,16 @@ class EventType(DjangoObjectType):
         return self.rsvps.filter(response='going').count()
 
     def resolve_attendees(self, info):
+        user = info.context.user
+        if not user_can_view_event_rsvps(user, self):
+            return User.objects.none()
         going_user_ids = self.rsvps.filter(response='going').values_list('user_id', flat=True)
         return User.objects.filter(id__in=going_user_ids).select_related('profile')
 
     def resolve_rsvps(self, info):
+        user = info.context.user
+        if not user_can_view_event_rsvps(user, self):
+            return EventRSVP.objects.none()
         return self.rsvps.select_related('user', 'user__profile').all()
 
     def resolve_hobbies(self, info):

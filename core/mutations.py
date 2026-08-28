@@ -32,6 +32,7 @@ from .models import (
     Match, Message, CircleMessage, HobbyCategory, Hobby,
 )
 from .decorators import login_required
+from .permissions import require_event_access
 import logging
 
 logger = logging.getLogger(__name__)
@@ -328,7 +329,8 @@ class SwipeEvent(graphene.Mutation):
         """
         try:
             user = info.context.user
-            event = Event.objects.get(id=event_id)
+            event = Event.objects.select_related('community', 'creator').get(id=event_id)
+            require_event_access(info, event)
 
             if response not in ('going', 'maybe', 'pass'):
                 return cls(rsvp=None, success=False, message="Invalid response. Use 'going', 'maybe', or 'pass'")
