@@ -40,3 +40,8 @@ pnpm-debug.log*
 
 # Docker
 *.pid
+
+# Data and import files
+*.xlsx
+*.xls
+*.csv
