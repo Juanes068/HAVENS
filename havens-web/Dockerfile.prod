@@ -11,7 +11,7 @@ ENV VITE_GOOGLE_MAPS_API_KEY=$VITE_GOOGLE_MAPS_API_KEY
 
 # Install dependencies (cached layer)
 COPY package.json package-lock.json* yarn.lock* ./
-RUN npm install --frozen-lockfile || npm install
+RUN npm install --legacy-peer-deps
 
 # Copy source and build
 COPY . .
