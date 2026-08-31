@@ -109,32 +109,26 @@ Havens is an application where members of trusted communities can join a tailore
 ### 2. Database Schema Design
 
 **Schema Diagram:** https://dbdiagram.io/d/6a234bbed2fbd72c4d63518a
+*(Full DBML source code available at [`schema.dbml`](./schema.dbml))*
 
-- **Tables:**
-  1. `community`
-  2. `user`
-  3. `tag`
-  4. `user_tag`
-  5. `match`
-  6. `event`
-  7. `event_attendee`
-  8. `message`
-  9. `subscription`
-  10. `payment`
+- **Core Tables:**
+  1. `communities` — White-label branding, customized color palettes, and localized circles.
+  2. `users` — Django authentication core (`auth_user`) with JWT authorization.
+  3. `user_profiles` — OneToOne extension with city coordinates (Haversine proximity), trust score, points, and invite codes.
+  4. `friendships` — Direct member connections with `pending`/`accepted`/`declined` state machines.
+  5. `hobby_categories` & `hobbies` — Interest and passion taxonomies for smart affinity scoring.
+  6. `user_hobbies` — Many-to-Many mapping between user profiles and hobbies.
+  7. `matches` — Curated mutual introductions ranked by hobby overlap.
+  8. `messages` — Object-level authorized messaging for matches and circle rooms.
+  9. `events` — Geolocation-bounded gathering discovery with age ranges, capacity limits, and UTC wall-clock scheduling.
+  10. `event_swipes` — Discovery feed swipe interactions (`like`, `pass`, `going`, `maybe`).
+  11. `event_rsvps` & `tickets` — Confirmed guest lists, attendee facepiles, and QR access tickets.
+  12. `subscriptions` & `payments` — Subscription tiers and payment transaction logs.
 
-- **Relationships:**
-  - A community can host many users, matches, and events.
-  - A user belongs to one specific community.
-  - A user can have many tags (interests and goals), and a tag can be shared by many users.
-  - A match connects exactly two users for a potential introduction.
-  - A user can organize many events and attend many events.
-  - An event can have many attendees (users) with their own RSVP status.
-  - A user can send and receive many messages to and from other users.
-  - A user can have a subscription, which in turn can have many linked payments.
-
-- **Entity-Relationship Diagram (ERD):**
-
-> ![High-Level Architecture Diagrams](Readimages/Untitled.png)
+- **Key Architectural Relationships:**
+  - **Location Boundary**: User profiles maintain coordinate centroids; discovery queries apply spherical Haversine filtering before affinity ranking.
+  - **Timezone Resilience**: Event schedules are stored as canonical UTC wall-clock timestamps to eliminate client browser drift.
+  - **Gamification**: Event attendances and profile completions award points and dynamically compute `trust_score`.
 
 ---
 
