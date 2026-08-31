@@ -1,257 +1,306 @@
+# havens
 
-## **HAVENS (MVP)**
-### *White-Label Community Matching Platform*
+havens is a community-first social platform designed to bridge the gap between digital interaction and real-world connection. Instead of keeping people glued to endless feeds, the platform helps trusted circles, local groups, and friends discover meaningful activities, coordinate plans, and organize spontaneous encounters in their area.
 
----
-
-## **Week 1**
-
-### 1. Project Title & Vision
-
-This project aims to develop a **white-label community-matching platform** that helps existing communities turn members into real relationships. It offers a private, branded space where people can connect, match, and meet, while providing community leaders with lightweight tools to oversee engagement.
+The product follows a minimalist aesthetic with earthy tones—centered around our signature forest green (`#2D5A3D`)—and maintains a clean, intentional lowercase identity throughout the interface.
 
 ---
 
-### 2. Problem Statement
+## Architecture and Technology Stack
 
-The application will allow **members** to:
-
-- Join a white-label community instance.
-- Register and log in flexibly via email and password or Google Sign-In.
-- Complete an onboarding profile with interests, goals, and preferences.
-- Discover system-recommended matches or small group suggestions.
-- Accept curated introductions or engage with a suggested connection.
-- Coordinate a real conversation, meetup, or group interaction using simple RSVP mechanics.
-- Manage their payments and subscriptions securely.
-
-**Administrators** will be able to:
-
-- Access a basic admin view for managing members and seeing high-level activity.
-- Review simple metrics like signups, profiles completed, matches made, and introductions accepted.
-- Update the white-label visual identity of their space.
-
----
-
-### 3. Brief Overview of the Application's Functionality
-
-Havens is an application where members of trusted communities can join a tailored space, complete a meaningful profile, receive curated matches, and seamlessly coordinate in-person meetups. This supports real-world connection through a branded Havens experience.
-
----
-
-### 4. Technology Stack
-
-- **Frontend:**
-  1. **React Native** — For building a flexible, cross-platform mobile interface.
-  2. **Dynamic Styling** — To support soft, earthy colors and white-label branding per community.
-
-- **Backend:**
-  1. **Django (Python)** — Core framework for processing the matching logic, sessions, and GraphQL API endpoints.
-  2. **Graphene-Django** — For building and serving the GraphQL API.
-
-- **Authentication & Security:**
-  1. **JWT (JSON Web Tokens)** — Primary system for secure authentication, session creation, and route protection.
-  2. **Google Sign-In API** — Optional integration for one-click access.
-  3. **Celery & Redis** — For handling asynchronous background tasks (e.g., email notifications).
-
-- **Database:**
-  1. **MySQL** — Relational database engine for the persistence of profiles, events, and metrics.
-  2. **Django ORM** — To easily map and query data from the backend.
-
-- **Extras & Third-Party Integrations:**
-  1. **Email Notifications** — Service via SendGrid or Django Core Mail to alert users about new matches, RSVP confirmations, and event reminders.
-  2. **Stripe / PayPal API** — To process payments and manage the subscription model.
-  3. **Google Maps API** — To display and share physical meetup locations.
-  4. **Google Calendar API** — To automatically schedule confirmed meetups on members' calendars.
-
-- **Infrastructure & Version Control:**
-  1. **Docker** — For local containerized development (Django, MySQL, Redis, Celery).
-  2. **Hosting** — Hostinger for backend and database deployment.
-  3. **Version Control** — GitHub for version control, collaboration, and pull requests.
-
----
-
-### 5. Core Routing (Frontend)
-
-| Route | Description |
-|---|---|
-| `/` | Home — Dynamic loading of the white-label subdomain |
-| `/login` | Member login and account creation (JWT or Google) |
-| `/onboarding` | Profile setup, tag selection, and goals |
-| `/discovery` | Dashboard to view recommended members and groups |
-| `/meetups` | Area to manage invitations, RSVP, and view locations |
-| `/messages` | Internal chat for members who have accepted a match |
-| `/subscription` | Payment configuration and plan status |
-| `/admin` | Private community management view for administrators |
-
----
-
-## **Week 2**
-
-### 1. High-Level Design
-
-#### Color Palette & UI Mockups
-
-> UI Interface & Palette Design:
-> https://www.figma.com/make/F6Iy4uO1gYVmJ8I8L9kzYK/Color-Palette-Design?t=i1yAyqlJ6oFTTiNp-1&preview-route=%2Ffeatures
-
-#### High-Level Architecture Diagrams
-
-> ![DiagramHigh-Level Architecture Diagramsa](Readimages/mermaid-diagram-1780611765405.png)
-> ![High-Level Architecture Diagrams](Readimages/mermaid-diagram-1780611732535.png)
-
-#### User and Administrator Flows
-
-- **Admin Flow:** https://mermaid.ai/d/2e5f4c73-8a86-40b4-bd0e-9b6cc6604948
-- **User Flow:** https://mermaid.ai/d/8055569a-b5f7-4642-b106-924fbf757f1e
-
----
-
-### 2. Database Schema Design
-
-**Schema Diagram:** https://dbdiagram.io/d/6a234bbed2fbd72c4d63518a
-*(Full DBML source code available at [`schema.dbml`](./schema.dbml))*
-
-- **Core Tables:**
-  1. `communities` — White-label branding, customized color palettes, and localized circles.
-  2. `users` — Django authentication core (`auth_user`) with JWT authorization.
-  3. `user_profiles` — OneToOne extension with city coordinates (Haversine proximity), trust score, points, and invite codes.
-  4. `friendships` — Direct member connections with `pending`/`accepted`/`declined` state machines.
-  5. `hobby_categories` & `hobbies` — Interest and passion taxonomies for smart affinity scoring.
-  6. `user_hobbies` — Many-to-Many mapping between user profiles and hobbies.
-  7. `matches` — Curated mutual introductions ranked by hobby overlap.
-  8. `messages` — Object-level authorized messaging for matches and circle rooms.
-  9. `events` — Geolocation-bounded gathering discovery with age ranges, capacity limits, and UTC wall-clock scheduling.
-  10. `event_swipes` — Discovery feed swipe interactions (`like`, `pass`, `going`, `maybe`).
-  11. `event_rsvps` & `tickets` — Confirmed guest lists, attendee facepiles, and QR access tickets.
-  12. `subscriptions` & `payments` — Subscription tiers and payment transaction logs.
-
-- **Key Architectural Relationships:**
-  - **Location Boundary**: User profiles maintain coordinate centroids; discovery queries apply spherical Haversine filtering before affinity ranking.
-  - **Timezone Resilience**: Event schedules are stored as canonical UTC wall-clock timestamps to eliminate client browser drift.
-  - **Gamification**: Event attendances and profile completions award points and dynamically compute `trust_score`.
-
----
-
-### 3. API Architecture, Request Formats, and Authorization (GraphQL)
-
-The Havens API marks a paradigm shift from traditional REST architectures by utilizing **GraphQL**. This allows the React Native frontend to fetch exact data structures, avoiding over-fetching and under-fetching.
-
-- **Single Endpoint:** Every request is routed through `POST /graphql/`.
-- **Operations:** Uses Queries (for READ operations) and Mutations (for CREATE, UPDATE, DELETE).
-
-#### Authorization
-
-- Uses **JWT (JSON Web Tokens)** for protected queries and mutations.
-- Required header for authenticated operations:
+havens is built as a modular, containerized application designed for high performance, geospatial accuracy, and developer velocity.
 
 ```
-Authorization: Bearer <your_token_here>
+                   +---------------------------------------+
+                   |           React 18 + Vite             |
+                   |      Tailwind CSS + Apollo Client     |
+                   |       (Node 20 Alpine Container)      |
+                   +-------------------+-------------------+
+                                       |
+                              GraphQL / JSON (HTTP)
+                                       |
+                   +-------------------v-------------------+
+                   |         Django 4.2 + Graphene         |
+                   |         (Python 3.11 Container)       |
+                   |      havens/schema -> core/schema     |
+                   +---------+-------------------+---------+
+                             |                   |
+            +----------------v---+           +---v----------------+
+            |    MySQL 8.0 DB    |           |   Redis 7 Alpine   |
+            | (Geospatial / ORM) |           |  (Cache & Limits)  |
+            +--------------------+           +---+----------------+
+                                                 |
+                                             Tasks queue
+                                                 |
+                                             +---v----------------+
+                                             |   Celery Worker    |
+                                             | (Async Dispatcher) |
+                                             +---+----------------+
+                                                 |
+                                 +---------------+---------------+
+                                 |                               |
+                         +-------v-------+               +-------v-------+
+                         |  Resend Mail  |               |  Cloudinary   |
+                         | (Transactional|               | (Media CDN)   |
+                         +---------------+               +---------------+
 ```
 
-#### CRUD Operations Map
+### Containerized Environment
 
-- **USER & PROFILE**
-  - CREATE (Mutation): Register a new user.
-  - READ (Query): View own profile, bio, interests, and tags.
-  - UPDATE (Mutation): Edit bio, connection preferences, and profile picture.
-  - DELETE (Mutation): Delete account and credentials.
+The entire stack runs in isolated Docker containers orchestrated via Docker Compose:
 
-- **COMMUNITY**
-  - READ (Query): Fetch visual branding (logo, colors) on app launch.
-  - UPDATE (Mutation): Admin updates design/name.
-  - READ (Query): Admin views metrics (signups, matches).
+- **Frontend Container**: Node 20 Alpine running Vite with polling watchers enabled (`CHOKIDAR_USEPOLLING=true`) to ensure seamless Hot Module Replacement (HMR) during Windows and cross-platform development.
+- **Backend Container**: Python with Django 4.2, handling API requests, business logic, authentication, and database migrations.
+- **Database Container**: MySQL 8.0 running on an internal Docker network, exposed locally on port `3307` to prevent collisions with existing system databases.
+- **Cache & Message Broker**: Redis 7 Alpine managing rate limits, query caches, and task queues.
+- **Background Worker**: Celery worker instance processing asynchronous jobs such as email dispatches and notification pipelines.
 
-- **MATCHES**
-  - READ (Query): View curated list of suggested compatible profiles.
-  - UPDATE (Mutation): Accept/Decline introduction.
-  - READ (Query): Load history of accepted connections.
+### Frontend
 
-- **EVENTS**
-  - CREATE (Mutation): Create a small group gathering.
-  - READ (Query): View available events and locations.
-  - UPDATE (Mutation): Confirm attendance (RSVP).
-  - DELETE (Mutation): Cancel RSVP.
+- **React 18 & Vite**: Fast build times, modern JSX rendering, and instant dev server startup.
+- **Apollo Client 3**: Declarative data fetching, normalized client-side caching, and centralized JWT header injection.
+- **Tailwind CSS**: Utility-first styling framework engineered for fluid responsiveness across mobile devices, tablets, and desktop displays.
+- **Lucide Icons & Google Maps**: Clean iconography combined with `@react-google-maps/api` for smooth visual mapping.
 
-- **PAYMENTS**
-  - CREATE (Mutation): Generate Stripe checkout session.
-  - READ (Query): Retrieve subscription status.
+### Backend
 
-#### GraphQL Operations Table
+- **Django & Graphene-Django**: A structured GraphQL API built on a layered architecture:
+  - `havens/schema.py`: Acts as the root schema router.
+  - `core/schema.py`: Aggregates domain-specific queries, mutations, and types.
+  - `core/queries.py` and `core/mutations.py`: House isolated business logic, authorization checks, and payload resolvers.
+- **MySQL & Django ORM**: Relational persistence layer optimized with compound indexes and specialized queries.
+- **Cloudinary Storage**: Direct client-to-cloud media uploading utilizing backend-generated SHA signatures, eliminating server bandwidth bottlenecks for avatar and event image processing.
 
-| Entity | Type | Operation Name | Description | Auth Required |
-|---|---|---|---|---|
-| Auth | Mutation | `createUser` | Register a new member to the platform | No |
-| Auth | Mutation | `tokenAuth` | Login to receive the JWT access token | No |
-| Profile | Query | `myProfile` | Fetch user info, bio, and associated tags | Yes |
-| Profile | Mutation | `updateProfile` | Modify personal info and preferences | Yes |
-| Community | Query | `communityBranding` | Fetch instance colors, logo, and title | No |
-| Matches | Query | `suggestedMatches` | List compatible profiles based on the algorithm | Yes |
-| Matches | Mutation | `acceptMatch` | Confirm interest in a suggested profile | Yes |
-| Events | Query | `upcomingMeetups` | List available small group gatherings | Yes |
-| Events | Mutation | `rsvpEvent` | Confirm or cancel attendance to a meetup | Yes |
-| Payments | Mutation | `createCheckout` | Initialize Stripe payment flow | Yes |
+### Supporting Services
 
-#### Sample GraphQL Requests
-
-**Sample Query — Get User Profile:**
-```graphql
-query {
-  myProfile {
-    id
-    username
-    bio
-    interests {
-      name
-    }
-  }
-}
-```
-
-**Sample Mutation — RSVP to Event:**
-```graphql
-mutation {
-  rsvpEvent(eventId: 15, status: "ACCEPTED") {
-    success
-    message
-    event {
-      title
-      currentAttendees
-    }
-  }
-}
-```
+- **Redis**: Low-latency cache store and distributed rate-limiting backend.
+- **Celery**: Background task runner executing long-running I/O operations without blocking the HTTP request-response cycle.
+- **Resend**: Transactional email provider for welcome emails, invitation codes, and system notifications.
+- **Google Maps Platform**: Geocoding API and Places API (New) for location autocomplete, address resolution, and pin placement.
 
 ---
 
-## **Week 3 — Development Progress: Backend**
+## Key Modules and Features
 
-### Infrastructure & Docker Setup
+### 1. Authentication and Onboarding
 
-- Initialized the Docker environment using a custom `docker-compose.yml` to orchestrate four containers: `web` (Django), `db` (MySQL), `redis` (Broker), and `celery` (Asynchronous worker).
-- Configured `requirements.txt` incorporating dependencies including Django 4.2, `mysqlclient`, `graphene-django`, `celery`, `redis`, and `python-dotenv`.
-- Established environment variables (`.env`) to securely map the database credentials across containers.
+- **Gatekeeper Flow**: Flexible onboarding with step-by-step profile configuration.
+- **Age Validation**: Strict birthdate checks enforcing a minimum age requirement of 14 years before profile creation.
+- **Profile Customization**: Biography authoring, city selection, and secure direct-to-Cloudinary photo uploads.
+- **Taxonomic Hobby Engine**: Multi-tier interest selector organizing hobbies into primary and secondary categories for granular affinity scoring.
 
-### Database Initialization & Django Setup
+### 2. Geolocation Engine
 
-- Successfully initialized the MySQL database container on port `3306` (mapped to `3307` locally to avoid system conflicts).
-- Resolved Docker caching issues using container wipes (`docker compose down -v`) to synchronize secure root passwords.
-- Executed initial `python manage.py migrate` to structure the core Django administrative and session tables.
-- Created the primary Superuser to gain access to the Django Admin Panel.
-- Initialized the primary application module named `core` and registered it in `settings.py`.
+- **Haversine Distance Filtering**: Proximity queries evaluate the spherical Haversine formula directly in SQL at the database layer:
+  $$\text{distance} = 2r \arcsin\left(\sqrt{\sin^2\left(\frac{\Delta \text{lat}}{2}\right) + \cos(\text{lat}_1)\cos(\text{lat}_2)\sin^2\left(\frac{\Delta \text{lon}}{2}\right)}\right)$$
+- **Zero In-Memory Overhead**: Distance calculations are executed during database index scans, allowing strict radial filtering (e.g., within 5 km, 15 km, or 50 km) without loading unnecessary records into Python memory.
 
-### GraphQL Integration
+### 3. Discovery and Interactive Maps
 
-- Installed and configured `graphene-django` in the project settings.
-- Defined the single API endpoint `path('graphql/', GraphQLView.as_view(graphiql=True))` in the main `urls.py`.
-- Created the foundational `schema.py` routing in the `core` app and linked it to the master schema.
-- Successfully tested the architecture using Postman with a "Hello World" root query, returning a `200 OK` response with JSON data, confirming the container network and GraphQL endpoint are fully operational.
+- **Dual Discovery View**: Seamless switching between an interactive map with customized pins and an interactive card feed.
+- **Human-Readable Addresses**: Integration with Google Geocoding converts raw coordinate pairs into clean, formatted street addresses.
+- **Temporal Garbage Filtering**: Query resolvers automatically filter out expired gatherings, ensuring users only see active or upcoming events.
+
+### 4. Social Hub and Circles
+
+- **Connection Lifecycle**: Asynchronous relationship states (`pending`, `accepted`, `declined`) with bidirectional status updates.
+- **Affinity Scoring**: Algorithm computes overlap between member hobby taxonomies to highlight shared interests and potential compatibility.
+- **Flexible Circles**: Users can create location-based local hubs or virtual circles that operate independently of geographical constraints.
+- **Paginated Directories**: Cursor and offset-based pagination to maintain sub-second response times across large directories.
+
+### 5. Calendar and Plan Management
+
+- **Personal Agenda**: Centralized view of all confirmed and pending events.
+- **RSVP States**: Multi-state attendance tracking (`Going`, `Maybe`) with live attendee counters.
+- **Event Sharing & Ownership**: Direct plan sharing capabilities alongside strict creator permissions for updating details or safely canceling gatherings.
 
 ---
 
-## **References**
+## Cybersecurity and System Robustness
 
-*To be completed.*
+```
+ Client Request
+       |
+       v
++-------------------------------------------------------------+
+| Nginx / Reverse Proxy                                       |
+| - Rate Limiting & SSL Termination                           |
++------------------------------+------------------------------+
+                               |
+                               v
++-------------------------------------------------------------+
+| Django Security Layer                                       |
+| - CORS Policy & Allowed Hosts validation                    |
+| - Redis-backed Rate Limiter (IP & User buckets)             |
++------------------------------+------------------------------+
+                               |
+                               v
++-------------------------------------------------------------+
+| GraphQL Security Inspection                                 |
+| - AST Query Depth Limiter (rejects deeply nested queries)   |
+| - Introspection Disabled in Production                      |
+| - JWT Signature & Expiration Verification                   |
++------------------------------+------------------------------+
+                               |
+                               v
++-------------------------------------------------------------+
+| Resolver Authorization & Permissions                        |
+| - Object-level ownership checks                             |
+| - Chat and circle membership verification                   |
+| - Masked error handler (suppresses raw SQL/tracebacks)      |
++-------------------------------------------------------------+
+```
+
+### GraphQL Hardening
+
+- **Object-Level Access Control**: Resolvers verify entity ownership and group participation before returning records. Private message threads and member lists cannot be queried without valid membership.
+- **Query Depth Limiting**: The GraphQL AST validator analyzes incoming queries and rejects malicious requests exceeding safe depth thresholds, preventing nested denial-of-service attempts.
+- **Introspection Controls**: Schema introspection is automatically disabled in production environments (`DEBUG=False`) to prevent unauthorized API schema scraping.
+
+### Network and Resource Protection
+
+- **Redis Rate Limiting**: Request buckets track traffic per IP address and authenticated user, throttling automated scrapers and brute-force attempts.
+- **Connection Health & Recycling**: MySQL connections are managed with persistent reuse parameters to avoid thread exhaustion during high concurrency.
+
+### Secrets and Privacy Management
+
+- **Environment Isolation**: All credentials, tokens, and third-party secrets (Google Maps, Cloudinary, Resend, database passwords) are stored exclusively in `.env` files and injected at runtime.
+- **Legal Compliance**: Explicit Terms of Service and Privacy Policy consent is required upon registration.
+- **Sanitized Error Responses**: Internal database exceptions and traceback outputs are caught and masked, delivering generic error messages to the client while logging full traces securely on the server.
 
 ---
 
-*Last updated: June 2026* 
+## Local Installation and Execution Guide
+
+### Prerequisites
+
+Ensure you have the following tools installed on your development machine:
+
+- **Docker Desktop** (with Docker Compose v2)
+- **Git**
+
+### 1. Clone the Repository and Configure Environment
+
+```bash
+git clone https://github.com/Juanes068/Capstone-Project.git
+cd Capstone-Project
+```
+
+Copy the example environment configuration and fill in the required API keys:
+
+```bash
+cp .env.example .env
+```
+
+Ensure your `.env` contains the required variables:
+
+```env
+# Django Settings
+SECRET_KEY=your_local_secret_key
+DEBUG=True
+ALLOWED_HOSTS=localhost,127.0.0.1,web
+
+# Database Settings
+DB_NAME=havens_db
+DB_USER=root
+DB_PASSWORD=your_root_password
+DB_HOST=db
+DB_PORT=3306
+
+# Redis
+REDIS_URL=redis://redis:6379/1
+
+# Third-Party Integrations
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+RESEND_API_KEY=your_resend_key
+VITE_GOOGLE_MAPS_API_KEY=your_google_maps_browser_key
+```
+
+### 2. Build and Start the Infrastructure
+
+Launch all containers in detached mode:
+
+```bash
+docker compose up -d --build
+```
+
+Verify that all five services are healthy and running:
+
+```bash
+docker compose ps
+```
+
+### 3. Run Database Migrations
+
+Apply database migrations inside the web container:
+
+```bash
+docker compose exec web python manage.py migrate
+```
+
+*(Optional)* Create a Django administrative superuser:
+
+```bash
+docker compose exec web python manage.py createsuperuser
+```
+
+### 4. Access Local Endpoints
+
+Once the containers are running, access the local services:
+
+| Service | URL | Description |
+|---|---|---|
+| **Frontend Web App** | `http://localhost:5173` | React application with Vite hot reloading |
+| **GraphQL API** | `http://localhost:8000/graphql/` | GraphQL endpoint and GraphiQL interactive playground |
+| **Django Admin** | `http://localhost:8000/admin/` | Superuser administration dashboard |
+| **MySQL Database** | `localhost:3307` | Database host mapping for external tools (DBeaver, TablePlus) |
+
+### 5. Useful Development Commands
+
+- **View container logs:**
+  ```bash
+  docker compose logs -f web frontend
+  ```
+- **Restart a specific service:**
+  ```bash
+  docker compose restart web
+  ```
+- **Stop all containers:**
+  ```bash
+  docker compose down
+  ```
+- **Stop containers and clear database volumes (fresh start):**
+  ```bash
+  docker compose down -v
+  ```
+
+---
+
+## Repository Structure
+
+```
+.
+├── core/                   # Main Django application
+│   ├── models.py           # Relational database models
+│   ├── queries.py          # GraphQL query resolvers
+│   ├── mutations.py        # GraphQL mutation resolvers
+│   ├── types.py            # Graphene ObjectType mappings
+│   ├── permissions.py      # Authorization & access control helpers
+│   ├── rate_limit.py       # Redis rate limiting implementation
+│   ├── tasks.py            # Celery asynchronous background tasks
+│   └── tests.py            # Test suites
+├── havens/                 # Django project configuration
+│   ├── settings.py         # App settings and environment loading
+│   ├── urls.py             # Main routing table
+│   └── schema.py           # Root GraphQL schema router
+├── havens-web/             # Frontend application
+│   ├── src/                # React application source code
+│   ├── package.json        # Frontend dependencies
+│   ├── vite.config.js      # Vite build configuration
+│   └── Dockerfile          # Node 20 Alpine frontend container
+├── docker-compose.yml      # Multi-container orchestration config
+├── requirements.txt        # Python backend dependencies
+└── README.md               # Project documentation
+```
