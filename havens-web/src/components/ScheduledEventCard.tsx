@@ -1,6 +1,7 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
+import { parseEventDate } from '../utils/dateUtils'
 import { Avatar } from './Avatar'
 import { Facepile } from './Facepile'
 import { HelpCircle, Clock, Crown, Check, Share2 } from 'lucide-react'
@@ -70,10 +71,8 @@ export const ScheduledEventCard: React.FC<ScheduledEventCardProps> = ({
   const { t, language } = useApp()
   const locale = language === 'es' ? 'es-ES' : language === 'fr' ? 'fr-FR' : 'en-US'
 
-  // Parse dynamic scheduled date safely
-  const rawDate = event.scheduledDate ? new Date(event.scheduledDate) : new Date()
-  const isValidDate = !isNaN(rawDate.getTime())
-  const eventDate = isValidDate ? rawDate : new Date()
+  // Parse dynamic scheduled date safely without timezone drift
+  const eventDate = parseEventDate(event.scheduledDate) || new Date()
 
   // Format date parts using standard Intl.DateTimeFormat with active language locale
   const monthShort = new Intl.DateTimeFormat(locale, { month: 'short' }).format(eventDate)

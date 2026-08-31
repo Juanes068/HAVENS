@@ -57,30 +57,9 @@ export interface PlanItem {
   userResponse?: 'going' | 'maybe' | 'pass' | 'hosting' | string
   role?: 'hosting' | 'attending'
 }
+import { formatEventDisplayDate as formatEventDisplayDateUtil } from '../../utils/dateUtils'
 
 /**
  * Robust date formatting utility for event cards and badges.
  */
-export function formatEventDisplayDate(dateString?: string): { label: string; time: string; badge?: string } {
-  if (!dateString) return { label: 'Upcoming', time: '' }
-  const d = new Date(dateString)
-  if (isNaN(d.getTime())) return { label: 'Upcoming', time: '' }
-
-  const now = new Date()
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
-  const eventDay = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
-  const diffDays = Math.round((eventDay - today) / (1000 * 60 * 60 * 24))
-
-  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-
-  if (diffDays === 0) return { label: 'Today', time, badge: 'Today' }
-  if (diffDays === 1) return { label: 'Tomorrow', time, badge: 'Tomorrow' }
-  if (diffDays === -1) return { label: 'Yesterday', time, badge: 'Past' }
-  if (diffDays < -1) return { label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), time, badge: 'Past' }
-  if (diffDays > 1 && diffDays < 7) {
-    const weekday = d.toLocaleDateString('en-US', { weekday: 'short' })
-    const monthDay = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    return { label: `${weekday}, ${monthDay}`, time }
-  }
-  return { label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), time }
-}
+export const formatEventDisplayDate = formatEventDisplayDateUtil

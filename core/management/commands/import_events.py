@@ -636,12 +636,11 @@ class Command(BaseCommand):
                         except ValueError:
                             continue
 
-        # In case the date/time is naive, attach the inferred local timezone
+        # In case the date/time is naive, attach UTC timezone directly to preserve exact scheduled wall-clock time
         if timezone.is_naive(dt):
-            loc_tz = self._infer_timezone(location_name, title, lat, lng, default_tz)
-            dt = dt.replace(tzinfo=loc_tz)
+            dt = dt.replace(tzinfo=datetime.timezone.utc)
 
-        # Convert accurately to UTC
+        # Convert to standard UTC
         return dt.astimezone(datetime.timezone.utc)
 
     def _resolve_user(self, user_val: Any) -> Optional[User]:

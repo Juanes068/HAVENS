@@ -72,8 +72,10 @@ const PlanCardItem: React.FC<{
   onRsvpChange: (eventId: number, response: 'going' | 'maybe' | 'pass') => Promise<void>
 }> = ({ plan, onManage, onExplore, onDelete, onRsvpChange }) => {
   const navigate = useNavigate()
+  const { language } = useApp()
+  const locale = language === 'es' ? 'es-ES' : language === 'fr' ? 'fr-FR' : 'en-US'
   const [imgError, setImgError] = useState(false)
-  const { label, time, badge } = formatEventDisplayDate(plan.scheduledDate)
+  const { label, time, badge } = formatEventDisplayDate(plan.scheduledDate, locale)
   const isPast = badge === 'Past'
   const displayHobbies = (plan.hobbies || []).slice(0, 4)
   const remainingCount = Math.max(0, (plan.hobbies?.length || 0) - 4)

@@ -3,6 +3,7 @@ import { useMutation } from '@apollo/client';
 import { GoogleMap, useLoadScript, MarkerF, InfoWindowF } from '@react-google-maps/api';
 import { SWIPE_EVENT } from '../graphql/operations';
 import { useApp } from '../context/AppContext';
+import { parseEventDate, formatEventFullDate, formatEventTime } from '../utils/dateUtils';
 import { EventItem } from './SwipeCardsView';
 import { Avatar } from './Avatar';
 import { GOOGLE_MAPS_LIBRARIES } from './LocationInput';
@@ -228,21 +229,13 @@ export const DiscoveryMapView: React.FC<DiscoveryMapViewProps> = ({ events, myRs
                 <h4 className="text-sm font-serif font-bold text-charcoal leading-snug">
                   {selectedEvent.title}
                 </h4>
-                {selectedEvent.scheduledDate && !isNaN(new Date(selectedEvent.scheduledDate).getTime()) && (
+                {selectedEvent.scheduledDate && Boolean(parseEventDate(selectedEvent.scheduledDate)) && (
                   <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#2D5A3D] mt-1">
                     <Calendar className="w-3.5 h-3.5 text-[#2D5A3D]" />
                     <span>
-                      {new Intl.DateTimeFormat('en-US', {
-                        weekday: 'short',
-                        month: 'short',
-                        day: 'numeric',
-                      }).format(new Date(selectedEvent.scheduledDate))}
+                      {formatEventFullDate(selectedEvent.scheduledDate, language === 'es' ? 'es-ES' : language === 'fr' ? 'fr-FR' : 'en-US')}
                       {' • '}
-                      {new Intl.DateTimeFormat('en-US', {
-                        hour: 'numeric',
-                        minute: '2-digit',
-                        hour12: true,
-                      }).format(new Date(selectedEvent.scheduledDate))}
+                      {formatEventTime(selectedEvent.scheduledDate, language === 'es' ? 'es-ES' : language === 'fr' ? 'fr-FR' : 'en-US')}
                     </span>
                   </div>
                 )}

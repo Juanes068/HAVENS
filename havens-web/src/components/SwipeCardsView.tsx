@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useMutation } from '@apollo/client';
 import { SWIPE_EVENT } from '../graphql/operations';
 import { useApp } from '../context/AppContext';
+import { parseEventDate, formatEventTime, formatEventFullDate } from '../utils/dateUtils';
 import { Avatar } from './Avatar';
 import { Facepile } from './Facepile';
 import { Check, HelpCircle, Compass, Calendar, MapPin, Sparkles } from 'lucide-react';
@@ -454,24 +455,16 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
 
 
               {/* Prominent Scheduled Date & Time Badge */}
-              {currentEvent.scheduledDate && !isNaN(new Date(currentEvent.scheduledDate).getTime()) && (
+              {currentEvent.scheduledDate && Boolean(parseEventDate(currentEvent.scheduledDate)) && (
                 <div className="flex items-center gap-2 bg-[#2D5A3D]/95 backdrop-blur-md px-3.5 py-1.5 rounded-2xl border border-white/20 w-max shadow-sm">
                   <Calendar className="w-4 h-4 text-emerald-300 shrink-0" />
                   <div className="text-xs font-bold text-white flex items-center gap-1.5">
                     <span>
-                      {new Intl.DateTimeFormat(language === 'es' ? 'es-ES' : language === 'fr' ? 'fr-FR' : 'en-US', {
-                        weekday: 'short',
-                        month: 'short',
-                        day: 'numeric',
-                      }).format(new Date(currentEvent.scheduledDate))}
+                      {formatEventFullDate(currentEvent.scheduledDate, language === 'es' ? 'es-ES' : language === 'fr' ? 'fr-FR' : 'en-US')}
                     </span>
                     <span className="text-emerald-300">•</span>
                     <span className="font-normal text-white/90">
-                      {new Intl.DateTimeFormat(language === 'es' ? 'es-ES' : language === 'fr' ? 'fr-FR' : 'en-US', {
-                        hour: 'numeric',
-                        minute: '2-digit',
-                        hour12: true,
-                      }).format(new Date(currentEvent.scheduledDate))}
+                      {formatEventTime(currentEvent.scheduledDate, language === 'es' ? 'es-ES' : language === 'fr' ? 'fr-FR' : 'en-US')}
                     </span>
                   </div>
                 </div>

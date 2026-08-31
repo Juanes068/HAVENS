@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { parseEventDate } from '../utils/dateUtils';
 import { Avatar } from './Avatar';
 import { Facepile, getEarthyAvatarColor } from './Facepile';
 import { Clock, MapPin, Star, Crown, X, Share2 } from 'lucide-react';
@@ -25,10 +26,10 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
 
   if (!event) return null;
 
-  const rawDate = event.scheduledDate ? new Date(event.scheduledDate) : null;
-  const isValidDate = rawDate && !isNaN(rawDate.getTime());
+  const rawDate = parseEventDate(event.scheduledDate);
+  const isValidDate = Boolean(rawDate);
 
-  const fullDateFormatted = isValidDate
+  const fullDateFormatted = isValidDate && rawDate
     ? new Intl.DateTimeFormat(locale, {
         weekday: 'long',
         month: 'long',
@@ -37,7 +38,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
       }).format(rawDate)
     : 'Date TBD';
 
-  const timeFormatted = isValidDate
+  const timeFormatted = isValidDate && rawDate
     ? new Intl.DateTimeFormat(locale, {
         hour: 'numeric',
         minute: '2-digit',

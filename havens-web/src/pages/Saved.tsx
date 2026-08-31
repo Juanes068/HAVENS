@@ -8,6 +8,7 @@ import { EventDetailModal } from '../components/EventDetailModal'
 import { GET_ALL_EVENTS, MY_RSVPS, SWIPE_EVENT } from '../graphql/operations'
 import { useAuth } from '../context/AuthContext'
 import { useApp } from '../context/AppContext'
+import { formatEventFullDate, formatEventTime } from '../utils/dateUtils'
 import {
   Bookmark,
   Calendar,
@@ -478,21 +479,8 @@ export const SavedView: React.FC = () => {
             const isDiscarded = plan.rsvpStatus === 'pass'
             const isBookmarked = plan.isBookmarked
 
-            const formattedDate = plan.scheduledDate
-              ? new Date(plan.scheduledDate).toLocaleDateString(locale, {
-                  weekday: 'short',
-                  month: 'short',
-                  day: 'numeric',
-                })
-              : 'Date TBD'
-
-            const formattedTime = plan.scheduledDate
-              ? new Date(plan.scheduledDate).toLocaleTimeString(locale, {
-                  hour: 'numeric',
-                  minute: '2-digit',
-                  hour12: true,
-                })
-              : ''
+            const formattedDate = formatEventFullDate(plan.scheduledDate, locale)
+            const formattedTime = formatEventTime(plan.scheduledDate, locale)
 
             const displayHobbies = (plan.hobbies || []).slice(0, 4)
 
