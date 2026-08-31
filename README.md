@@ -1,8 +1,8 @@
-# havens — Technical Architecture & MVP Documentation
+# havens — Technical Architecture, MVP Documentation & Contributor Guide
 
 havens is a privacy-first, trust-circle web platform engineered to help people coordinate real-world gatherings, small group activities, and local discovery based on shared routines and interests. Rather than optimizing for infinite feed scrolling or algorithmic engagement loops, the platform focuses on bridging digital intent with physical meetups through localized, community-governed spaces called Circles.
 
-This document serves as the comprehensive architectural reference, mathematical specification, and engineering log for the havens Minimum Viable Product (MVP).
+This document serves as the single comprehensive reference for the havens Minimum Viable Product (MVP), detailing the technical architecture, mathematical algorithms, data schema, security hardening, local development setup, contributor guidelines, and academic/industry references.
 
 ---
 
@@ -47,6 +47,8 @@ The core objective of havens is to lower the coordination friction of real-life 
 
 havens utilizes a multi-container Docker Compose topology to ensure complete environment parity between local development and production deployments.
 
+### Multi-Container Topology
+
 ```
                             +-----------------------------+
                             |     Client Browser / UI     |
@@ -80,12 +82,81 @@ havens utilizes a multi-container Docker Compose topology to ensure complete env
                                            +-------------------------------+
 ```
 
-### Container Topology & Roles
-* **Frontend (`havens-frontend`):** Built with React 18, TypeScript, Vite 7, Apollo Client 3.14, and Tailwind CSS 3.4 running in an isolated `node:20-alpine` environment. Uses polling-aware file watching (`CHOKIDAR_USEPOLLING=true`) for hot-module replacement across Docker mounts.
-* **Backend (`havens-web-app`):** Python 3.10-slim running Django 4.2 LTS, Graphene-Django 3.0, and Django GraphQL JWT. Serves all GraphQL queries and mutations through a unified schema pipeline.
-* **Relational Database (`db`):** MySQL 8.0 configured with `utf8mb4` character encoding, custom health checks via `mysqladmin ping`, and persistent volume storage (`db_data`).
-* **Cache & Message Broker (`redis`):** Redis 7 Alpine configured with Append-Only File (`--appendonly yes`) persistence. Handles sliding-window rate limiting and acts as Celery's message broker.
-* **Background Worker (`celery`):** Standalone worker instance running Celery 5.3 tied to the primary Django application context for non-blocking email delivery and asynchronous event processing.
+### High-Level Architecture & Layer Connectivity
+
+```mermaid
+flowchart TD
+    subgraph Client ["Frontend Layer (havens-web)"]
+        UI["React 18 Components & Views (Vite)"]
+        Apollo["Apollo Client (services/apollo.ts)"]
+        AuthCtx["AuthContext & SecureStore (JWT Token)"]
+        UI --> Apollo
+        AuthCtx --> Apollo
+    end
+
+    subgraph Gateway ["Transport & Security Gateway"]
+        HTTP["HTTP POST /graphql/"]
+        RateLimit["RateLimit Middleware (core/rate_limit.py)"]
+        JWT["JWT Authentication Middleware (core/middleware.py)"]
+        Apollo -->|Bearer Token & GraphQL Payload| HTTP
+        HTTP --> RateLimit
+        RateLimit --> JWT
+    end
+
+    subgraph Backend ["Backend Engine (Django 4.2 & Graphene)"]
+        RootSchema["havens/schema.py (Root Router)"]
+        CoreSchema["core/schema.py (Domain Schema)"]
+        Queries["Query Resolvers (core/queries.py)"]
+        Mutations["Mutation Resolvers (core/mutations.py)"]
+        Permissions["Permission Guards (core/permissions.py)"]
+        ORM["Django ORM (core/models.py)"]
+        
+        JWT --> RootSchema
+        RootSchema --> CoreSchema
+        CoreSchema --> Permissions
+        Permissions --> Queries
+        Permissions --> Mutations
+        Queries --> ORM
+        Mutations --> ORM
+    end
+
+    subgraph Data ["Data, Broker & Cloud Infrastructure"]
+        MySQL[("MySQL 8.0 Database (havens_db)")]
+        Redis[("Redis 7 Cache & Task Broker")]
+        CeleryWorker["Celery Worker Engine (core/tasks.py)"]
+        Cloudinary["Cloudinary API (Signed Media Bucket)"]
+        GoogleMaps["Google Maps Places & Geocoding API"]
+        
+        ORM --> MySQL
+        Mutations -.->|Enqueues Async Task| Redis
+        Redis --> CeleryWorker
+        Client -.->|Direct Signed Upload| Cloudinary
+        Client -.->|Places / Geocoding Autocomplete| GoogleMaps
+    end
+```
+
+### Visual Architecture Blueprints
+
+<p align="center">
+  <img src="Readimages/mermaid-diagram-1780611765405.png" alt="High-Level Architecture Overview" width="850" />
+</p>
+
+<p align="center">
+  <img src="Readimages/mermaid-diagram-1780611732535.png" alt="Service Layering and Interaction Diagram" width="850" />
+</p>
+
+### Technology Stack Summary
+
+| Layer | Technologies | Role & Purpose |
+| :--- | :--- | :--- |
+| **Frontend** | React 18, Vite 7, TypeScript, Tailwind CSS 3.4 | Modern Single-Page Application (SPA) with tactile, distraction-free UI. |
+| **State & API Client** | Apollo Client 3.14, GraphQL | Typed GraphQL queries, mutations, cache normalization, and auth links. |
+| **Backend Engine** | Python 3.10, Django 4.2 LTS, Graphene-Django 3.0 | Relational ORM, business logic, authorization decorators, and admin portal. |
+| **Authentication** | Django GraphQL JWT (PyJWT 2.8) | Stateless Bearer token issuance, refresh lifecycle, and resolver middleware. |
+| **Database** | MySQL 8.0 (utf8mb4) | Relational store with trigonometric spatial filtering and index optimization. |
+| **Task Queue & Cache** | Celery 5.3, Redis 7 (Alpine) | Non-blocking background worker engine for transactional emails and rate limiting. |
+| **Media Pipeline** | Cloudinary API (HMAC-SHA1) | Direct-to-cloud signed asset uploads for profile avatars and event banners. |
+| **Mapping & Location** | Google Maps Platform (Places New & Geocoding) | Interactive discovery maps, address autocompletion, and reverse geocoding. |
 
 ### Layered GraphQL Schema Routing
 All GraphQL operations are cleanly decoupled across domain boundaries:
@@ -163,6 +234,12 @@ The database schema decouples core authentication records from user profile attr
        | updated_at: DATETIME    |
        +-------------------------+
 ```
+
+### Entity-Relationship Diagram (Visual Blueprint)
+
+<p align="center">
+  <img src="Readimages/Untitled.png" alt="Database Entity-Relationship Diagram" width="850" />
+</p>
 
 ### Relational Entities & Constraints
 * **`User` & `UserProfile`:** Separated via a strict `OneToOneField`. Profiles store physical neighborhood identifiers, coordinates, bios, total points, dynamically generated 6-character alphanumeric referral codes, and birth dates. Enforces a 14+ minimum age rule computed against UTC date boundaries.
@@ -392,12 +469,13 @@ The platform incorporates built-in terms and conditions covering:
 
 ---
 
-## 8. Local Setup, Environment & Deployment
+## 8. Local Setup & Development Quickstart
 
 ### Prerequisites
-* Docker Engine 24.0+ and Docker Compose v2+
-* Node.js 20+ and Python 3.10+ (for local, non-containerized workflows)
-* Valid Google Maps API Key and Cloudinary credentials
+* **Docker Desktop** (Engine 24.0+, Compose v2+) — *Recommended*
+* **Node.js** >= 18.x (or 20.x Alpine in container)
+* **Python** >= 3.10
+* **MySQL** 8.0 & **Redis** 7 (for bare-metal execution)
 
 ### Environment Configuration
 Create a `.env` file in the root directory:
@@ -439,7 +517,7 @@ DEFAULT_FROM_EMAIL=havens <welcome@havensapp.com>
 FRONTEND_URL=http://localhost:5173
 ```
 
-### Docker Lifecycle Commands
+### Option A: Running with Docker Compose (Recommended)
 
 ```bash
 # 1. Build and start all services in detached mode
@@ -454,31 +532,123 @@ docker compose exec web python manage.py seed_hobbies
 # 4. Create administrative superuser
 docker compose exec web python manage.py createsuperuser
 
-# 5. Clean up or deduplicate event records (if needed)
+# 5. (Optional) Run event deduplication or cleanup
 docker compose exec web python manage.py cleanup_events
 
-# 6. Stream real-time container logs
+# 6. Stream live logs
 docker compose logs -f web celery
 ```
 
-### Local Port Allocation
+### Option B: Running Locally (Bare Metal)
+
+#### Backend Setup:
+```bash
+# 1. Create and activate virtual environment
+python -m venv venv
+# Windows:
+.\venv\Scripts\activate
+# Linux/macOS:
+source venv/bin/activate
+
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. Run database migrations & seed taxonomy
+python manage.py migrate
+python manage.py seed_hobbies
+
+# 4. (Optional) Create superuser
+python manage.py createsuperuser
+
+# 5. Start Django development server
+python manage.py runserver
+```
+
+#### Frontend Setup:
+```bash
+cd havens-web
+npm install
+npm run dev
+```
+
+### Local Port Allocations
 | Service | Internal Port | Host Port | Purpose |
 | :--- | :--- | :--- | :--- |
-| `frontend` | 5173 | `5173` | Vite React Development Server |
-| `web` | 8000 | `8000` | Django GraphQL API Backend |
+| `frontend` | 5173 | `5173` | Vite React Development Server (`http://localhost:5173`) |
+| `web` | 8000 | `8000` | Django GraphQL API Backend (`http://localhost:8000/graphql/`) |
 | `db` | 3306 | `3307` | MySQL 8.0 Database Engine |
 | `redis` | 6379 | `6379` | Redis 7 Cache & Task Broker |
 
 ---
 
-## 9. References, Standards & Academic Sources
+## 9. Engineering Guidelines & Code Standards
 
-* Sinnott, R. W. (1984). "Virtues of the Haversine." *Sky and Telescope*, 68(2), 159.
-* GraphQL Working Group. (October 2021). "GraphQL Specification." *GraphQL Foundation*. https://spec.graphql.org/
-* Fielding, R. T., & Reschke, J. (2014). "Hypertext Transfer Protocol (HTTP/1.1): Authentication." *RFC 7235*, IETF.
-* Jones, M., Bradley, J., & Sakimura, N. (May 2015). "JSON Web Token (JWT)." *RFC 7519*, IETF. https://datatracker.ietf.org/doc/html/rfc7519
-* OWASP Foundation. (2023). "OWASP Top 10 API Security Risks – 2023." *Open Web Application Security Project*. https://owasp.org/API-Security/
-* Django Software Foundation. (2024). "Django Documentation: Database access optimization and Geographic Queries." https://docs.djangoproject.com/
-* Meta Platforms & Apollo GraphQL. (2024). "Apollo Client for React: State Management and Query Caching." https://www.apollographql.com/docs/react/
-* Google Cloud Platform. (2024). "Places API (New) & Maps JavaScript API Reference." https://developers.google.com/maps/documentation
-* Cloudinary Ltd. (2024). "Generating Authenticated Upload Signatures." https://cloudinary.com/documentation/upload_images#generating_authentication_signatures
+### Backend Guidelines
+1. **Preserve Business Logic:** Never bypass model integrity or ownership validation.
+2. **Docstrings & Typing:** All new queries, mutations, and models must include Google-style Python docstrings with detailed `Args` and `Returns`.
+3. **Database Performance:**
+   - Always prefetch related models using `.select_related()` (for OneToOne/ForeignKey) or `.prefetch_related()` (for ManyToMany/Reverse FK).
+   - Use database-level annotations for calculations (e.g. Haversine distance, count aggregations).
+4. **Security Hardening:** Ensure all user-scoped mutations and queries are protected with `@login_required` and verify that `request.user` owns the target resource via `core/permissions.py`.
+
+### Frontend Guidelines
+1. **TypeScript First:** Write all new components and utilities in `.tsx` / `.ts` with explicit type annotations.
+2. **Modular Architecture:** Keep page views lean by extracting sub-components and custom hooks instead of monolithic files.
+3. **GraphQL Operations:** Keep queries and mutations organized inside `src/graphql/operations/` with fragments for reusable fields.
+
+---
+
+## 10. Pull Request, Branching & Contribution Workflow
+
+1. **Branch Naming Conventions:**
+   - `feature/<feature-name>` (e.g., `feature/event-calendar-export`)
+   - `fix/<bug-name>` (e.g., `fix/jwt-auth-expiration`)
+   - `refactor/<module-name>` (e.g., `refactor/modular-mutations`)
+2. **Conventional Commits:**
+   - `feat: add Google Calendar sync mutation`
+   - `fix: resolve null pointer on anonymous discovery feed`
+   - `docs: add docstrings to GraphQL resolvers`
+3. **Pre-Flight Verification Checklist:**
+   - Ensure all Python files compile cleanly: `python -m py_compile core/mutations.py core/queries.py`
+   - Ensure the frontend builds cleanly without TypeScript or bundler errors: `npm run build` in `havens-web`
+   - Describe changes, verification steps, and attach screenshots or terminal logs for UI updates.
+
+---
+
+## 11. References, Standards & Academic Sources
+
+* **Spherical Distance & Geolocation:**  
+  Sinnott, R. W. (1984). "Virtues of the Haversine." *Sky and Telescope*, 68(2), 159.  
+  *Foundational mathematical formulation for great-circle spherical distance calculations on WGS-84 coordinates.*
+
+* **GraphQL API Specification & Standards:**  
+  GraphQL Working Group. (October 2021). "GraphQL Specification." *GraphQL Foundation*. https://spec.graphql.org/  
+  *Standard specification governing schema types, AST validation, execution semantics, and introspection.*
+
+* **HTTP/1.1 Authentication & Security:**  
+  Fielding, R. T., & Reschke, J. (2014). "Hypertext Transfer Protocol (HTTP/1.1): Authentication." *RFC 7235*, IETF.  
+  *Defines the authentication framework and `Authorization` header standards used for token transport.*
+
+* **JSON Web Token (JWT) Standard:**  
+  Jones, M., Bradley, J., & Sakimura, N. (May 2015). "JSON Web Token (JWT)." *RFC 7519*, IETF. https://datatracker.ietf.org/doc/html/rfc7519  
+  *Cryptographic standard for stateless authentication tokens and claim assertions.*
+
+* **Application Security & Threat Hardening:**  
+  OWASP Foundation. (2023). "OWASP Top 10 API Security Risks – 2023." *Open Web Application Security Project*. https://owasp.org/API-Security/  
+  *Standard mitigation protocols for Broken Object Level Authorization (API1:2023) and Unrestricted Resource Consumption (API4:2023).*
+
+* **Relational Persistence & Spatial Query Optimization:**  
+  Django Software Foundation. (2024). "Django Documentation: Database access optimization and Geographic Queries." https://docs.djangoproject.com/  
+  *Best practices for database-level query optimization, prefetching, and trigonometric annotations.*
+
+* **Client State & Cache Normalization:**  
+  Meta Platforms & Apollo GraphQL. (2024). "Apollo Client for React: State Management and Query Caching." https://www.apollographql.com/docs/react/  
+  *Reactive state management, optimistic caching, and typed GraphQL client integrations.*
+
+* **Geolocation & Mapping APIs:**  
+  Google Cloud Platform. (2024). "Places API (New) & Maps JavaScript API Reference." https://developers.google.com/maps/documentation  
+  *API contracts for address autocompletion, place details resolution, and geocoding services.*
+
+* **Cryptographic Asset Signatures:**  
+  Cloudinary Ltd. (2024). "Generating Authenticated Upload Signatures." https://cloudinary.com/documentation/upload_images#generating_authentication_signatures  
+  *Specifications for HMAC-SHA1 client-side authenticated direct uploads to cloud storage.*
