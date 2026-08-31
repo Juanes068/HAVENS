@@ -183,7 +183,9 @@ JWT_REFRESH_EXPIRATION_DELTA = timedelta(days=7)
 JWT_ALLOW_REFRESH = True
 JWT_VERIFY_EXPIRATION = True
 
-# ─── CORS Configuration ──────────────────────────────────────────────────────
+# ─── CORS & CSRF Configuration ────────────────────────────────────────────────
+from corsheaders.defaults import default_headers, default_methods
+
 CORS_ALLOW_ALL_ORIGINS = False
 
 CORS_ALLOWED_ORIGINS = [
@@ -199,7 +201,35 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:8081",  # Metro bundler for Expo / React Native
 ]
 
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://([a-zA-Z0-9-]+\.)?havensapp\.com$",
+]
+
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    'authorization',
+    'content-type',
+    'x-requested-with',
+    'accept',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'apollographql-client-name',
+    'apollographql-client-version',
+]
+
+CORS_ALLOW_METHODS = list(default_methods) + [
+    'OPTIONS',
+    'POST',
+    'GET',
+]
+
 CORS_ALLOW_CREDENTIALS = True
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://havensapp.com",
+    "https://www.havensapp.com",
+    "https://api.havensapp.com",
+]
 
 # ─── HTTPS / Security Headers (Production only) ──────────────────────────────
 if IS_PRODUCTION:
