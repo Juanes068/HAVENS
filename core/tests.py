@@ -909,3 +909,114 @@ class GraphQLRateLimitAndTimeoutTests(TestCase):
         cache.clear()
 
 
+class EventLocationMatchingAndCleanupTests(TestCase):
+    def setUp(self):
+        from django.utils import timezone
+        import datetime
+
+        # Categories & Hobbies
+        self.cat = HobbyCategory.objects.create(name="Wellness")
+        self.hobby = Hobby.objects.create(name="Cold Plunge", category=self.cat)
+
+        # Bogota User (4.6097, -74.0817)
+        self.user_bogota = User.objects.create_user(username="bogota_user", email="bog@test.com", password="password123")
+        self.profile_bogota = UserProfile.objects.create(
+            user=self.user_bogota,
+            latitude=4.6097,
+            longitude=-74.0817,
+            city_name="Bogota"
+        )
+        self.profile_bogota.hobbies.add(self.hobby)
+
+        # Vancouver User (49.2827, -123.1207)
+        self.user_vancouver = User.objects.create_user(username="vanc_user", email="van@test.com", password="password123")
+        self.profile_vancouver = UserProfile.objects.create(
+            user=self.user_vancouver,
+            latitude=49.2827,
+            longitude=-123.1207,
+            city_name="Vancouver"
+        )
+        self.profile_vancouver.hobbies.add(self.hobby)
+
+        # Bogota Event
+        self.event_bogota = Event.objects.create(
+            title="Bogota Cold Plunge Gathering",
+            description="Cold plunge meetup in Bogota",
+            latitude=4.6097,
+            longitude=-74.0817,
+            location_name="Chapinero, Bogota",
+            scheduled_date=timezone.now() + datetime.timedelta(days=2),
+            visibility="public"
+        )
+        self.event_bogota.hobbies.add(self.hobby)
+
+        # Vancouver Event
+        self.event_vancouver = Event.objects.create(
+            title="Vancouver Cold Plunge Gathering",
+            description="Cold plunge meetup in Vancouver",
+            latitude=49.2827,
+            longitude=-123.1207,
+            location_name="Kitsilano Beach, Vancouver",
+            scheduled_date=timezone.now() + datetime.timedelta(days=3),
+            visibility="public"
+        )
+        self.event_vancouver.hobbies.add(self.hobby)
+
+    def test_bogota_user_only_sees_bogota_events(self):
+        """A user in Bogota must NEVER see Vancouver events despite 100% hobby match."""
+        query = """
+        query {
+            allEvents {
+                id
+                title
+            }
+        }
+        """
+        result = schema.execute(query, context=type('Context', (), {'user': self.user_bogota})())
+        self.assertIsNone(result.errors)
+        events = result.data['allEvents']
+        titles = [e['title'] for e in events]
+        self.assertIn("Bogota Cold Plunge Gathering", titles)
+        self.assertNotIn("Vancouver Cold Plunge Gathering", titles)
+
+    def test_vancouver_user_only_sees_vancouver_events(self):
+        """A user in Vancouver must NEVER see Bogota events despite 100% hobby match."""
+        query = """
+        query {
+            allEvents {
+                id
+                title
+            }
+        }
+        """
+        result = schema.execute(query, context=type('Context', (), {'user': self.user_vancouver})())
+        self.assertIsNone(result.errors)
+        events = result.data['allEvents']
+        titles = [e['title'] for e in events]
+        self.assertIn("Vancouver Cold Plunge Gathering", titles)
+        self.assertNotIn("Bogota Cold Plunge Gathering", titles)
+
+    def test_cleanup_events_deduplication(self):
+        """cleanup_events command removes duplicate events while keeping the primary instance."""
+        from django.core.management import call_command
+        import datetime
+        from django.utils import timezone
+
+        # Create duplicate Bogota event
+        dup_event = Event.objects.create(
+            title="Bogota Cold Plunge Gathering",
+            description="Duplicate event",
+            latitude=4.6097,
+            longitude=-74.0817,
+            location_name="Chapinero, Bogota",
+            scheduled_date=self.event_bogota.scheduled_date,
+            visibility="public"
+        )
+        self.assertEqual(Event.objects.filter(title="Bogota Cold Plunge Gathering").count(), 2)
+
+        # Run deduplication command
+        call_command("cleanup_events")
+        self.assertEqual(Event.objects.filter(title="Bogota Cold Plunge Gathering").count(), 1)
+
+
+

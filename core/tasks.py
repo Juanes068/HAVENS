@@ -18,9 +18,9 @@ def send_welcome_email_task(user_email, username, app_url=None):
         logger.warning("[Celery Email] Skipped welcome email: No email provided.")
         return "No email provided"
 
-    subject = "Welcome to Havens! 🌿"
-    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'Havens <welcome@havens.app>')
-    app_link = app_url or getattr(settings, 'FRONTEND_URL', 'http://localhost:5173/discover')
+    subject = "Welcome to havens! 🌿"
+    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'havens <info@havensapp.com>')
+    app_link = app_url or getattr(settings, 'FRONTEND_URL', 'https://havensapp.com')
 
     context = {
         'username': username,
@@ -63,8 +63,8 @@ def send_system_alert_task(user_email, alert_subject, alert_message, username=No
         logger.warning("[Celery Email] Skipped system alert: No email provided.")
         return "No email provided"
 
-    subject = f"[Havens] {alert_subject}"
-    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'Havens <welcome@havens.app>')
+    subject = f"[havens] {alert_subject}"
+    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'havens <info@havensapp.com>')
 
     context = {
         'username': username,

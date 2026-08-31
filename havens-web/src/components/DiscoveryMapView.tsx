@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { useMutation } from '@apollo/client';
 import { GoogleMap, useLoadScript, MarkerF, InfoWindowF } from '@react-google-maps/api';
 import { SWIPE_EVENT } from '../graphql/operations';
+import { useApp } from '../context/AppContext';
 import { EventItem } from './SwipeCardsView';
 import { Avatar } from './Avatar';
 import { GOOGLE_MAPS_LIBRARIES } from './LocationInput';
@@ -36,6 +37,8 @@ const defaultMapOptions: google.maps.MapOptions = {
 };
 
 export const DiscoveryMapView: React.FC<DiscoveryMapViewProps> = ({ events, myRsvps, onRefetch }) => {
+  const { t, language } = useApp();
+  const locale = language === 'es' ? 'es-ES' : language === 'fr' ? 'fr-FR' : 'en-US';
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
   const { isLoaded, loadError } = useLoadScript({
@@ -259,16 +262,16 @@ export const DiscoveryMapView: React.FC<DiscoveryMapViewProps> = ({ events, myRs
                   <div className="pt-2 border-t border-[#E2DBD0]/60 space-y-2">
                     <div className="flex items-center justify-between text-[11px]">
                       <span className="text-stone-500">
-                        Host: @{selectedEvent.creator?.username || 'member'}
+                        {t('hostedBy')}: @{selectedEvent.creator?.username || 'member'}
                       </span>
                       {currentRsvp === 'going' && (
                         <span className="font-bold text-[#2D5A3D] bg-[#eaf3ed] px-2.5 py-0.5 rounded-full border border-[#2D5A3D]/20">
-                          ✓ Confirmed Going
+                          ✓ {t('going')}
                         </span>
                       )}
                       {currentRsvp === 'maybe' && (
                         <span className="font-bold text-[#C47B5A] bg-[#fdf6ed] px-2.5 py-0.5 rounded-full border border-[#C47B5A]/20">
-                          ? Marked Maybe
+                          ? {t('maybe')}
                         </span>
                       )}
                     </div>
@@ -276,7 +279,7 @@ export const DiscoveryMapView: React.FC<DiscoveryMapViewProps> = ({ events, myRs
                     {/* Attendee avatars preview */}
                     {((selectedEvent.goingCount && selectedEvent.goingCount > 0) || (selectedEvent.attendees && selectedEvent.attendees.length > 0)) && (
                       <div className="flex items-center gap-2 py-0.5">
-                        <span className="text-[10px] font-bold text-stone-500 uppercase">Going:</span>
+                        <span className="text-[10px] font-bold text-stone-500 uppercase">{t('going')}:</span>
                         <div className="flex items-center -space-x-1.5">
                           {(selectedEvent.attendees || []).slice(0, 4).map((att: any) => (
                             <Avatar
@@ -290,7 +293,7 @@ export const DiscoveryMapView: React.FC<DiscoveryMapViewProps> = ({ events, myRs
                           ))}
                         </div>
                         <span className="text-[11px] font-bold text-[#2D5A3D]">
-                          {selectedEvent.goingCount || selectedEvent.attendees?.length || 1} attending
+                          {selectedEvent.goingCount || selectedEvent.attendees?.length || 1} {t('attendees')}
                         </span>
                       </div>
                     )}
@@ -306,7 +309,7 @@ export const DiscoveryMapView: React.FC<DiscoveryMapViewProps> = ({ events, myRs
                             : 'bg-[#eaf3ed] text-[#2D5A3D] hover:bg-[#2D5A3D] hover:text-white border border-[#2D5A3D]/30'
                         }`}
                       >
-                        {currentRsvp === 'going' ? '✓ Attending' : "I'm In! (Going)"}
+                        {currentRsvp === 'going' ? `✓ ${t('going')}` : t('going')}
                       </button>
 
                       <button
@@ -319,7 +322,7 @@ export const DiscoveryMapView: React.FC<DiscoveryMapViewProps> = ({ events, myRs
                             : 'bg-[#FAF8F5] text-stone-700 hover:bg-[#F0EAE0] border border-[#E2DBD0]'
                         }`}
                       >
-                        {currentRsvp === 'maybe' ? '? Maybe' : 'Maybe'}
+                        {currentRsvp === 'maybe' ? `? ${t('maybe')}` : t('maybe')}
                       </button>
 
                       {currentRsvp && (
@@ -328,7 +331,7 @@ export const DiscoveryMapView: React.FC<DiscoveryMapViewProps> = ({ events, myRs
                           disabled={isRsvping}
                           onClick={() => handleRsvpFromMap(selectedEvent, 'pass')}
                           className="px-2.5 py-2 rounded-xl text-[11px] text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
-                          title="Remove RSVP"
+                          title={t('pass')}
                         >
                           ✕
                         </button>

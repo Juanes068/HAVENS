@@ -52,6 +52,7 @@ import csv
 import re
 import math
 import datetime
+import zoneinfo
 from typing import Any, Dict, List, Optional, Tuple
 
 from django.core.management.base import BaseCommand, CommandError
@@ -121,6 +122,13 @@ class Command(BaseCommand):
             help="Fallback longitude coordinate if missing in row (default: 0.0).",
         )
         parser.add_argument(
+            "--timezone",
+            "-tz",
+            type=str,
+            default=None,
+            help="Timezone for parsed events (e.g. 'America/Vancouver', 'America/Bogota'). Auto-inferred if omitted.",
+        )
+        parser.add_argument(
             "--default-visibility",
             type=str,
             default="public",
@@ -139,6 +147,7 @@ class Command(BaseCommand):
         default_lat = options.get("default_lat", 0.0)
         default_lng = options.get("default_lng", 0.0)
         default_visibility = options.get("default_visibility", "public")
+        default_timezone = options.get("timezone")
 
         if not os.path.exists(file_path):
             raise CommandError(f"File not found: {file_path}")
@@ -178,28 +187,29 @@ class Command(BaseCommand):
                         default_lat=default_lat,
                         default_lng=default_lng,
                         default_visibility=default_visibility,
+                        default_tz=default_timezone,
                     )
 
                     if not dry_run:
-                        existing_event = None
-                        if is_update:
-                            existing_event = Event.objects.filter(
-                                title=event_data["title"],
-                                scheduled_date__date=event_data["scheduled_date"].date()
-                            ).first() or Event.objects.filter(
-                                title=event_data["title"],
-                                location_name=event_data["location_name"]
-                            ).first()
+                        existing_event = Event.objects.filter(
+                            title__iexact=event_data["title"],
+                            scheduled_date=event_data["scheduled_date"],
+                        ).first()
 
                         if existing_event:
-                            for k, v in event_data.items():
-                                setattr(existing_event, k, v)
-                            existing_event.save()
-                            if hobby_instances:
-                                existing_event.hobbies.set(hobby_instances)
-                            self.stdout.write(
-                                self.style.SUCCESS(f"  [Row {idx}] Updated: '{existing_event.title}' (ID: {existing_event.id})")
-                            )
+                            if is_update:
+                                for k, v in event_data.items():
+                                    setattr(existing_event, k, v)
+                                existing_event.save()
+                                if hobby_instances:
+                                    existing_event.hobbies.set(hobby_instances)
+                                self.stdout.write(
+                                    self.style.SUCCESS(f"  [Row {idx}] Updated: '{existing_event.title}' (ID: {existing_event.id})")
+                                )
+                            else:
+                                self.stdout.write(
+                                    self.style.WARNING(f"  [Row {idx}] Skipped duplicate: '{event_data['title']}' on {event_data['scheduled_date']} (ID: {existing_event.id})")
+                                )
                         else:
                             event = Event.objects.create(**event_data)
                             if hobby_instances:
@@ -209,7 +219,7 @@ class Command(BaseCommand):
                             )
                     else:
                         self.stdout.write(
-                            self.style.SUCCESS(f"  [Row {idx}] Validated: '{event_data.get('title')}'")
+                            self.style.SUCCESS(f"  [Row {idx}] Validated: '{event_data.get('title')}' ({event_data.get('scheduled_date')})")
                         )
 
                     imported_count += 1
@@ -406,6 +416,38 @@ class Command(BaseCommand):
         # General high quality event banner
         return "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=1200&q=80"
 
+    @staticmethod
+    def _infer_timezone(
+        location_name: str,
+        title: str,
+        lat: Optional[float],
+        lng: Optional[float],
+        default_tz: Optional[str] = None,
+    ) -> zoneinfo.ZoneInfo:
+        """Infer geographic timezone from coordinates or location keywords, defaulting to America/Vancouver."""
+        if default_tz:
+            try:
+                return zoneinfo.ZoneInfo(default_tz)
+            except Exception:
+                pass
+
+        combined = f"{location_name} {title}".lower()
+
+        if lat is not None and lng is not None:
+            # Bogota / Colombia coordinates range (~4.6 deg N, -74.0 deg W)
+            if 3.5 <= lat <= 6.0 and -76.5 <= lng <= -71.5:
+                return zoneinfo.ZoneInfo("America/Bogota")
+            # Vancouver / Pacific NW coordinates range (~49.28 deg N, -123.12 deg W)
+            if 47.0 <= lat <= 51.0 and -125.0 <= lng <= -120.0:
+                return zoneinfo.ZoneInfo("America/Vancouver")
+
+        if "bogot" in combined or "colombia" in combined:
+            return zoneinfo.ZoneInfo("America/Bogota")
+        if any(term in combined for term in ["vancouver", "richmond", "burnaby", "north vancouver", "granville", "kitsilano", "yaletown", "gastown", "bc", "canada"]):
+            return zoneinfo.ZoneInfo("America/Vancouver")
+
+        return zoneinfo.ZoneInfo("America/Vancouver")
+
     def _parse_row(
         self,
         row: Dict[str, Any],
@@ -414,6 +456,7 @@ class Command(BaseCommand):
         default_lat: float,
         default_lng: float,
         default_visibility: str,
+        default_tz: Optional[str] = None,
     ) -> Tuple[Dict[str, Any], List[Hobby]]:
         """Parse, validate, and convert a single row dictionary into Event kwargs and Hobby list."""
         # 1. Title (Required)
@@ -426,12 +469,7 @@ class Command(BaseCommand):
         description = self._get_val(row, "description", "desc", "details", default="")
         description = str(description).strip() if description is not None else ""
 
-        # 3. Scheduled Date and Time Parsing
-        date_raw = self._get_val(row, "scheduled_date", "date", "event_date", "start_date", "datetime")
-        time_raw = self._get_val(row, "scheduled_time", "time", "event_time", "start_time")
-        scheduled_dt = self._parse_event_datetime(date_raw, time_raw, row_idx=row_idx)
-
-        # 4. Location & Coordinates
+        # 3. Location & Coordinates (Parsed prior to date/time to assist timezone inference)
         location_name = self._get_val(row, "location", "location_name", "venue", "address", default="")
         location_name = str(location_name).strip()[:300] if location_name else ""
 
@@ -463,6 +501,20 @@ class Command(BaseCommand):
                 longitude = default_lng
             else:
                 latitude, longitude = self._auto_geocode(location_name, title)
+
+        # 4. Scheduled Date and Time Parsing (with precise timezone & UTC conversion)
+        date_raw = self._get_val(row, "scheduled_date", "date", "event_date", "start_date", "datetime")
+        time_raw = self._get_val(row, "scheduled_time", "time", "event_time", "start_time")
+        scheduled_dt = self._parse_event_datetime(
+            date_raw,
+            time_raw,
+            location_name=location_name,
+            title=title,
+            lat=latitude,
+            lng=longitude,
+            default_tz=default_tz,
+            row_idx=row_idx,
+        )
 
         # 5. Creator
         creator_raw = self._get_val(row, "creator_id", "creator", "creator_username", "user", "user_id")
@@ -522,8 +574,18 @@ class Command(BaseCommand):
 
         return event_data, hobbies
 
-    def _parse_event_datetime(self, date_val: Any, time_val: Any, row_idx: int) -> datetime.datetime:
-        """Parse combined or separate date/time fields into a timezone-aware datetime."""
+    def _parse_event_datetime(
+        self,
+        date_val: Any,
+        time_val: Any,
+        location_name: str = "",
+        title: str = "",
+        lat: Optional[float] = None,
+        lng: Optional[float] = None,
+        default_tz: Optional[str] = None,
+        row_idx: int = 0,
+    ) -> datetime.datetime:
+        """Parse combined or separate date/time fields into a timezone-aware UTC datetime."""
         if date_val is None:
             return timezone.now()
 
@@ -574,10 +636,13 @@ class Command(BaseCommand):
                         except ValueError:
                             continue
 
+        # In case the date/time is naive, attach the inferred local timezone
         if timezone.is_naive(dt):
-            dt = timezone.make_aware(dt, timezone.get_current_timezone())
+            loc_tz = self._infer_timezone(location_name, title, lat, lng, default_tz)
+            dt = dt.replace(tzinfo=loc_tz)
 
-        return dt
+        # Convert accurately to UTC
+        return dt.astimezone(datetime.timezone.utc)
 
     def _resolve_user(self, user_val: Any) -> Optional[User]:
         """Look up User by ID or username."""

@@ -1,4 +1,4 @@
-# **Capstone Project**
+
 ## **HAVENS (MVP)**
 ### *White-Label Community Matching Platform*
 

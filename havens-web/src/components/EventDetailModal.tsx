@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { useApp } from '../context/AppContext';
 import { Avatar } from './Avatar';
 import { Facepile, getEarthyAvatarColor } from './Facepile';
 import { Clock, MapPin, Star, Crown, X, Share2 } from 'lucide-react';
@@ -19,13 +20,16 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
   onDeletePlan,
   currentUsername,
 }) => {
+  const { t, language } = useApp();
+  const locale = language === 'es' ? 'es-ES' : language === 'fr' ? 'fr-FR' : 'en-US';
+
   if (!event) return null;
 
   const rawDate = event.scheduledDate ? new Date(event.scheduledDate) : null;
   const isValidDate = rawDate && !isNaN(rawDate.getTime());
 
   const fullDateFormatted = isValidDate
-    ? new Intl.DateTimeFormat('en-US', {
+    ? new Intl.DateTimeFormat(locale, {
         weekday: 'long',
         month: 'long',
         day: 'numeric',
@@ -34,7 +38,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
     : 'Date TBD';
 
   const timeFormatted = isValidDate
-    ? new Intl.DateTimeFormat('en-US', {
+    ? new Intl.DateTimeFormat(locale, {
         hour: 'numeric',
         minute: '2-digit',
         hour12: true,
@@ -240,7 +244,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
               }}
               className="px-4 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold transition-colors cursor-pointer"
             >
-              Delete Plan
+              {t('delete')}
             </button>
           ) : null}
 
@@ -250,7 +254,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
               onClick={onClose}
               className="px-4 py-2 rounded-xl border border-[#E2DBD0] text-xs font-semibold text-stone-600 hover:bg-[#F4EEE2] transition-colors cursor-pointer"
             >
-              Close
+              {t('close')}
             </button>
 
             {onRsvpChange && (
@@ -262,7 +266,7 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
                 }}
                 className={`px-5 py-2 rounded-xl text-xs font-semibold transition-all shadow-xs cursor-pointer ${event.response === 'going' ? 'bg-[#2D5A3D] text-white hover:bg-[#3d7a55]' : 'bg-[#eaf3ed] text-[#2D5A3D] hover:bg-[#2D5A3D] hover:text-white border border-[#2D5A3D]/20'}`}
               >
-                {event.response === 'going' ? 'Going (Confirmed)' : "I'm In (RSVP)"}
+                {event.response === 'going' ? t('going') : t('confirm')}
               </button>
             )}
           </div>

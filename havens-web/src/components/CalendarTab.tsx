@@ -23,6 +23,7 @@ import { Facepile, getEarthyAvatarColor } from './Facepile'
 import { ScheduledEventCard, ScheduledEvent } from './ScheduledEventCard'
 import { MY_RSVPS, GET_ALL_EVENTS, SWIPE_EVENT } from '../graphql/operations'
 import { useAuth } from '../context/AuthContext'
+import { useApp } from '../context/AppContext'
 import {
   CalendarDays,
   Compass,
@@ -369,14 +370,17 @@ export const CalendarTab: React.FC = () => {
     }
   }
 
+  const { t, language } = useApp()
+  const locale = language === 'es' ? 'es-ES' : language === 'fr' ? 'fr-FR' : 'en-US'
+
   // Dynamic formatted Month + Year title
-  const monthTitle = new Intl.DateTimeFormat('en-US', {
+  const monthTitle = new Intl.DateTimeFormat(locale, {
     month: 'long',
     year: 'numeric',
   }).format(viewDate)
 
   const selectedDateFormatted = selectedDate
-    ? new Intl.DateTimeFormat('en-US', {
+    ? new Intl.DateTimeFormat(locale, {
         month: 'long',
         day: 'numeric',
         year: 'numeric',
@@ -432,9 +436,9 @@ export const CalendarTab: React.FC = () => {
       {/* Top Header Bar & Action */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
         <div>
-          <SectionHeading>Calendar</SectionHeading>
+          <SectionHeading>{t('calendarTitle')}</SectionHeading>
           <p className="text-sm text-stone-500 mt-1">
-            Real-time schedule of upcoming gatherings across your community
+            {t('calendarSubtitle')}
           </p>
         </div>
 
@@ -452,7 +456,7 @@ export const CalendarTab: React.FC = () => {
               strokeLinecap="round"
             />
           </svg>
-          Post a plan
+          {t('postPlan')}
         </button>
       </div>
 
@@ -848,7 +852,7 @@ export const CalendarTab: React.FC = () => {
                         : 'text-stone-500 hover:text-stone-800'
                     }`}
                   >
-                    <span>Upcoming</span>
+                    <span>{t('upcomingPlans')}</span>
                     <span
                       className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
                         activeTab === 'upcoming'
@@ -870,7 +874,7 @@ export const CalendarTab: React.FC = () => {
                         : 'text-stone-500 hover:text-stone-800'
                     }`}
                   >
-                    <span>Selected Day</span>
+                    <span>{selectedDateFormatted || t('calendar')}</span>
                     <span
                       className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
                         activeTab === 'selected'
@@ -889,23 +893,20 @@ export const CalendarTab: React.FC = () => {
               <div className="flex items-center justify-between pb-2 border-b border-[#E2DBD0]/60 shrink-0">
                 <h3 className="text-sm font-bold font-serif text-stone-800 flex items-center gap-2 flex-wrap">
                   {activeTab === 'upcoming' ? (
-                    <span>All Upcoming Plans ({upcomingEvents.length})</span>
+                    <span>{t('upcomingPlans')} ({upcomingEvents.length})</span>
                   ) : (
                     <>
                       <span>
-                        Plans for{' '}
-                        {selectedDate instanceof Date && !isNaN(selectedDate.getTime())
-                          ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(selectedDate)
-                          : 'Selected Day'}
+                        {selectedDateFormatted || t('calendar')}
                       </span>
                       {isSelectedDateToday && (
                         <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-[#2D5A3D] text-white">
-                          Today
+                          {t('today')}
                         </span>
                       )}
                       {isSelectedDatePast && !isSelectedDateToday && (
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#fdf0eb] text-[#C47B5A]">
-                          Past
+                          {t('past')}
                         </span>
                       )}
                     </>
@@ -916,7 +917,7 @@ export const CalendarTab: React.FC = () => {
               {/* Loading Indicator */}
               {isLoading && (
                 <div className="text-center py-16 text-stone-400 font-serif animate-pulse text-sm">
-                  Loading your Havens schedule...
+                  {t('fetchingEvents')}
                 </div>
               )}
 
@@ -952,13 +953,11 @@ export const CalendarTab: React.FC = () => {
                   <div>
                     <h3 className="text-sm sm:text-base font-bold text-stone-800 font-serif">
                       {activeTab === 'upcoming'
-                        ? 'Your calendar is clear. Go discover some Havens!'
-                        : 'No events scheduled for this date.'}
+                        ? t('noPlansOnDate')
+                        : t('noPlansOnDate')}
                     </h3>
                     <p className="text-xs text-stone-500 mt-1 leading-relaxed">
-                      {activeTab === 'upcoming'
-                        ? 'Explore upcoming community gatherings, RSVP with friends, or host your own plan.'
-                        : `No gatherings are scheduled for ${selectedDateFormatted}. Click another date on the calendar or explore live community events.`}
+                      {t('selectDatePrompt')}
                     </p>
                   </div>
 
@@ -968,7 +967,7 @@ export const CalendarTab: React.FC = () => {
                     className="w-full py-2.5 rounded-xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
                   >
                     <Compass className="w-4 h-4" />
-                    <span>Discover Havens</span>
+                    <span>{t('discover')}</span>
                   </button>
                 </div>
               )}

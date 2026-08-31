@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useApp } from '../../context/AppContext';
 import { SectionHeading } from '../../components/SectionHeading';
 import {
   GET_ALL_USERS,
@@ -23,6 +24,7 @@ import { Sparkles, UserCheck, Users } from 'lucide-react';
 
 export const SocialView: React.FC = () => {
   const { user: currentUser } = useAuth();
+  const { t } = useApp();
   const [activeTab, setActiveTab] = useState<TabType>('meet');
   const [actionStatus, setActionStatus] = useState<string>('');
   const [optimisticJoinedCircleIds, setOptimisticJoinedCircleIds] = useState<number[]>([]);
@@ -380,18 +382,18 @@ export const SocialView: React.FC = () => {
       {/* ── Header & Pill Tab Switcher ── */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <SectionHeading>Social Hub</SectionHeading>
+          <SectionHeading>{t('socialTitle')}</SectionHeading>
           <p className="text-sm text-[#8a8278] mt-1">
-            Meet new people, manage your connections, and explore local circles.
+            {t('socialSubtitle')}
           </p>
         </div>
 
         {/* Pill Tabs */}
         <div className="flex items-center gap-1 p-1 bg-[#E2DBD0]/60 rounded-2xl w-full md:w-auto">
           {([
-            { key: 'meet' as TabType, label: 'Meet', icon: <Sparkles className="w-3.5 h-3.5" /> },
-            { key: 'connections' as TabType, label: 'Connections', icon: <UserCheck className="w-3.5 h-3.5" />, badge: connectionsCount },
-            { key: 'circles' as TabType, label: 'Circles', icon: <Users className="w-3.5 h-3.5" /> },
+            { key: 'meet' as TabType, label: t('meetTab'), icon: <Sparkles className="w-3.5 h-3.5" /> },
+            { key: 'connections' as TabType, label: t('connectionsTab'), icon: <UserCheck className="w-3.5 h-3.5" />, badge: connectionsCount },
+            { key: 'circles' as TabType, label: t('circlesTab'), icon: <Users className="w-3.5 h-3.5" /> },
           ]).map((tab) => (
             <button
               key={tab.key}

@@ -10,6 +10,7 @@ import {
   UPDATE_USER_PROFILE,
 } from '../graphql/operations';
 import { useAuth } from '../context/AuthContext';
+import { useApp } from '../context/AppContext';
 import { LocationInput } from '../components/LocationInput';
 import { Avatar } from '../components/Avatar';
 import { HavensDatePicker } from '../components/ui/HavensDatePicker';
@@ -41,6 +42,7 @@ interface ProfileData {
 export const ProfileSettingsView: React.FC = () => {
   const navigate = useNavigate();
   const { logout, refetchUser } = useAuth();
+  const { t, language } = useApp();
 
   // GraphQL Query for current profile
   const { data, loading, error, refetch } = useQuery<{ myProfile: ProfileData }>(MY_PROFILE, {
@@ -364,12 +366,9 @@ export const ProfileSettingsView: React.FC = () => {
       
       {/* Page Header */}
       <div className="border-b border-[#E2DBD0] pb-5">
-        <h1 className="text-3xl font-serif font-semibold text-[#2D5A3D] lowercase tracking-tight">
-          profile & account settings
+        <h1 className="text-3xl font-serif font-semibold text-[#2D5A3D] capitalize tracking-tight">
+          {t('profileSettings')}
         </h1>
-        <p className="text-xs text-[#8a8278] mt-1 font-normal">
-          Manage your personal details, interest hobbies taxonomy, and security preferences.
-        </p>
       </div>
 
       {/* Global Alerts */}

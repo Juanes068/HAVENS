@@ -5,6 +5,7 @@ import { SwipeCardsView, EventItem } from '../components/SwipeCardsView';
 import { DiscoveryMapView } from '../components/DiscoveryMapView';
 import { GET_ALL_EVENTS, MY_RSVPS } from '../graphql/operations';
 import { useAuth } from '../context/AuthContext';
+import { useApp } from '../context/AppContext';
 import { Layers, MapPin, Sparkles, CheckCircle2, Calendar } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -12,6 +13,7 @@ type ViewMode = 'swipe' | 'map';
 
 export const DiscoverView: React.FC = () => {
   const { user } = useAuth();
+  const { t } = useApp();
   const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<ViewMode>('swipe');
 
@@ -89,9 +91,9 @@ export const DiscoverView: React.FC = () => {
       {/* Header & Mode Switcher Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E2DBD0] pb-5">
         <div>
-          <SectionHeading>Discover community plans</SectionHeading>
+          <SectionHeading>{t('discoverTitle')}</SectionHeading>
           <p className="text-sm text-muted mt-1">
-            Explore local gatherings via discovery swipe cards or interactive map markers
+            {t('discoverSubtitle')}
           </p>
         </div>
 
@@ -107,7 +109,7 @@ export const DiscoverView: React.FC = () => {
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span>Discover Feed</span>
+            <span>{t('discoverFeed')}</span>
             <span
               className={`text-[10px] px-2 py-0.5 rounded-full font-bold transition-colors ${
                 viewMode === 'swipe' ? 'bg-white/20 text-white' : 'bg-[#E2DBD0] text-stone-700'
@@ -127,7 +129,7 @@ export const DiscoverView: React.FC = () => {
             }`}
           >
             <MapPin className="w-3.5 h-3.5" />
-            <span>Interactive Map</span>
+            <span>{t('interactiveMap')}</span>
             <span
               className={`text-[10px] px-2 py-0.5 rounded-full font-bold transition-colors ${
                 viewMode === 'map' ? 'bg-white/20 text-white' : 'bg-[#E2DBD0] text-stone-700'
@@ -145,7 +147,7 @@ export const DiscoverView: React.FC = () => {
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-[#2D5A3D] shrink-0" />
             <span>
-              You have <strong>{activeRsvpsCount} active {activeRsvpsCount === 1 ? 'plan' : 'plans'}</strong> (marked Going/Maybe). These are archived from your swipe feed and kept live on your Map & Calendar.
+              <strong>{activeRsvpsCount}</strong> {t('activePlansBanner')}
             </span>
           </div>
           <button
@@ -153,7 +155,7 @@ export const DiscoverView: React.FC = () => {
             onClick={() => setViewMode('map')}
             className="px-3 py-1 bg-white text-[#2D5A3D] rounded-xl font-bold border border-[#2D5A3D]/20 hover:bg-[#2D5A3D] hover:text-white transition-colors cursor-pointer text-[11px] shrink-0"
           >
-            View on Map
+            {t('viewOnMap')}
           </button>
         </div>
       )}
@@ -161,14 +163,14 @@ export const DiscoverView: React.FC = () => {
       {/* Loading State */}
       {loading && (
         <div className="text-center py-20 text-muted font-normal animate-pulse text-sm">
-          Fetching live events from havens backend...
+          {t('fetchingEvents')}
         </div>
       )}
 
       {/* Error State */}
       {eventsError && !loading && (
         <div className="p-4 bg-rose-50 border border-rose-200 text-rose-700 rounded-2xl text-center text-sm font-medium">
-          Failed to load community events. Please try again.
+          {t('failedLoadEvents')}
         </div>
       )}
 

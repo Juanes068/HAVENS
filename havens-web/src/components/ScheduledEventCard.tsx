@@ -1,5 +1,6 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useApp } from '../context/AppContext'
 import { Avatar } from './Avatar'
 import { Facepile } from './Facepile'
 import { HelpCircle, Clock, Crown, Check, Share2 } from 'lucide-react'
@@ -66,21 +67,24 @@ export const ScheduledEventCard: React.FC<ScheduledEventCardProps> = ({
   currentUsername,
   showActions = true,
 }) => {
+  const { t, language } = useApp()
+  const locale = language === 'es' ? 'es-ES' : language === 'fr' ? 'fr-FR' : 'en-US'
+
   // Parse dynamic scheduled date safely
   const rawDate = event.scheduledDate ? new Date(event.scheduledDate) : new Date()
   const isValidDate = !isNaN(rawDate.getTime())
   const eventDate = isValidDate ? rawDate : new Date()
 
-  // Format date parts using standard Intl.DateTimeFormat
-  const monthShort = new Intl.DateTimeFormat('en-US', { month: 'short' }).format(eventDate)
+  // Format date parts using standard Intl.DateTimeFormat with active language locale
+  const monthShort = new Intl.DateTimeFormat(locale, { month: 'short' }).format(eventDate)
   const dayNum = eventDate.getDate()
-  const weekdayShort = new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(eventDate)
-  const timeFormatted = new Intl.DateTimeFormat('en-US', {
+  const weekdayShort = new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(eventDate)
+  const timeFormatted = new Intl.DateTimeFormat(locale, {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
   }).format(eventDate)
-  const fullDateFormatted = new Intl.DateTimeFormat('en-US', {
+  const fullDateFormatted = new Intl.DateTimeFormat(locale, {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
@@ -152,30 +156,30 @@ export const ScheduledEventCard: React.FC<ScheduledEventCardProps> = ({
               {isHost && (
                 <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-[#eaf3ed] text-[#2D5A3D] border border-[#2D5A3D]/20 flex items-center gap-1">
                   <Crown className="w-2.5 h-2.5 text-[#2D5A3D]" />
-                  <span>Host</span>
+                  <span>{t('host')}</span>
                 </span>
               )}
 
               {isPast ? (
                 <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-[#fdf0eb] text-[#C47B5A] border border-[#C47B5A]/20 flex items-center gap-1">
                   <Clock className="w-2.5 h-2.5 text-[#C47B5A]" />
-                  <span>Past</span>
+                  <span>{t('past')}</span>
                 </span>
               ) : rsvpStatus === 'going' ? (
                 <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-[#eaf3ed] text-[#2D5A3D] flex items-center gap-1">
                   <Check className="w-2.5 h-2.5 text-[#2D5A3D]" />
-                  <span>Going</span>
+                  <span>{t('going')}</span>
                 </span>
               ) : rsvpStatus === 'maybe' ? (
                 <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-[#fef9ee] text-[#b87e28] flex items-center gap-1">
                   <HelpCircle className="w-2.5 h-2.5 text-[#b87e28]" />
-                  <span>Maybe</span>
+                  <span>{t('maybe')}</span>
                 </span>
               ) : null}
 
               {event.pointsReward ? (
                 <span className="text-xs font-bold text-amber-900 bg-amber-50/90 border border-amber-300 px-2.5 py-1 rounded-full shadow-2xs inline-flex items-center gap-1">
-                  ⭐ +{event.pointsReward} pts
+                  ⭐ +{event.pointsReward} {t('ptsReward')}
                 </span>
               ) : null}
             </div>
@@ -184,7 +188,7 @@ export const ScheduledEventCard: React.FC<ScheduledEventCardProps> = ({
             <div className="flex items-center gap-2 text-[11px] text-stone-500 mb-2 truncate">
               <span className="shrink-0">{timeFormatted}</span>
               <span>·</span>
-              <span className="truncate">📍 {event.locationName || 'Vancouver, BC'}</span>
+              <span className="truncate">📍 {event.locationName || 'Nearby'}</span>
             </div>
 
             {/* Attendees Facepile */}
@@ -229,7 +233,7 @@ export const ScheduledEventCard: React.FC<ScheduledEventCardProps> = ({
                   title="Past events are archived and strictly read-only"
                   className="px-2.5 py-1 rounded-lg bg-stone-100 text-stone-500 text-[11px] font-medium cursor-not-allowed border border-stone-200 inline-flex items-center gap-1 select-none"
                 >
-                  Read-Only
+                  {t('readOnly')}
                 </span>
               </div>
             ) : (
@@ -248,10 +252,10 @@ export const ScheduledEventCard: React.FC<ScheduledEventCardProps> = ({
                           ? 'bg-[#2D5A3D] text-white hover:bg-[#3d7a55] ring-1 ring-[#2D5A3D]/30'
                           : 'bg-[#eaf3ed] text-[#2D5A3D] hover:bg-[#2D5A3D] hover:text-white border border-[#2D5A3D]/25'
                       }`}
-                      title={rsvpStatus === 'going' ? 'Confirmed (Going) - Click to cancel' : 'Confirm attendance (Going)'}
+                      title={rsvpStatus === 'going' ? t('going') : t('confirm')}
                     >
                       <Check className="w-3.5 h-3.5" />
-                      <span>{rsvpStatus === 'going' ? 'Going' : 'Confirm'}</span>
+                      <span>{rsvpStatus === 'going' ? t('going') : t('confirm')}</span>
                     </button>
 
                     <button
@@ -266,10 +270,10 @@ export const ScheduledEventCard: React.FC<ScheduledEventCardProps> = ({
                           ? 'bg-amber-100 border-amber-300 text-amber-900 shadow-2xs font-bold'
                           : 'border-[#E2DBD0] bg-white text-stone-700 hover:text-stone-900 hover:bg-[#FAF8F5]'
                       }`}
-                      title={rsvpStatus === 'maybe' ? 'Marked Maybe - Click to cancel' : 'Mark as Maybe'}
+                      title={t('maybe')}
                     >
                       <HelpCircle className="w-3.5 h-3.5" />
-                      <span>Maybe</span>
+                      <span>{t('maybe')}</span>
                     </button>
                   </>
                 )}
@@ -281,16 +285,16 @@ export const ScheduledEventCard: React.FC<ScheduledEventCardProps> = ({
                     if (navigator.share) {
                       navigator.share({
                         title: event.title,
-                        text: `Join me at ${event.title} on Havens!`,
+                        text: `Join me at ${event.title} on havens!`,
                         url: window.location.href,
                       }).catch(() => {})
                     } else {
                       navigator.clipboard?.writeText(window.location.href)
-                      alert('✓ Event link copied to clipboard!')
+                      alert(t('eventLinkCopied'))
                     }
                   }}
                   className="p-1.5 rounded-xl border border-[#E2DBD0] text-stone-500 hover:text-stone-900 hover:bg-[#F4EEE2] transition-colors cursor-pointer"
-                  title="Share event"
+                  title={t('shareEvent')}
                 >
                   <Share2 className="w-3.5 h-3.5" />
                 </button>

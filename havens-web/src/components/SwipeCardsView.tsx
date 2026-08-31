@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation } from '@apollo/client';
 import { SWIPE_EVENT } from '../graphql/operations';
+import { useApp } from '../context/AppContext';
 import { Avatar } from './Avatar';
 import { Facepile } from './Facepile';
 import { Check, HelpCircle, Compass, Calendar, MapPin, Sparkles } from 'lucide-react';
@@ -61,6 +62,7 @@ interface ToastState {
 }
 
 export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetch }) => {
+  const { t, language } = useApp();
   const [sessionSkippedIds, setSessionSkippedIds] = useState<string[]>([]);
   const [toast, setToast] = useState<ToastState | null>(null);
 
@@ -114,7 +116,7 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
         });
 
         if (res?.data?.swipeEvent?.success) {
-          showToast(`✓ RSVP Confirmed for "${eventTitle}"!`, 'rsvp');
+          showToast(`✓ ${eventTitle}: ${t('attendingToast')}`, 'rsvp');
         }
       } catch (err: any) {
         console.error('[Swipe Right Error]', err);
@@ -143,7 +145,7 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
             response: 'pass',
           },
         });
-        showToast(`✕ Passed "${eventTitle}" — Archived from feed.`, 'pass');
+        showToast(`✕ ${eventTitle}: ${t('passedToast')}`, 'pass');
       } catch (err: any) {
         console.error('[Swipe Left Error]', err);
       } finally {
@@ -171,7 +173,7 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
             response: 'maybe',
           },
         });
-        showToast(`? Marked "${eventTitle}" as Maybe — Saved to Calendar.`, 'maybe');
+        showToast(`? ${eventTitle}: ${t('maybeToast')}`, 'maybe');
       } catch (err: any) {
         console.error('[Swipe Up Error]', err);
       } finally {
@@ -247,10 +249,10 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
         </div>
         <div>
           <h3 className="text-xl font-serif font-bold text-[#2D5A3D]">
-            You're All Caught Up!
+            {t('noMoreEvents')}
           </h3>
           <p className="text-xs text-[#8a8278] mt-2 leading-relaxed">
-            No more unswiped events in your area. Switch to Interactive Map mode to explore all local gathering pins and markers!
+            {t('noMoreEventsSub')}
           </p>
         </div>
       </div>
@@ -457,7 +459,7 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
                   <Calendar className="w-4 h-4 text-emerald-300 shrink-0" />
                   <div className="text-xs font-bold text-white flex items-center gap-1.5">
                     <span>
-                      {new Intl.DateTimeFormat('en-US', {
+                      {new Intl.DateTimeFormat(language === 'es' ? 'es-ES' : language === 'fr' ? 'fr-FR' : 'en-US', {
                         weekday: 'short',
                         month: 'short',
                         day: 'numeric',
@@ -465,7 +467,7 @@ export const SwipeCardsView: React.FC<SwipeCardsViewProps> = ({ events, onRefetc
                     </span>
                     <span className="text-emerald-300">•</span>
                     <span className="font-normal text-white/90">
-                      {new Intl.DateTimeFormat('en-US', {
+                      {new Intl.DateTimeFormat(language === 'es' ? 'es-ES' : language === 'fr' ? 'fr-FR' : 'en-US', {
                         hour: 'numeric',
                         minute: '2-digit',
                         hour12: true,

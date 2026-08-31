@@ -79,27 +79,43 @@ TEMPLATES = [
 WSGI_APPLICATION = 'havens.wsgi.application'
 
 
-# Database Connection Recycling for MVP Performance
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': os.getenv('DB_NAME'),
-        'USER': os.getenv('DB_USER'),
-        'PASSWORD': os.getenv('DB_PASSWORD'),
-        'HOST': os.getenv('DB_HOST'),
-        'PORT': os.getenv('DB_PORT'),
-        'CONN_MAX_AGE': int(os.getenv('CONN_MAX_AGE', '600')),
-        'OPTIONS': {'charset': 'utf8mb4'},
+# Database Configuration (MySQL in Docker/Prod, SQLite fallback for local test/dev)
+_DB_ENGINE = os.getenv('DB_ENGINE', 'django.db.backends.mysql' if os.getenv('DB_NAME') else 'django.db.backends.sqlite3')
+if _DB_ENGINE == 'django.db.backends.sqlite3' or not os.getenv('DB_NAME'):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': _DB_ENGINE,
+            'NAME': os.getenv('DB_NAME'),
+            'USER': os.getenv('DB_USER', 'root'),
+            'PASSWORD': os.getenv('DB_PASSWORD', ''),
+            'HOST': os.getenv('DB_HOST', '127.0.0.1'),
+            'PORT': os.getenv('DB_PORT', '3306'),
+            'CONN_MAX_AGE': int(os.getenv('CONN_MAX_AGE', '600')),
+            'OPTIONS': {'charset': 'utf8mb4'},
+        }
+    }
 
-# Redis Cache Setup for Rate Limiting & Session Caching
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": os.getenv("REDIS_URL", "redis://redis:6379/1"),
+# Redis Cache Setup for Rate Limiting & Session Caching (fallback to LocMemCache locally)
+if os.getenv("REDIS_URL"):
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": os.getenv("REDIS_URL"),
+        }
     }
-}
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        }
+    }
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -223,6 +239,7 @@ else:
 
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Havens <welcome@havens.app>')
 SERVER_EMAIL = os.getenv('SERVER_EMAIL', DEFAULT_FROM_EMAIL)
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'https://havensapp.com')
 
 # ─── GraphQL Security & Execution Controls ─────────────────────────────────
 GRAPHQL_MAX_QUERY_DEPTH = int(os.getenv('GRAPHQL_MAX_QUERY_DEPTH', '5'))

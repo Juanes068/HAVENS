@@ -687,15 +687,36 @@ class Query(graphene.ObjectType):
                     Q(max_participants__isnull=True) | Q(current_participants_count__lt=F('max_participants'))
                 )
 
-        # ── 7. Geolocation Haversine Filtering ───────────────────────────────
-        if latitude is not None and longitude is not None:
-            # Trigonometric Haversine formula calculation on DB level
+        # ── 7. Strict Geolocation Boundary Enforcement ───────────────────────
+        ref_lat = latitude
+        ref_lng = longitude
+
+        if (ref_lat is None or ref_lng is None) and user and user.is_authenticated:
+            try:
+                profile = getattr(user, 'profile', None) or UserProfile.objects.get(user=user)
+                if profile.latitude is not None and profile.longitude is not None:
+                    ref_lat = profile.latitude
+                    ref_lng = profile.longitude
+                elif profile.city_name:
+                    city_lower = profile.city_name.lower().strip()
+                    if 'bogot' in city_lower or 'colombia' in city_lower:
+                        ref_lat, ref_lng = 4.7110, -74.0721
+                    elif any(c in city_lower for c in ['vancouver', 'richmond', 'burnaby', 'bc', 'canada']):
+                        ref_lat, ref_lng = 49.2827, -123.1207
+            except UserProfile.DoesNotExist:
+                pass
+
+        if ref_lat is not None and ref_lng is not None:
+            effective_radius = radius_km if (radius_km is not None and radius_km > 0) else 60.0
             distance_expr = 6371 * ACos(
-                Cos(Radians(Value(latitude))) * Cos(Radians(F('latitude'))) *
-                Cos(Radians(F('longitude')) - Radians(Value(longitude))) +
-                Sin(Radians(Value(latitude))) * Sin(Radians(F('latitude')))
+                Cos(Radians(Value(ref_lat))) * Cos(Radians(F('latitude'))) *
+                Cos(Radians(F('longitude')) - Radians(Value(ref_lng))) +
+                Sin(Radians(Value(ref_lat))) * Sin(Radians(F('latitude')))
             )
-            queryset = queryset.annotate(distance=distance_expr).filter(distance__lte=radius_km)
+            queryset = queryset.filter(
+                latitude__isnull=False,
+                longitude__isnull=False
+            ).annotate(distance=distance_expr).filter(distance__lte=effective_radius)
 
         # ── 8. Rank by User Hobby Affinity Score & Chronological Order ───────
         try:
@@ -725,7 +746,7 @@ class Query(graphene.ObjectType):
         has_spots=None,
         latitude=None,
         longitude=None,
-        radius_km=10.0,
+        radius_km=None,
         upcoming_only=True,
         creator_id=None,
     ):
@@ -802,14 +823,36 @@ class Query(graphene.ObjectType):
                     Q(max_participants__isnull=True) | Q(current_participants_count__lt=F('max_participants'))
                 )
 
-        # Haversine distance constraint
-        if latitude is not None and longitude is not None:
+        # Strict Geolocation Boundary Enforcement
+        ref_lat = latitude
+        ref_lng = longitude
+
+        if (ref_lat is None or ref_lng is None) and user and user.is_authenticated:
+            try:
+                profile = getattr(user, 'profile', None) or UserProfile.objects.get(user=user)
+                if profile.latitude is not None and profile.longitude is not None:
+                    ref_lat = profile.latitude
+                    ref_lng = profile.longitude
+                elif profile.city_name:
+                    city_lower = profile.city_name.lower().strip()
+                    if 'bogot' in city_lower or 'colombia' in city_lower:
+                        ref_lat, ref_lng = 4.7110, -74.0721
+                    elif any(c in city_lower for c in ['vancouver', 'richmond', 'burnaby', 'bc', 'canada']):
+                        ref_lat, ref_lng = 49.2827, -123.1207
+            except UserProfile.DoesNotExist:
+                pass
+
+        if ref_lat is not None and ref_lng is not None:
+            effective_radius = radius_km if (radius_km is not None and radius_km > 0) else 60.0
             distance_expr = 6371 * ACos(
-                Cos(Radians(Value(latitude))) * Cos(Radians(F('latitude'))) *
-                Cos(Radians(F('longitude')) - Radians(Value(longitude))) +
-                Sin(Radians(Value(latitude))) * Sin(Radians(F('latitude')))
+                Cos(Radians(Value(ref_lat))) * Cos(Radians(F('latitude'))) *
+                Cos(Radians(F('longitude')) - Radians(Value(ref_lng))) +
+                Sin(Radians(Value(ref_lat))) * Sin(Radians(F('latitude')))
             )
-            queryset = queryset.annotate(distance=distance_expr).filter(distance__lte=radius_km)
+            queryset = queryset.filter(
+                latitude__isnull=False,
+                longitude__isnull=False
+            ).annotate(distance=distance_expr).filter(distance__lte=effective_radius)
 
         # Personalization ranking if authenticated
         if user and user.is_authenticated:

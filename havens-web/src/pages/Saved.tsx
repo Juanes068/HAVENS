@@ -5,12 +5,9 @@ import { SectionHeading } from '../components/SectionHeading'
 import { Avatar } from '../components/Avatar'
 import { Facepile, ParticipantProfile, RawRsvpItem } from '../components/Facepile'
 import { EventDetailModal } from '../components/EventDetailModal'
-import {
-  GET_ALL_EVENTS,
-  MY_RSVPS,
-  SWIPE_EVENT,
-} from '../graphql/operations'
+import { GET_ALL_EVENTS, MY_RSVPS, SWIPE_EVENT } from '../graphql/operations'
 import { useAuth } from '../context/AuthContext'
+import { useApp } from '../context/AppContext'
 import {
   Bookmark,
   Calendar,
@@ -61,6 +58,8 @@ interface UnifiedSavedPlan {
 
 export const SavedView: React.FC = () => {
   const { user } = useAuth()
+  const { t, language } = useApp()
+  const locale = language === 'es' ? 'es-ES' : language === 'fr' ? 'fr-FR' : 'en-US'
   const navigate = useNavigate()
 
   // Tab & Filter States
@@ -341,9 +340,9 @@ export const SavedView: React.FC = () => {
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E2DBD0] pb-6">
         <div>
-          <SectionHeading>Saved & RSVPed Plans</SectionHeading>
+          <SectionHeading>{t('savedTitle')}</SectionHeading>
           <p className="text-sm text-[#8a8278] mt-1">
-            Manage your confirmed attendances, interested gatherings, and bookmarked events
+            {t('savedSubtitle')}
           </p>
         </div>
 
@@ -354,7 +353,7 @@ export const SavedView: React.FC = () => {
             className="px-4 py-2 rounded-xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white text-xs font-bold shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
           >
             <Compass className="w-3.5 h-3.5" />
-            <span>Discover More</span>
+            <span>{t('discover')}</span>
           </button>
         </div>
       </div>
@@ -365,11 +364,11 @@ export const SavedView: React.FC = () => {
         <div className="flex flex-wrap items-center gap-1.5 p-1.5 bg-[#F0EAE0] rounded-2xl border border-[#E2DBD0] shadow-2xs">
           {(
             [
-              { key: 'all', label: 'All Saved', count: counts.all, icon: Bookmark },
-              { key: 'going', label: 'Going', count: counts.going, icon: CheckCircle2 },
-              { key: 'maybe', label: 'Maybe', count: counts.maybe, icon: HelpCircle },
-              { key: 'bookmarked', label: 'Bookmark', count: counts.bookmarked, icon: Bookmark },
-              { key: 'discarded', label: 'Discarded', count: counts.discarded, icon: XCircle },
+              { key: 'all', label: t('savedPlans'), count: counts.all, icon: Bookmark },
+              { key: 'going', label: t('going'), count: counts.going, icon: CheckCircle2 },
+              { key: 'maybe', label: t('maybe'), count: counts.maybe, icon: HelpCircle },
+              { key: 'bookmarked', label: t('saved'), count: counts.bookmarked, icon: Bookmark },
+              { key: 'discarded', label: t('pass'), count: counts.discarded, icon: XCircle },
             ] as const
           ).map((tab) => {
             const Icon = tab.icon
@@ -406,7 +405,7 @@ export const SavedView: React.FC = () => {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search saved plans, locations..."
+            placeholder="Search..."
             className="w-full pl-9 pr-8 py-2 rounded-xl border border-[#E2DBD0] bg-white text-xs text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[#2D5A3D] transition-colors shadow-2xs"
           />
           {searchQuery && (
@@ -423,9 +422,6 @@ export const SavedView: React.FC = () => {
 
       {/* Category Pills */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
-        <span className="text-xs font-bold text-stone-500 uppercase tracking-wider mr-1 shrink-0">
-          Category:
-        </span>
         {categoriesList.map((cat) => (
           <button
             key={cat}
@@ -445,7 +441,7 @@ export const SavedView: React.FC = () => {
       {/* Loading State */}
       {loading && (
         <div className="text-center py-20 text-stone-500 font-normal animate-pulse text-xs">
-          Loading your saved gatherings and RSVP states...
+          {t('fetchingEvents')}
         </div>
       )}
 
@@ -457,15 +453,8 @@ export const SavedView: React.FC = () => {
           </div>
           <div>
             <h3 className="text-lg font-bold text-stone-900 font-serif">
-              {searchQuery
-                ? `No plans matching "${searchQuery}"`
-                : activeTab === 'all'
-                ? 'No saved or RSVPed plans yet'
-                : `No plans under "${activeTab}"`}
+              {t('noSavedEvents')}
             </h3>
-            <p className="text-xs text-[#8a8278] mt-1.5 leading-relaxed">
-              Explore local gatherings in Discover and swipe right or bookmark to build your personal itinerary!
-            </p>
           </div>
           <div className="pt-2">
             <button
@@ -474,7 +463,7 @@ export const SavedView: React.FC = () => {
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#2D5A3D] hover:bg-[#3d7a55] text-white text-xs font-bold transition-colors shadow-xs cursor-pointer"
             >
               <Compass className="w-3.5 h-3.5" />
-              <span>Explore Discover Feed</span>
+              <span>{t('discover')}</span>
             </button>
           </div>
         </div>
@@ -490,7 +479,7 @@ export const SavedView: React.FC = () => {
             const isBookmarked = plan.isBookmarked
 
             const formattedDate = plan.scheduledDate
-              ? new Date(plan.scheduledDate).toLocaleDateString('en-US', {
+              ? new Date(plan.scheduledDate).toLocaleDateString(locale, {
                   weekday: 'short',
                   month: 'short',
                   day: 'numeric',
@@ -498,7 +487,7 @@ export const SavedView: React.FC = () => {
               : 'Date TBD'
 
             const formattedTime = plan.scheduledDate
-              ? new Date(plan.scheduledDate).toLocaleTimeString('en-US', {
+              ? new Date(plan.scheduledDate).toLocaleTimeString(locale, {
                   hour: 'numeric',
                   minute: '2-digit',
                   hour12: true,
