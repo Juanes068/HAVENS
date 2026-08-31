@@ -237,9 +237,7 @@ The database schema decouples core authentication records from user profile attr
 
 ### Entity-Relationship Diagram (Visual Blueprint)
 
-<p align="center">
-  <img src="Readimages/Untitled.png" alt="Database Entity-Relationship Diagram" width="850" />
-</p>
+https://dbdiagram.io/d/6a234bbed2fbd72c4d63518a
 
 ### Relational Entities & Constraints
 * **`User` & `UserProfile`:** Separated via a strict `OneToOneField`. Profiles store physical neighborhood identifiers, coordinates, bios, total points, dynamically generated 6-character alphanumeric referral codes, and birth dates. Enforces a 14+ minimum age rule computed against UTC date boundaries.
